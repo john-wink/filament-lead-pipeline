@@ -69,13 +69,14 @@ A PipeDrive-style lead management system for [Filament 3](https://filamentphp.co
 composer require john-wink/filament-lead-pipeline
 ```
 
-Publish config and run migrations:
+Publish the config and run migrations:
 
 ```bash
 php artisan vendor:publish --tag="lead-pipeline-config"
-php artisan vendor:publish --tag="lead-pipeline-migrations"
 php artisan migrate
 ```
+
+> Migrations run automatically from the package — no need to publish them. If you need to customize migrations, you can optionally publish them with `php artisan vendor:publish --tag="lead-pipeline-migrations"`.
 
 ### Prepare your Team Model
 
