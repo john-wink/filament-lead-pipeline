@@ -1,0 +1,37 @@
+<?php
+
+declare(strict_types=1);
+
+namespace {{ namespace }};
+
+use Illuminate\Database\Eloquent\Model;
+use JohnWink\FilamentLeadPipeline\Converters\BaseConverter;
+use JohnWink\FilamentLeadPipeline\Models\Lead;
+
+class {{ class }} extends BaseConverter
+{
+    public function getDisplayName(): string
+    {
+        return '{{ displayName }}';
+    }
+
+    public function getTargetModelClass(): string
+    {
+        return \App\Models\{{ targetModel }}::class;
+    }
+
+    /** @return array<\Filament\Forms\Components\Component> */
+    public function getConversionFormSchema(Lead $lead): array
+    {
+        return [];
+    }
+
+    public function convert(Lead $lead, array $additionalData = []): Model
+    {
+        $targetClass = $this->getTargetModelClass();
+
+        return $targetClass::create(
+            $this->mapLeadToAttributes($lead, $additionalData),
+        );
+    }
+}

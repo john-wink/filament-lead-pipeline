@@ -1,0 +1,61 @@
+{
+    "name": "john-wink/filament-lead-pipeline",
+    "description": "A PipeDrive-like lead management system for Filament",
+    "keywords": ["john-wink", "laravel", "filament", "lead", "pipeline", "kanban", "crm"],
+    "homepage": "https://github.com/john-wink/filament-lead-pipeline",
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "John Wink",
+            "email": "johnwink@posteo.de",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "filament/filament": "^3.0",
+        "spatie/laravel-data": "^4.0",
+        "spatie/laravel-package-tools": "^1.15.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.0",
+        "nunomaduro/collision": "^8.0",
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^4.0",
+        "pestphp/pest-plugin-arch": "^4.0",
+        "pestphp/pest-plugin-laravel": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "JohnWink\\FilamentLeadPipeline\\": "src/",
+            "JohnWink\\FilamentLeadPipeline\\Database\\Factories\\": "database/factories/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "JohnWink\\FilamentLeadPipeline\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "post-autoload-dump": "@php ./vendor/bin/testbench package:discover --ansi",
+        "analyse": "vendor/bin/phpstan analyse",
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "JohnWink\\FilamentLeadPipeline\\FilamentLeadPipelineServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
