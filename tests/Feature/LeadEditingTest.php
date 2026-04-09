@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Models\Team;
 use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Livewire\LeadDetailModal;
@@ -10,6 +9,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\Team;
 use Livewire\Livewire;
 
 beforeEach(function (): void {

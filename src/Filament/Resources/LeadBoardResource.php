@@ -13,9 +13,9 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard;
-use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\SourceManagement;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages;
+use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 
 class LeadBoardResource extends Resource
@@ -133,7 +133,7 @@ class LeadBoardResource extends Resource
                                     ->options(function (): array {
                                         $plugin = filament()->getCurrentPanel()?->getPlugin('filament-lead-pipeline');
 
-                                        if ( ! $plugin instanceof \JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin) {
+                                        if ( ! $plugin instanceof FilamentLeadPipelinePlugin) {
                                             return [];
                                         }
 

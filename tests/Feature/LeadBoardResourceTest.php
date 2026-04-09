@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Models\Team;
 use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages\CreateLeadBoard;
@@ -13,6 +12,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\Team;
 
 use function Pest\Livewire\livewire;
 

@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Models\User;
 use App\Notifications\LeadPipeline\LeadAssignedNotification;
 use App\Notifications\LeadPipeline\LeadCreatedNotification;
 use App\Notifications\LeadPipeline\LeadMovedNotification;
@@ -18,6 +17,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\User;
 
 beforeEach(function (): void {
     Notification::fake();
