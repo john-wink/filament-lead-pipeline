@@ -13,6 +13,7 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard;
+use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\SourceManagement;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
@@ -66,8 +67,16 @@ class LeadBoardResource extends Resource
                             ->default(true),
                         Forms\Components\Select::make('admins')
                             ->label(__('lead-pipeline::lead-pipeline.board.admins'))
-                            ->relationship('admins', 'first_name')
-                            ->getOptionLabelFromRecordUsing(fn ($record) => $record->name)
+                            ->relationship(
+                                'admins',
+                                'first_name',
+                                modifyQueryUsing: function ($query) {
+                                    $modifier = FilamentLeadPipelinePlugin::getAssignableUsersQuery();
+
+                                    return $modifier ? $modifier($query) : $query;
+                                },
+                            )
+                            ->getOptionLabelFromRecordUsing(fn ($record) => $record->name . ' (' . $record->email . ')')
                             ->multiple()
                             ->searchable()
                             ->preload()
