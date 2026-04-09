@@ -9,8 +9,8 @@ use JohnWink\FilamentLeadPipeline\Livewire\LeadDetailModal;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
-use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\Team;
-use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\User;
+use App\Models\Team;
+use App\Models\User;
 use Livewire\Livewire;
 
 beforeEach(function (): void {

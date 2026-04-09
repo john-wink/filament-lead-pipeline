@@ -26,7 +26,6 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
             ->hasViews(static::$viewNamespace)
             ->hasTranslations()
             ->hasRoutes(['web', 'api'])
-            ->hasMigrations($this->getMigrations())
             ->hasCommands([
                 GenerateDemoDataCommand::class,
                 Commands\ConnectFacebookCommand::class,

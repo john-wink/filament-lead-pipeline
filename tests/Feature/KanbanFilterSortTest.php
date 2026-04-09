@@ -11,7 +11,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
-use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\User;
+use App\Models\User;
 use Livewire\Livewire;
 
 beforeEach(function (): void {

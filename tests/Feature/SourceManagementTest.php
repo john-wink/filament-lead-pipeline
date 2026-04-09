@@ -9,7 +9,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
-use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\Team;
+use App\Models\Team;
 
 use function Pest\Livewire\livewire;
 

@@ -21,20 +21,23 @@ class FacebookOAuthController
 
     public function redirect(Request $request): RedirectResponse
     {
-        $state = Str::random(40);
+        $nonce  = Str::random(40);
+        $teamId = filament()->getTenant()?->getKey() ?? $request->query('team');
+        $state  = base64_encode(json_encode(['nonce' => $nonce, 'team' => $teamId]));
 
-        $request->session()->put('facebook_oauth_state', $state);
-        $request->session()->put('facebook_oauth_team', filament()->getTenant()?->getKey());
+        $request->session()->put('facebook_oauth_nonce', $nonce);
 
         return redirect()->away($this->facebook->getOAuthRedirectUrl($state));
     }
 
     public function callback(Request $request): RedirectResponse|Response
     {
-        $expectedState = $request->session()->pull('facebook_oauth_state');
-        $teamId        = $request->session()->pull('facebook_oauth_team');
+        $stateData     = json_decode(base64_decode($request->query('state', '')), true) ?? [];
+        $expectedNonce = $request->session()->pull('facebook_oauth_nonce');
+        $teamId        = $stateData['team'] ?? null;
+        $returnedNonce = $stateData['nonce'] ?? null;
 
-        if ( ! $expectedState || $request->query('state') !== $expectedState) {
+        if ( ! $expectedNonce || $returnedNonce !== $expectedNonce) {
             return response('Invalid OAuth state.', 403);
         }
 
