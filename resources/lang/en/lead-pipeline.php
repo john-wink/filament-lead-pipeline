@@ -260,6 +260,7 @@ return [
         'call'           => 'Call',
         'email'          => 'Email',
         'assignment'     => 'Assigned',
+        'deleted'        => 'deleted',
         'moved_from_to'  => 'Moved from "%s" to "%s"',
         'no_phase'       => 'No phase',
         'marked_won'     => 'Lead marked as won',

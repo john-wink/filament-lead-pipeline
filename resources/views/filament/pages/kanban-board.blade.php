@@ -1,6 +1,7 @@
 <x-filament-panels::page>
+    @if($this->activeTab === 'board')
     <style>
-        /* Kanban: nuclear approach — kill ALL scrolling ancestors and pin the board */
+        /* Kanban: kill scrolling on ancestors so the board fills the viewport */
         html, body { overflow: hidden !important; height: 100vh !important; }
         .fi-layout, .fi-main, .fi-main-ctn, .fi-topbar + div,
         .fi-page, .fi-page-content, .fi-section, .fi-section-content-ctn,
@@ -8,6 +9,9 @@
             overflow: hidden !important;
             max-height: 100vh !important;
         }
+    </style>
+    @endif
+    <style>
         [data-kanban-page] {
             display: flex; flex-direction: column; overflow: hidden; min-height: 0;
         }

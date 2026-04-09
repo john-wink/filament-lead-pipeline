@@ -36,10 +36,16 @@ class LeadSource extends Model
         'lead_board_uuid',
         'lead_board_id',
         'team_uuid',
+        'created_by',
         'facebook_page_uuid',
         'facebook_form_ids',
         'default_assigned_to',
     ];
+
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(config('lead-pipeline.user_model'), 'created_by');
+    }
 
     public function board(): BelongsTo
     {

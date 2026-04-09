@@ -161,6 +161,116 @@ class PhaseListTable extends Component implements HasForms, HasTable
                             }
                         }
                     }),
+                Tables\Actions\DeleteAction::make()
+                    ->label('')
+                    ->tooltip(__('lead-pipeline::lead-pipeline.activity.deleted'))
+                    ->visible(function (Lead $record): bool {
+                        $phase = LeadPhase::find($this->phaseId);
+                        $board = $phase?->board;
+                        $user  = auth()->user();
+
+                        return $board && $user && $board->isAdmin($user);
+                    }),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkAction::make('bulk_assign')
+                    ->label(__('lead-pipeline::lead-pipeline.actions.assign_advisor'))
+                    ->icon('heroicon-o-user-plus')
+                    ->form([
+                        Forms\Components\Select::make('assigned_to')
+                            ->label(__('lead-pipeline::lead-pipeline.actions.advisor'))
+                            ->options(fn () => FilamentLeadPipelinePlugin::getAssignableUsers()
+                                ->pluck('display_label', 'uuid' === config('lead-pipeline.primary_key_type') ? 'uuid' : 'id'))
+                            ->searchable()
+                            ->required(),
+                    ])
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data): void {
+                        $assignee     = config('lead-pipeline.user_model')::find($data['assigned_to']);
+                        $assigneeName = $assignee?->name ?? __('lead-pipeline::lead-pipeline.field.unknown');
+
+                        foreach ($records as $record) {
+                            $record->update(['assigned_to' => $data['assigned_to']]);
+
+                            $record->activities()->create([
+                                'type'        => LeadActivityTypeEnum::Assignment->value,
+                                'description' => __('lead-pipeline::lead-pipeline.actions.assigned_to_name', ['name' => $assigneeName]),
+                                'causer_type' => config('lead-pipeline.user_model'),
+                                'causer_id'   => auth()->id(),
+                            ]);
+
+                            LeadAssigned::dispatch($record, $assignee, auth()->user());
+
+                            // Auto-move from Open to InProgress
+                            $phase = $record->phase;
+                            if ($phase && LeadPhaseTypeEnum::Open === $phase->type) {
+                                $firstInProgress = $record->board->phases()
+                                    ->where('type', LeadPhaseTypeEnum::InProgress)
+                                    ->ordered()
+                                    ->first();
+
+                                if ($firstInProgress) {
+                                    $record->moveToPhase($firstInProgress);
+                                }
+                            }
+                        }
+
+                        \Filament\Notifications\Notification::make()
+                            ->title(__('lead-pipeline::lead-pipeline.actions.assigned_to_name', ['name' => $assigneeName]))
+                            ->body(count($records) . ' Leads')
+                            ->success()
+                            ->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
+                Tables\Actions\BulkAction::make('bulk_move')
+                    ->label(__('lead-pipeline::lead-pipeline.actions.move'))
+                    ->icon('heroicon-o-arrow-right')
+                    ->form(function (): array {
+                        $phase   = LeadPhase::find($this->phaseId);
+                        $boardId = $phase?->{LeadPhase::fkColumn('lead_board')};
+
+                        return [
+                            Forms\Components\Select::make('phase_id')
+                                ->label(__('lead-pipeline::lead-pipeline.phase.singular'))
+                                ->options(fn () => $boardId
+                                    ? LeadPhase::where(LeadPhase::fkColumn('lead_board'), $boardId)
+                                        ->ordered()
+                                        ->pluck('name', LeadPhase::pkColumn())
+                                    : [])
+                                ->required(),
+                        ];
+                    })
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data): void {
+                        $targetPhase = LeadPhase::find($data['phase_id']);
+                        if (! $targetPhase) {
+                            return;
+                        }
+
+                        foreach ($records as $record) {
+                            $record->moveToPhase($targetPhase);
+                        }
+
+                        \Filament\Notifications\Notification::make()
+                            ->title(__('lead-pipeline::lead-pipeline.lead.moved'))
+                            ->body(count($records) . ' Leads → ' . $targetPhase->name)
+                            ->success()
+                            ->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
+                Tables\Actions\BulkAction::make('bulk_delete')
+                    ->label(__('lead-pipeline::lead-pipeline.actions.close'))
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records): void {
+                        $count = $records->count();
+                        $records->each->delete();
+
+                        \Filament\Notifications\Notification::make()
+                            ->title("{$count} Leads " . __('lead-pipeline::lead-pipeline.activity.deleted'))
+                            ->success()
+                            ->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
             ])
             ->defaultSort('updated_at', 'desc')
             ->paginated([10, 25, 50]);

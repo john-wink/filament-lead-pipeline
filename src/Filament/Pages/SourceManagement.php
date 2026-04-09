@@ -44,6 +44,31 @@ class SourceManagement extends Page implements HasTable
                         filament()->getTenant(),
                         fn ($q) => $q->where(config('lead-pipeline.tenancy.foreign_key'), filament()->getTenant()->getKey())
                     )
+                    ->where(function ($q): void {
+                        $user = auth()->user();
+                        if (! $user) {
+                            return;
+                        }
+
+                        $q->where(function ($sub) use ($user): void {
+                            // Creator always sees their own sources
+                            $sub->where('created_by', $user->getKey())
+                                // Board admins see non-private sources (api, funnel, manual) + legacy sources without created_by
+                                ->orWhere(function ($adminSub) use ($user): void {
+                                    $adminSub->where(function ($driverSub): void {
+                                        $driverSub->whereNotIn('driver', ['meta', 'zapier'])
+                                            ->orWhereNull('created_by');
+                                    })
+                                        ->whereHas('board', fn ($bq) => $bq->whereHas(
+                                            'admins',
+                                            fn ($aq) => $aq->where(
+                                                'lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'),
+                                                $user->getKey(),
+                                            )
+                                        ));
+                                });
+                        });
+                    })
             )
             ->modifyQueryUsing(fn ($query) => $query->withCount('leads'))
             ->columns([
@@ -119,6 +144,8 @@ class SourceManagement extends Page implements HasTable
                         if (filament()->getTenant()) {
                             $data[config('lead-pipeline.tenancy.foreign_key')] = filament()->getTenant()->getKey();
                         }
+
+                        $data['created_by'] = auth()->id();
 
                         return $data;
                     })

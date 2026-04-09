@@ -42,11 +42,11 @@ class MetaDriver implements LeadSourceDriver
         $customMapping = $config['custom_field_mapping'] ?? [];
         $fieldData     = $this->extractFieldData($payload->raw_payload);
 
-        $name      = $this->findFirstMatch($fieldData, $fieldMapping['name'] ?? ['full_name']);
-        $firstName = $this->findFirstMatch($fieldData, $fieldMapping['first_name'] ?? []);
-        $lastName  = $this->findFirstMatch($fieldData, $fieldMapping['last_name'] ?? []);
-        $email     = $this->findFirstMatch($fieldData, $fieldMapping['email'] ?? ['email']);
-        $phone     = $this->findFirstMatch($fieldData, $fieldMapping['phone'] ?? ['phone_number']);
+        $name      = $this->findFirstMatch($fieldData, $fieldMapping['name'] ?? ['full_name', 'vollständiger_name']);
+        $firstName = $this->findFirstMatch($fieldData, $fieldMapping['first_name'] ?? ['first_name', 'vorname']);
+        $lastName  = $this->findFirstMatch($fieldData, $fieldMapping['last_name'] ?? ['last_name', 'nachname']);
+        $email     = $this->findFirstMatch($fieldData, $fieldMapping['email'] ?? ['email', 'e-mail-adresse', 'e-mail']);
+        $phone     = $this->findFirstMatch($fieldData, $fieldMapping['phone'] ?? ['phone_number', 'telefonnummer', 'phone']);
 
         if (( ! $name || '' === $name) && ($firstName || $lastName)) {
             $name = mb_trim("{$firstName} {$lastName}");
@@ -162,29 +162,73 @@ class MetaDriver implements LeadSourceDriver
             Section::make(__('lead-pipeline::lead-pipeline.facebook.field_mapping'))
                 ->schema([
                     View::make('lead-pipeline::filament.components.field-mapping-info'),
+                    Repeater::make('config.custom_field_mapping')
+                        ->label(__('lead-pipeline::lead-pipeline.facebook.custom_fields'))
+                        ->schema([
+                            TextInput::make('facebook_key')
+                                ->label(__('lead-pipeline::lead-pipeline.facebook.fb_field'))
+                                ->disabled()
+                                ->columnSpan(1),
+                            TextInput::make('facebook_label')
+                                ->label(__('lead-pipeline::lead-pipeline.facebook.fb_label'))
+                                ->disabled()
+                                ->columnSpan(1),
+                            Select::make('board_field_key')
+                                ->label(__('lead-pipeline::lead-pipeline.facebook.board_field'))
+                                ->options(function (callable $get) {
+                                    $boardFk = LeadSource::fkColumn('lead_board');
+                                    $boardId = $get('../../' . $boardFk);
+                                    if (! $boardId) {
+                                        return [
+                                            '__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping'),
+                                            '__create__' => '+ ' . __('lead-pipeline::lead-pipeline.facebook.auto_create_fields'),
+                                        ];
+                                    }
+                                    $board  = LeadBoard::find($boardId);
+                                    $fields = $board?->fieldDefinitions()->custom()->ordered()->pluck('name', 'key')->toArray() ?? [];
+
+                                    return [
+                                        '__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping'),
+                                        '__create__' => '+ ' . __('lead-pipeline::lead-pipeline.facebook.auto_create_fields'),
+                                        ...$fields,
+                                    ];
+                                })
+                                ->live()
+                                ->default('__ignore__')
+                                ->columnSpan(1),
+                            Select::make('create_field_type')
+                                ->label(__('lead-pipeline::lead-pipeline.facebook.field_type_label'))
+                                ->options(\JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum::class)
+                                ->default('string')
+                                ->visible(fn (callable $get) => '__create__' === $get('board_field_key'))
+                                ->columnSpan(1),
+                            \Filament\Forms\Components\Toggle::make('create_show_in_card')
+                                ->label(__('lead-pipeline::lead-pipeline.facebook.show_on_card'))
+                                ->default(false)
+                                ->visible(fn (callable $get) => '__create__' === $get('board_field_key'))
+                                ->columnSpan(1),
+                            \Filament\Forms\Components\Toggle::make('create_show_in_funnel')
+                                ->label(__('lead-pipeline::lead-pipeline.facebook.show_in_funnel'))
+                                ->default(false)
+                                ->visible(fn (callable $get) => '__create__' === $get('board_field_key'))
+                                ->columnSpan(1),
+                        ])
+                        ->columns(3)
+                        ->addable(false)
+                        ->deletable(false)
+                        ->reorderable(false)
+                        ->defaultItems(0),
                     Actions::make([
-                        FormAction::make('auto_create_fields')
+                        FormAction::make('save_field_mapping')
                             ->label(__('lead-pipeline::lead-pipeline.facebook.auto_create_fields'))
                             ->icon('heroicon-o-bolt')
                             ->color('success')
-                            ->form([
-                                Select::make('field_type')
-                                    ->label(__('lead-pipeline::lead-pipeline.facebook.field_type_label'))
-                                    ->options(\JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum::class)
-                                    ->default('string'),
-                                \Filament\Forms\Components\Toggle::make('show_in_card')
-                                    ->label(__('lead-pipeline::lead-pipeline.facebook.show_on_card'))
-                                    ->default(false),
-                                \Filament\Forms\Components\Toggle::make('show_in_funnel')
-                                    ->label(__('lead-pipeline::lead-pipeline.facebook.show_in_funnel'))
-                                    ->default(false),
-                            ])
-                            ->action(function (callable $get, callable $set, array $data): void {
+                            ->action(function (callable $get, callable $set): void {
                                 $boardFk = LeadSource::fkColumn('lead_board');
                                 $boardId = $get($boardFk);
                                 $items   = $get('config.custom_field_mapping') ?? [];
 
-                                if ( ! $boardId || empty($items)) {
+                                if (! $boardId || empty($items)) {
                                     return;
                                 }
 
@@ -194,7 +238,7 @@ class MetaDriver implements LeadSourceDriver
                                 $created = 0;
 
                                 foreach ($items as $index => $item) {
-                                    if ('__ignore__' !== ($item['board_field_key'] ?? '__ignore__') && '__create__' !== ($item['board_field_key'] ?? '')) {
+                                    if ('__create__' !== ($item['board_field_key'] ?? '')) {
                                         $updated[$index] = $item;
 
                                         continue;
@@ -211,7 +255,6 @@ class MetaDriver implements LeadSourceDriver
 
                                     $key = \Illuminate\Support\Str::slug($fbKey, '_');
 
-                                    // Skip if field already exists
                                     if ($board->fieldDefinitions()->where('key', $key)->exists()) {
                                         $item['board_field_key'] = $key;
                                         $updated[$index]         = $item;
@@ -223,11 +266,11 @@ class MetaDriver implements LeadSourceDriver
                                     $board->fieldDefinitions()->create([
                                         'name'           => $label,
                                         'key'            => $key,
-                                        'type'           => $data['field_type'] ?? 'string',
+                                        'type'           => $item['create_field_type'] ?? 'string',
                                         'is_required'    => false,
                                         'is_system'      => false,
-                                        'show_in_card'   => $data['show_in_card'] ?? false,
-                                        'show_in_funnel' => $data['show_in_funnel'] ?? false,
+                                        'show_in_card'   => $item['create_show_in_card'] ?? false,
+                                        'show_in_funnel' => $item['create_show_in_funnel'] ?? false,
                                         'sort'           => $maxSort,
                                     ]);
 
@@ -245,35 +288,6 @@ class MetaDriver implements LeadSourceDriver
                                     ->send();
                             }),
                     ]),
-                    Repeater::make('config.custom_field_mapping')
-                        ->label(__('lead-pipeline::lead-pipeline.facebook.custom_fields'))
-                        ->schema([
-                            TextInput::make('facebook_key')
-                                ->label(__('lead-pipeline::lead-pipeline.facebook.fb_field'))
-                                ->disabled(),
-                            TextInput::make('facebook_label')
-                                ->label(__('lead-pipeline::lead-pipeline.facebook.fb_label'))
-                                ->disabled(),
-                            Select::make('board_field_key')
-                                ->label(__('lead-pipeline::lead-pipeline.facebook.board_field'))
-                                ->options(function (callable $get) {
-                                    $boardFk = LeadSource::fkColumn('lead_board');
-                                    $boardId = $get('../../' . $boardFk);
-                                    if ( ! $boardId) {
-                                        return ['__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping')];
-                                    }
-                                    $board  = LeadBoard::find($boardId);
-                                    $fields = $board?->fieldDefinitions()->custom()->ordered()->pluck('name', 'key')->toArray() ?? [];
-
-                                    return ['__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping'), ...$fields];
-                                })
-                                ->default('__ignore__'),
-                        ])
-                        ->columns(3)
-                        ->addable(false)
-                        ->deletable(false)
-                        ->reorderable(false)
-                        ->defaultItems(0),
                 ])
                 ->visible(fn (callable $get) => filled($get('config.loaded_fields'))),
             Select::make('default_assigned_to')

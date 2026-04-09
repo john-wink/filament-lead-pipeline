@@ -260,6 +260,7 @@ return [
         'call'           => 'Anruf',
         'email'          => 'E-Mail',
         'assignment'     => 'Zugewiesen',
+        'deleted'        => 'gelöscht',
         'moved_from_to'  => 'Von "%s" nach "%s" verschoben',
         'no_phase'       => 'Keine Phase',
         'marked_won'     => 'Lead als gewonnen markiert',
