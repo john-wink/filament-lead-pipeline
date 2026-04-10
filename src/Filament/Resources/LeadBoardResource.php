@@ -100,6 +100,8 @@ class LeadBoardResource extends Resource
                             ->visible(fn (?LeadBoard $record): bool => (bool) $record?->hasLeads())
                             ->extraAttributes(['class' => 'text-sm text-warning-600 dark:text-warning-400']),
                         Forms\Components\Repeater::make('phases')
+                            ->label(__('lead-pipeline::lead-pipeline.board.phases'))
+                            ->hiddenLabel()
                             ->relationship('phases')
                             ->schema([
                                 Forms\Components\TextInput::make('name')
