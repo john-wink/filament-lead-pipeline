@@ -33,6 +33,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
     public function __construct(
         public LeadSource $source,
         public int $days = 90,
+        public bool $updateExisting = false,
     ) {}
 
     public function handle(FacebookGraphService $facebook): void
@@ -100,14 +101,6 @@ class ImportFacebookLeadsJob implements ShouldQueue
                 foreach ($leads as $fbLead) {
                     $fbLeadId = $fbLead['id'] ?? null;
 
-                    // Dedup by Facebook Lead ID (raw_data->id)
-                    if ($fbLeadId && Lead::query()
-                        ->where(Lead::fkColumn('lead_board'), $board->getKey())
-                        ->whereJsonContains('raw_data->id', $fbLeadId)
-                        ->exists()) {
-                        continue;
-                    }
-
                     $fieldData = collect($fbLead['field_data'] ?? [])
                         ->mapWithKeys(fn ($f) => [$f['name'] => $f['values'][0] ?? null])
                         ->toArray();
@@ -128,18 +121,66 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     $email     = $findFirst($mapping['email'] ?? ['email', 'e-mail-adresse', 'e-mail']);
                     $phone     = $findFirst($mapping['phone'] ?? ['phone_number', 'telefonnummer', 'phone']);
 
-                    if (( ! $name || '' === $name) && ($firstName || $lastName)) {
+                    if ((! $name || '' === $name) && ($firstName || $lastName)) {
                         $name = mb_trim("{$firstName} {$lastName}");
                     }
 
-                    // Additional dedup by email + board
-                    if ($email && Lead::query()
-                        ->where(Lead::fkColumn('lead_board'), $board->getKey())
-                        ->where('email', $email)
-                        ->exists()) {
+                    // Check if lead already exists (by Facebook Lead ID or email)
+                    $existingLead = null;
+                    if ($fbLeadId) {
+                        $existingLead = Lead::query()
+                            ->where(Lead::fkColumn('lead_board'), $board->getKey())
+                            ->whereJsonContains('raw_data->id', $fbLeadId)
+                            ->first();
+                    }
+                    if (! $existingLead && $email) {
+                        $existingLead = Lead::query()
+                            ->where(Lead::fkColumn('lead_board'), $board->getKey())
+                            ->where('email', $email)
+                            ->first();
+                    }
+
+                    // Update existing lead (re-import mode)
+                    if ($existingLead) {
+                        if ($this->updateExisting) {
+                            $updates = ['raw_data' => $fbLead];
+
+                            if ($name && '' !== $name && (! $existingLead->name || '' === $existingLead->name || 'Unknown' === $existingLead->name)) {
+                                $updates['name'] = (string) $name;
+                            }
+                            // Always update name if we have a better one (first+last vs empty)
+                            if ($name && '' !== $name && $existingLead->name !== $name) {
+                                $updates['name'] = (string) $name;
+                            }
+                            if ($email && ! $existingLead->email) {
+                                $updates['email'] = $email;
+                            }
+                            if ($phone && ! $existingLead->phone) {
+                                $updates['phone'] = $phone;
+                            }
+
+                            $existingLead->update($updates);
+
+                            // Update custom field mappings
+                            foreach ($customMapping as $item) {
+                                $fbKey    = $item['facebook_key'] ?? '';
+                                $boardKey = $item['board_field_key'] ?? '__ignore__';
+
+                                if ('__ignore__' === $boardKey || '__create__' === $boardKey || ! isset($fieldData[$fbKey])) {
+                                    continue;
+                                }
+
+                                $definition = $fieldDefinitions->firstWhere('key', $boardKey);
+                                if ($definition) {
+                                    $existingLead->setFieldValue($definition, $fieldData[$fbKey]);
+                                }
+                            }
+                        }
+
                         continue;
                     }
 
+                    // Create new lead
                     $maxSort = Lead::query()
                         ->where(Lead::fkColumn('lead_phase'), $targetPhase->getKey())
                         ->max('sort') ?? 0;

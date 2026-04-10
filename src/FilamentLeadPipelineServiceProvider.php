@@ -25,7 +25,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
             ->hasConfigFile()
             ->hasViews(static::$viewNamespace)
             ->hasTranslations()
-            ->hasRoutes(['web', 'api'])
+            ->hasRoutes(['api'])
             ->hasCommands([
                 GenerateDemoDataCommand::class,
                 Commands\ConnectFacebookCommand::class,
@@ -61,6 +61,12 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
 
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->registerLivewireComponents();
+
+        // Register funnel web routes LAST so they don't catch other routes
+        // when route_prefix is empty (/{slug} would match everything)
+        $this->app->booted(function (): void {
+            $this->loadRoutesFrom(__DIR__ . '/../routes/web.php');
+        });
     }
 
     protected function registerLivewireComponents(): void

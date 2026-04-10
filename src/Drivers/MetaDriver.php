@@ -318,24 +318,27 @@ class MetaDriver implements LeadSourceDriver
     /** @return array<TableAction> */
     public function getTableActions(LeadSource $source): array
     {
+        $importForm = [
+            Select::make('days')
+                ->label(__('lead-pipeline::lead-pipeline.facebook.import_period'))
+                ->options([
+                    30  => __('lead-pipeline::lead-pipeline.facebook.import_30'),
+                    60  => __('lead-pipeline::lead-pipeline.facebook.import_60'),
+                    90  => __('lead-pipeline::lead-pipeline.facebook.import_90'),
+                    180 => __('lead-pipeline::lead-pipeline.facebook.import_180'),
+                    365 => __('lead-pipeline::lead-pipeline.facebook.import_365'),
+                ])
+                ->default(90)
+                ->required(),
+        ];
+
         return [
             TableAction::make('import_leads')
                 ->label(__('lead-pipeline::lead-pipeline.facebook.import_leads'))
                 ->icon('heroicon-o-arrow-down-tray')
-                ->visible(fn (LeadSource $record) => \JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum::Active === $record->status)
-                ->form([
-                    Select::make('days')
-                        ->label(__('lead-pipeline::lead-pipeline.facebook.import_period'))
-                        ->options([
-                            30  => __('lead-pipeline::lead-pipeline.facebook.import_30'),
-                            60  => __('lead-pipeline::lead-pipeline.facebook.import_60'),
-                            90  => __('lead-pipeline::lead-pipeline.facebook.import_90'),
-                            180 => __('lead-pipeline::lead-pipeline.facebook.import_180'),
-                            365 => __('lead-pipeline::lead-pipeline.facebook.import_365'),
-                        ])
-                        ->default(90)
-                        ->required(),
-                ])
+                ->visible(fn (LeadSource $record) => filled($record->facebook_page_uuid)
+                    && \JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum::Active === $record->status)
+                ->form($importForm)
                 ->modalDescription(__('lead-pipeline::lead-pipeline.facebook.import_description'))
                 ->action(function (LeadSource $record, array $data): void {
                     \JohnWink\FilamentLeadPipeline\Jobs\ImportFacebookLeadsJob::dispatch($record, (int) $data['days']);
@@ -343,6 +346,23 @@ class MetaDriver implements LeadSourceDriver
                     \Filament\Notifications\Notification::make()
                         ->title(__('lead-pipeline::lead-pipeline.facebook.import_started'))
                         ->body(__('lead-pipeline::lead-pipeline.facebook.import_started_body'))
+                        ->success()
+                        ->send();
+                }),
+            TableAction::make('reimport_leads')
+                ->label(__('lead-pipeline::lead-pipeline.facebook.reimport_leads'))
+                ->icon('heroicon-o-arrow-path')
+                ->visible(fn (LeadSource $record) => filled($record->facebook_page_uuid)
+                    && \JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum::Active === $record->status
+                    && $record->leads()->exists())
+                ->form($importForm)
+                ->modalDescription(__('lead-pipeline::lead-pipeline.facebook.reimport_description'))
+                ->action(function (LeadSource $record, array $data): void {
+                    \JohnWink\FilamentLeadPipeline\Jobs\ImportFacebookLeadsJob::dispatch($record, (int) $data['days'], true);
+
+                    \Filament\Notifications\Notification::make()
+                        ->title(__('lead-pipeline::lead-pipeline.facebook.reimport_started'))
+                        ->body(__('lead-pipeline::lead-pipeline.facebook.reimport_started_body'))
                         ->success()
                         ->send();
                 }),

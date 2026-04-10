@@ -19,6 +19,11 @@ beforeEach(function (): void {
     $this->actingAs($this->user);
     filament()->setCurrentPanel(filament()->getPanel('admin'));
     filament()->setTenant($this->team);
+
+    // Auto-add user as admin on every new board
+    LeadBoard::created(function (LeadBoard $board): void {
+        $board->admins()->syncWithoutDetaching([$this->user->getKey()]);
+    });
 });
 
 // ==========================================
