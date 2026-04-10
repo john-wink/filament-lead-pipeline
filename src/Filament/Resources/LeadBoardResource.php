@@ -158,6 +158,8 @@ class LeadBoardResource extends Resource
                 Forms\Components\Section::make(__('lead-pipeline::lead-pipeline.board.custom_fields'))
                     ->schema([
                         Forms\Components\Repeater::make('fieldDefinitions')
+                            ->label(__('lead-pipeline::lead-pipeline.board.custom_fields'))
+                            ->hiddenLabel()
                             ->relationship('fieldDefinitions', fn ($query) => $query->where('is_system', false))
                             ->schema([
                                 Forms\Components\TextInput::make('name')
