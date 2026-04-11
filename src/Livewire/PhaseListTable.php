@@ -188,6 +188,11 @@ class PhaseListTable extends Component implements HasForms, HasTable
                         $assignee     = config('lead-pipeline.user_model')::find($data['assigned_to']);
                         $assigneeName = $assignee?->name ?? __('lead-pipeline::lead-pipeline.field.unknown');
 
+                        $records->load('phase', 'board.phases');
+
+                        // Resolve InProgress phase per board once
+                        $inProgressPhases = [];
+
                         foreach ($records as $record) {
                             $record->update(['assigned_to' => $data['assigned_to']]);
 
@@ -203,13 +208,17 @@ class PhaseListTable extends Component implements HasForms, HasTable
                             // Auto-move from Open to InProgress
                             $phase = $record->phase;
                             if ($phase && LeadPhaseTypeEnum::Open === $phase->type) {
-                                $firstInProgress = $record->board->phases()
-                                    ->where('type', LeadPhaseTypeEnum::InProgress)
-                                    ->ordered()
-                                    ->first();
+                                $boardKey = $record->board->getKey();
 
-                                if ($firstInProgress) {
-                                    $record->moveToPhase($firstInProgress);
+                                if (! array_key_exists($boardKey, $inProgressPhases)) {
+                                    $inProgressPhases[$boardKey] = $record->board->phases
+                                        ->where('type', LeadPhaseTypeEnum::InProgress)
+                                        ->sortBy('sort')
+                                        ->first();
+                                }
+
+                                if ($inProgressPhases[$boardKey]) {
+                                    $record->moveToPhase($inProgressPhases[$boardKey]);
                                 }
                             }
                         }
