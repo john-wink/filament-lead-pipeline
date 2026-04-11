@@ -300,6 +300,7 @@ return [
         'fields_created'        => ':count champs créés',
         'fields_created_body'   => 'Les nouveaux champs du tableau ont été créés et mappés.',
         'fields_already_mapped' => 'Tous les champs étaient déjà mappés.',
+        'no_board_selected'     => 'Veuillez d\'abord sélectionner un tableau.',
         'custom_fields'         => 'Mapper les champs personnalisés',
         'fb_field'              => 'Champ Facebook',
         'fb_label'              => 'Libellé',

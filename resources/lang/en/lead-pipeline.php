@@ -300,6 +300,7 @@ return [
         'fields_created'        => ':count fields created',
         'fields_created_body'   => 'The new board fields have been created and mapped.',
         'fields_already_mapped' => 'All fields were already mapped.',
+        'no_board_selected'     => 'Please select a board first.',
         'custom_fields'         => 'Map Custom Fields',
         'fb_field'              => 'Facebook Field',
         'fb_label'              => 'Label',

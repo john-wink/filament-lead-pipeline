@@ -196,9 +196,9 @@
                         <div class="space-y-1.5">
                             @foreach($lead->fieldValues as $fieldValue)
                                 @if($fieldValue->definition)
-                                    <div class="flex items-start justify-between rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800">
-                                        <span class="text-xs font-medium text-gray-500 dark:text-gray-400 shrink-0 mr-2">{{ $fieldValue->definition->name }}</span>
-                                        <div class="text-right" x-data="{ editing: false }">
+                                    <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800">
+                                        <span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ $fieldValue->definition->name }}</span>
+                                        <div x-data="{ editing: false }">
                                             @php
                                                 $defType = $fieldValue->definition->type;
                                                 $defId = $fieldValue->definition->getKey();

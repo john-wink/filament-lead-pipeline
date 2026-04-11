@@ -101,9 +101,19 @@ class ImportFacebookLeadsJob implements ShouldQueue
                 foreach ($leads as $fbLead) {
                     $fbLeadId = $fbLead['id'] ?? null;
 
-                    $fieldData = collect($fbLead['field_data'] ?? [])
-                        ->mapWithKeys(fn ($f) => [$f['name'] => $f['values'][0] ?? null])
-                        ->toArray();
+                    // Build field data indexed by both the raw name and its slugified
+                    // form so lookups work regardless of whether the mapping stores
+                    // the Facebook question key (slug) or the display label.
+                    $fieldData = [];
+                    foreach ($fbLead['field_data'] ?? [] as $f) {
+                        $value = $f['values'][0] ?? null;
+                        $name  = $f['name'] ?? '';
+                        $fieldData[$name] = $value;
+                        $slug = \Illuminate\Support\Str::slug($name, '_');
+                        if ($slug !== $name && ! isset($fieldData[$slug])) {
+                            $fieldData[$slug] = $value;
+                        }
+                    }
 
                     $findFirst = function (array $keys) use ($fieldData): ?string {
                         foreach ($keys as $key) {

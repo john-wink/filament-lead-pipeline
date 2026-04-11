@@ -6,6 +6,7 @@ namespace JohnWink\FilamentLeadPipeline\Drivers;
 
 use Filament\Forms\Components\Actions;
 use Filament\Forms\Components\Actions\Action as FormAction;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Section;
@@ -83,6 +84,10 @@ class MetaDriver implements LeadSourceDriver
     public function getConfigFormSchema(): array
     {
         return [
+            Hidden::make('config.field_mapping')
+                ->dehydrateStateUsing(fn ($state): array => is_array($state) ? $state : []),
+            Hidden::make('config.loaded_fields')
+                ->dehydrateStateUsing(fn ($state): array => is_array($state) ? $state : []),
             Placeholder::make('facebook_connect')
                 ->label('')
                 ->content(fn () => view('lead-pipeline::filament.components.facebook-connect-button')),
@@ -168,16 +173,28 @@ class MetaDriver implements LeadSourceDriver
                             TextInput::make('facebook_key')
                                 ->label(__('lead-pipeline::lead-pipeline.facebook.fb_field'))
                                 ->disabled()
+                                ->dehydrated()
                                 ->columnSpan(1),
                             TextInput::make('facebook_label')
                                 ->label(__('lead-pipeline::lead-pipeline.facebook.fb_label'))
                                 ->disabled()
+                                ->dehydrated()
                                 ->columnSpan(1),
                             Select::make('board_field_key')
                                 ->label(__('lead-pipeline::lead-pipeline.facebook.board_field'))
                                 ->options(function (callable $get) {
                                     $boardFk = LeadSource::fkColumn('lead_board');
-                                    $boardId = $get('../../' . $boardFk);
+
+                                    // Depth varies: Edit = 3 levels, Create = 4 levels
+                                    // (extra Section wrapper in Create form)
+                                    $boardId = null;
+                                    foreach (['../../../', '../../../../'] as $prefix) {
+                                        $boardId = $get($prefix . $boardFk);
+                                        if ($boardId) {
+                                            break;
+                                        }
+                                    }
+
                                     if (! $boardId) {
                                         return [
                                             '__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping'),
@@ -225,10 +242,15 @@ class MetaDriver implements LeadSourceDriver
                             ->color('success')
                             ->action(function (callable $get, callable $set): void {
                                 $boardFk = LeadSource::fkColumn('lead_board');
-                                $boardId = $get($boardFk);
+                                $boardId = $get('../' . $boardFk) ?: $get('../../' . $boardFk);
                                 $items   = $get('config.custom_field_mapping') ?? [];
 
                                 if (! $boardId || empty($items)) {
+                                    \Filament\Notifications\Notification::make()
+                                        ->title(__('lead-pipeline::lead-pipeline.facebook.no_board_selected'))
+                                        ->warning()
+                                        ->send();
+
                                     return;
                                 }
 
@@ -387,7 +409,12 @@ class MetaDriver implements LeadSourceDriver
                     $values = $field['values'] ?? [];
 
                     if (null !== $name && [] !== $values) {
-                        $fieldData[$name] = 1 === count($values) ? $values[0] : $values;
+                        $value          = 1 === count($values) ? $values[0] : $values;
+                        $fieldData[$name] = $value;
+                        $slug = \Illuminate\Support\Str::slug($name, '_');
+                        if ($slug !== $name && ! isset($fieldData[$slug])) {
+                            $fieldData[$slug] = $value;
+                        }
                     }
                 }
             }

@@ -300,6 +300,7 @@ return [
         'fields_created'        => ':count Felder erstellt',
         'fields_created_body'   => 'Die neuen Board-Felder wurden angelegt und zugeordnet.',
         'fields_already_mapped' => 'Alle Felder waren bereits zugeordnet.',
+        'no_board_selected'     => 'Bitte zuerst ein Board auswählen.',
         'custom_fields'         => 'Custom-Felder zuordnen',
         'fb_field'              => 'Facebook-Feld',
         'fb_label'              => 'Label',

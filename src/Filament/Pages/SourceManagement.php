@@ -10,6 +10,7 @@ use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
@@ -114,6 +115,9 @@ class SourceManagement extends Page implements HasTable
                         $driverFields = $this->getDriverConfigFields($record->driver);
 
                         return [...$baseFields, ...$driverFields];
+                    })
+                    ->mutateFormDataUsing(function (array $data): array {
+                        return $this->autoCreateFieldDefinitions($data);
                     }),
                 ...$this->getDriverTableActions(),
                 Tables\Actions\DeleteAction::make(),
@@ -147,7 +151,7 @@ class SourceManagement extends Page implements HasTable
 
                         $data['created_by'] = auth()->id();
 
-                        return $data;
+                        return $this->autoCreateFieldDefinitions($data);
                     })
                     ->after(function (LeadSource $record): void {
                         if ('funnel' === $record->driver && ! $record->funnel) {
@@ -225,6 +229,81 @@ class SourceManagement extends Page implements HasTable
         }
 
         return $design;
+    }
+
+    /**
+     * Automatically creates LeadFieldDefinition records for any custom_field_mapping
+     * entries that have board_field_key set to '__create__', then updates the mapping
+     * to reference the newly created field key.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    protected function autoCreateFieldDefinitions(array $data): array
+    {
+        $customMapping = $data['config']['custom_field_mapping'] ?? [];
+        $boardFk       = LeadSource::fkColumn('lead_board');
+        $boardId       = $data[$boardFk] ?? null;
+
+        if (! $boardId || empty($customMapping)) {
+            return $data;
+        }
+
+        $board = LeadBoard::find($boardId);
+        if (! $board) {
+            return $data;
+        }
+
+        $maxSort = $board->fieldDefinitions()->max('sort') ?? 0;
+        $created = 0;
+
+        foreach ($customMapping as $index => $item) {
+            if ('__create__' !== ($item['board_field_key'] ?? '')) {
+                continue;
+            }
+
+            $fbKey = $item['facebook_key'] ?? '';
+            $label = $item['facebook_label'] ?? $fbKey;
+
+            if ('' === $fbKey) {
+                continue;
+            }
+
+            $key = Str::slug($fbKey, '_');
+
+            if ($board->fieldDefinitions()->where('key', $key)->exists()) {
+                $customMapping[$index]['board_field_key'] = $key;
+
+                continue;
+            }
+
+            $maxSort++;
+            $board->fieldDefinitions()->create([
+                'name'           => $label,
+                'key'            => $key,
+                'type'           => $item['create_field_type'] ?? 'string',
+                'is_required'    => false,
+                'is_system'      => false,
+                'show_in_card'   => $item['create_show_in_card'] ?? false,
+                'show_in_funnel' => $item['create_show_in_funnel'] ?? false,
+                'sort'           => $maxSort,
+            ]);
+
+            $customMapping[$index]['board_field_key'] = $key;
+            $created++;
+        }
+
+        $data['config']['custom_field_mapping'] = $customMapping;
+
+        if ($created > 0) {
+            \Filament\Notifications\Notification::make()
+                ->title(__('lead-pipeline::lead-pipeline.facebook.fields_created', ['count' => $created]))
+                ->body(__('lead-pipeline::lead-pipeline.facebook.fields_created_body'))
+                ->success()
+                ->send();
+        }
+
+        return $data;
     }
 
     /** @return array<Tables\Actions\Action> */

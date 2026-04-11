@@ -10,25 +10,51 @@
             max-height: 100vh !important;
         }
     </style>
+    @else
+    <style>
+        /* Non-board tabs: ensure scrolling works normally */
+        html, body { overflow: auto !important; height: auto !important; }
+        .fi-layout, .fi-main, .fi-main-ctn, .fi-topbar + div,
+        .fi-page, .fi-page-content, .fi-section, .fi-section-content-ctn,
+        [class*="fi-body"], [class*="fi-main"] {
+            overflow: visible !important;
+            max-height: none !important;
+        }
+    </style>
     @endif
     <style>
         [data-kanban-page] {
-            display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+            display: flex; flex-direction: column; min-height: 0;
         }
     </style>
     <script>
-        // After full render: measure exact offset and set height
         requestAnimationFrame(() => {
             const el = document.querySelector('[data-kanban-page]');
             if (!el) return;
-            const top = el.getBoundingClientRect().top;
-            el.style.height = (window.innerHeight - top - 8) + 'px';
 
-            // Also kill overflow on every ancestor up to body
-            let node = el.parentElement;
-            while (node && node !== document.documentElement) {
-                node.style.overflow = 'hidden';
-                node = node.parentElement;
+            const isBoard = !!el.querySelector('[data-kanban-board]');
+
+            if (isBoard) {
+                // Board tab: lock height and overflow so the kanban fills the viewport
+                const top = el.getBoundingClientRect().top;
+                el.style.height = (window.innerHeight - top - 8) + 'px';
+                el.style.overflow = 'hidden';
+
+                let node = el.parentElement;
+                while (node && node !== document.documentElement) {
+                    node.style.overflow = 'hidden';
+                    node = node.parentElement;
+                }
+            } else {
+                // Non-board tabs (tables): restore scrolling
+                el.style.height = '';
+                el.style.overflow = '';
+
+                let node = el.parentElement;
+                while (node && node !== document.documentElement) {
+                    node.style.overflow = '';
+                    node = node.parentElement;
+                }
             }
         });
     </script>
@@ -179,13 +205,15 @@
         @endif
 
         {{-- Content (fills remaining space) --}}
-        <div class="flex-1 overflow-hidden min-h-0">
-            @if($this->activeTab === 'board')
+        @if($this->activeTab === 'board')
+            <div class="flex-1 overflow-hidden min-h-0">
                 @livewire('lead-pipeline::kanban-board', ['board' => $this->board])
-            @else
+            </div>
+        @else
+            <div class="flex-1 min-h-0">
                 @livewire('lead-pipeline::phase-list-table', ['phaseId' => $this->activeTab], key('list-' . $this->activeTab))
-            @endif
-        </div>
+            </div>
+        @endif
 
         @livewire('lead-pipeline::lead-detail-modal')
         @livewire('lead-pipeline::lead-analytics-modal')

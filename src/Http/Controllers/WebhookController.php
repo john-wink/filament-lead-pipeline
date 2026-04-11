@@ -210,9 +210,16 @@ class WebhookController
                 $facebook = app(FacebookGraphService::class);
                 $leadData = $facebook->getLeadData($leadgenId, $fbPage->page_access_token);
 
-                $fieldData = collect($leadData['field_data'] ?? [])
-                    ->mapWithKeys(fn ($field) => [$field['name'] => $field['values'][0] ?? null])
-                    ->toArray();
+                $fieldData = [];
+                foreach ($leadData['field_data'] ?? [] as $field) {
+                    $value = $field['values'][0] ?? null;
+                    $name  = $field['name'] ?? '';
+                    $fieldData[$name] = $value;
+                    $slug = \Illuminate\Support\Str::slug($name, '_');
+                    if ($slug !== $name && ! isset($fieldData[$slug])) {
+                        $fieldData[$slug] = $value;
+                    }
+                }
 
                 foreach ($sources as $source) {
                     try {
