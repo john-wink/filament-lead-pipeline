@@ -104,10 +104,19 @@ class FilamentLeadPipelinePlugin implements Plugin
         return $this;
     }
 
-    /** @param array<string, class-string> $converters */
+    /** @param array<int|string, class-string> $converters */
     public function converters(array $converters): static
     {
-        $this->converters = $converters;
+        // Ensure string keys: [UserLeadConverter::class] → ['user_lead' => UserLeadConverter::class]
+        $keyed = [];
+        foreach ($converters as $key => $class) {
+            if (is_int($key)) {
+                $key = \Illuminate\Support\Str::snake(class_basename($class));
+                $key = (string) str($key)->replaceLast('_converter', '')->replaceLast('_lead', '');
+            }
+            $keyed[$key] = $class;
+        }
+        $this->converters = $keyed;
 
         return $this;
     }
@@ -191,6 +200,12 @@ class FilamentLeadPipelinePlugin implements Plugin
 
     public function boot(Panel $panel): void
     {
-        //
+        $service = app(Services\LeadConversionService::class);
+
+        foreach ($this->converters as $name => $class) {
+            if (! $service->hasConverter($name)) {
+                $service->registerConverter($name, app($class));
+            }
+        }
     }
 }

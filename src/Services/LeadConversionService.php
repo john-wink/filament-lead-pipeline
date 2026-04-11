@@ -22,6 +22,11 @@ class LeadConversionService
         $this->converters[$name] = $converter;
     }
 
+    public function hasConverter(string $name): bool
+    {
+        return isset($this->converters[$name]);
+    }
+
     public function getConverter(string $name): LeadConverter
     {
         if ( ! isset($this->converters[$name])) {
