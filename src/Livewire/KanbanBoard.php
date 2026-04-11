@@ -124,10 +124,6 @@ class KanbanBoard extends Component
             ]);
 
             LeadMoved::dispatch($lead->refresh(), $oldPhase ?? $newPhase, $newPhase);
-
-            if ($newPhase->auto_convert && $newPhase->type->isTerminal()) {
-                $this->dispatch('lead-conversion-needed', leadId: $lead->getKey());
-            }
         }
 
         if ($oldPhase) {

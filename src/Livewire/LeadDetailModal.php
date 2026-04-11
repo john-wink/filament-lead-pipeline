@@ -277,7 +277,6 @@ class LeadDetailModal extends Component
         }
 
         $fromPhase = $this->lead->phase;
-
         $this->lead->moveToPhase($newPhase);
 
         $this->dispatch('phase-updated', phaseId: $fromPhase?->getKey());

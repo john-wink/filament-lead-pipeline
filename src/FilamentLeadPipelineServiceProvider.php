@@ -62,6 +62,8 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->registerLivewireComponents();
 
+        Models\Lead::observe(Observers\LeadObserver::class);
+
         // Register funnel web routes LAST so they don't catch other routes
         // when route_prefix is empty (/{slug} would match everything)
         $this->app->booted(function (): void {
