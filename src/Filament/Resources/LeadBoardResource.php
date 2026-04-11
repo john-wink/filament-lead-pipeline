@@ -238,14 +238,17 @@ class LeadBoardResource extends Resource
                     ->sortable(),
             ])
             ->defaultSort('sort')
+            ->recordUrl(fn (LeadBoard $record): string => KanbanBoard::getUrl(['board' => $record->getKey()]))
             ->actions([
                 Tables\Actions\ActionGroup::make([
                     Tables\Actions\Action::make('kanban')
                         ->label(__('lead-pipeline::lead-pipeline.board.open'))
                         ->icon('heroicon-o-view-columns')
                         ->url(fn (LeadBoard $record): string => KanbanBoard::getUrl(['board' => $record->getKey()])),
-                    Tables\Actions\EditAction::make(),
-                    Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\EditAction::make()
+                        ->visible(fn (LeadBoard $record): bool => $record->isAdmin(auth()->user())),
+                    Tables\Actions\DeleteAction::make()
+                        ->visible(fn (LeadBoard $record): bool => $record->isAdmin(auth()->user())),
                 ]),
             ])
             ->headerActions([
