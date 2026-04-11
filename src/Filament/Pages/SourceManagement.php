@@ -116,7 +116,13 @@ class SourceManagement extends Page implements HasTable
                                     ->options(LeadSourceStatusEnum::class),
                                 Forms\Components\Select::make(LeadSource::fkColumn('lead_board'))
                                     ->label(__('lead-pipeline::lead-pipeline.board.singular'))
-                                    ->options(LeadBoard::query()->pluck('name', LeadBoard::pkColumn()))
+                                    ->options(fn (): array => LeadBoard::query()
+                                        ->whereHas('admins', fn ($q) => $q->where(
+                                            'lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'),
+                                            auth()->id(),
+                                        ))
+                                        ->pluck('name', LeadBoard::pkColumn())
+                                        ->toArray())
                                     ->required(),
                             ];
 
@@ -147,7 +153,13 @@ class SourceManagement extends Page implements HasTable
                             ->live(),
                         Forms\Components\Select::make(LeadSource::fkColumn('lead_board'))
                             ->label(__('lead-pipeline::lead-pipeline.board.singular'))
-                            ->options(LeadBoard::query()->pluck('name', LeadBoard::pkColumn()))
+                            ->options(fn (): array => LeadBoard::query()
+                                        ->whereHas('admins', fn ($q) => $q->where(
+                                            'lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'),
+                                            auth()->id(),
+                                        ))
+                                        ->pluck('name', LeadBoard::pkColumn())
+                                        ->toArray())
                             ->required(),
                         Forms\Components\Section::make(__('lead-pipeline::lead-pipeline.source.connection'))
                             ->schema(fn (callable $get): array => $this->getDriverConfigFields($get('driver')))
