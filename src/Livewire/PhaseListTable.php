@@ -210,7 +210,7 @@ class PhaseListTable extends Component implements HasForms, HasTable
                             if ($phase && LeadPhaseTypeEnum::Open === $phase->type) {
                                 $boardKey = $record->board->getKey();
 
-                                if (! array_key_exists($boardKey, $inProgressPhases)) {
+                                if ( ! array_key_exists($boardKey, $inProgressPhases)) {
                                     $inProgressPhases[$boardKey] = $record->board->phases
                                         ->where('type', LeadPhaseTypeEnum::InProgress)
                                         ->sortBy('sort')
@@ -250,7 +250,7 @@ class PhaseListTable extends Component implements HasForms, HasTable
                     })
                     ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data): void {
                         $targetPhase = LeadPhase::find($data['phase_id']);
-                        if (! $targetPhase) {
+                        if ( ! $targetPhase) {
                             return;
                         }
 

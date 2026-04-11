@@ -212,10 +212,10 @@ class WebhookController
 
                 $fieldData = [];
                 foreach ($leadData['field_data'] ?? [] as $field) {
-                    $value = $field['values'][0] ?? null;
-                    $name  = $field['name'] ?? '';
+                    $value            = $field['values'][0] ?? null;
+                    $name             = $field['name'] ?? '';
                     $fieldData[$name] = $value;
-                    $slug = \Illuminate\Support\Str::slug($name, '_');
+                    $slug             = \Illuminate\Support\Str::slug($name, '_');
                     if ($slug !== $name && ! isset($fieldData[$slug])) {
                         $fieldData[$slug] = $value;
                     }

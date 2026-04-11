@@ -195,7 +195,7 @@ class MetaDriver implements LeadSourceDriver
                                         }
                                     }
 
-                                    if (! $boardId) {
+                                    if ( ! $boardId) {
                                         return [
                                             '__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping'),
                                             '__create__' => '+ ' . __('lead-pipeline::lead-pipeline.facebook.auto_create_fields'),
@@ -329,9 +329,9 @@ class MetaDriver implements LeadSourceDriver
                     $values = $field['values'] ?? [];
 
                     if (null !== $name && [] !== $values) {
-                        $value          = 1 === count($values) ? $values[0] : $values;
+                        $value            = 1 === count($values) ? $values[0] : $values;
                         $fieldData[$name] = $value;
-                        $slug = \Illuminate\Support\Str::slug($name, '_');
+                        $slug             = \Illuminate\Support\Str::slug($name, '_');
                         if ($slug !== $name && ! isset($fieldData[$slug])) {
                             $fieldData[$slug] = $value;
                         }

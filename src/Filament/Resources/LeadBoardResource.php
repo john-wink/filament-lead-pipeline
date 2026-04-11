@@ -206,8 +206,8 @@ class LeadBoardResource extends Resource
             ->modifyQueryUsing(function ($query) {
                 $query->withCount(['phases', 'leads', 'sources']);
 
-                $userId  = auth()->id();
-                $userFk  = config('lead-pipeline.user_foreign_key', 'user_uuid');
+                $userId = auth()->id();
+                $userFk = config('lead-pipeline.user_foreign_key', 'user_uuid');
 
                 $query->where(function ($q) use ($userId, $userFk): void {
                     $q->whereHas('admins', fn ($aq) => $aq->where('lead_board_admins.' . $userFk, $userId))

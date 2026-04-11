@@ -17,11 +17,11 @@ class EditLeadBoard extends EditRecord
     {
         $record = $parameters['record'] ?? null;
 
-        if (! $record instanceof LeadBoard) {
+        if ( ! $record instanceof LeadBoard) {
             $record = LeadBoard::find($record);
         }
 
-        if (! $record || ! auth()->user()) {
+        if ( ! $record || ! auth()->user()) {
             return false;
         }
 

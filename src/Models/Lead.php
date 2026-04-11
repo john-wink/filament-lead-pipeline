@@ -170,7 +170,11 @@ class Lead extends Model
             ],
         ]);
 
-        return $this->refresh();
+        $this->refresh();
+
+        \JohnWink\FilamentLeadPipeline\Events\LeadMoved::dispatch($this, $oldPhase ?? $phase, $phase);
+
+        return $this;
     }
 
     protected static function newFactory(): LeadFactory

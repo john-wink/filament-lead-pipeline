@@ -27,11 +27,11 @@ class TestCase extends Orchestra
     {
         // Register class aliases so tests can use App\Models\Team and App\Models\User
         // regardless of whether they run standalone or in the host app
-        if (! class_exists(\App\Models\Team::class)) {
-            class_alias(Fixtures\Models\Team::class, \App\Models\Team::class);
+        if ( ! class_exists(\App\Models\Team::class)) {
+            class_alias(Team::class, \App\Models\Team::class);
         }
-        if (! class_exists(\App\Models\User::class)) {
-            class_alias(Fixtures\Models\User::class, \App\Models\User::class);
+        if ( ! class_exists(\App\Models\User::class)) {
+            class_alias(User::class, \App\Models\User::class);
         }
 
         parent::setUp();

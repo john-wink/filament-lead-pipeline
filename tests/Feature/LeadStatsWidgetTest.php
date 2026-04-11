@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Models\Team;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Filament\Widgets\LeadStatsWidget;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
-use App\Models\Team;
 
 use function Pest\Livewire\livewire;
 

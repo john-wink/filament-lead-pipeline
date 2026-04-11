@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\User;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Livewire\KanbanBoard;
 use JohnWink\FilamentLeadPipeline\Livewire\KanbanPhaseColumn;
@@ -11,7 +12,6 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
-use App\Models\User;
 use Livewire\Livewire;
 
 beforeEach(function (): void {

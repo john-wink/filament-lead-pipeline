@@ -16,13 +16,13 @@ class LeadObserver
     {
         $phaseFk = Lead::fkColumn('lead_phase');
 
-        if (! $lead->wasChanged($phaseFk)) {
+        if ( ! $lead->wasChanged($phaseFk)) {
             return;
         }
 
         $newPhase = LeadPhase::find($lead->{$phaseFk});
 
-        if (! $newPhase || ! $newPhase->auto_convert || ! $newPhase->type->isTerminal()) {
+        if ( ! $newPhase || ! $newPhase->auto_convert || ! $newPhase->type->isTerminal()) {
             return;
         }
 

@@ -203,7 +203,7 @@ class FilamentLeadPipelinePlugin implements Plugin
         $service = app(Services\LeadConversionService::class);
 
         foreach ($this->converters as $name => $class) {
-            if (! $service->hasConverter($name)) {
+            if ( ! $service->hasConverter($name)) {
                 $service->registerConverter($name, app($class));
             }
         }

@@ -106,10 +106,10 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     // the Facebook question key (slug) or the display label.
                     $fieldData = [];
                     foreach ($fbLead['field_data'] ?? [] as $f) {
-                        $value = $f['values'][0] ?? null;
-                        $name  = $f['name'] ?? '';
+                        $value            = $f['values'][0] ?? null;
+                        $name             = $f['name'] ?? '';
                         $fieldData[$name] = $value;
-                        $slug = \Illuminate\Support\Str::slug($name, '_');
+                        $slug             = \Illuminate\Support\Str::slug($name, '_');
                         if ($slug !== $name && ! isset($fieldData[$slug])) {
                             $fieldData[$slug] = $value;
                         }
@@ -131,7 +131,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     $email     = $findFirst($mapping['email'] ?? ['email', 'e-mail-adresse', 'e-mail']);
                     $phone     = $findFirst($mapping['phone'] ?? ['phone_number', 'telefonnummer', 'phone']);
 
-                    if ((! $name || '' === $name) && ($firstName || $lastName)) {
+                    if (( ! $name || '' === $name) && ($firstName || $lastName)) {
                         $name = mb_trim("{$firstName} {$lastName}");
                     }
 
@@ -143,7 +143,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                             ->whereJsonContains('raw_data->id', $fbLeadId)
                             ->first();
                     }
-                    if (! $existingLead && $email) {
+                    if ( ! $existingLead && $email) {
                         $existingLead = Lead::query()
                             ->where(Lead::fkColumn('lead_board'), $board->getKey())
                             ->where('email', $email)
@@ -155,7 +155,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                         if ($this->updateExisting) {
                             $updates = ['raw_data' => $fbLead];
 
-                            if ($name && '' !== $name && (! $existingLead->name || '' === $existingLead->name || 'Unknown' === $existingLead->name)) {
+                            if ($name && '' !== $name && ( ! $existingLead->name || '' === $existingLead->name || 'Unknown' === $existingLead->name)) {
                                 $updates['name'] = (string) $name;
                             }
                             // Always update name if we have a better one (first+last vs empty)

@@ -12,7 +12,6 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
-use JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
@@ -48,7 +47,7 @@ class SourceManagement extends Page implements HasTable
                     )
                     ->where(function ($q): void {
                         $user = auth()->user();
-                        if (! $user) {
+                        if ( ! $user) {
                             return;
                         }
 
@@ -169,7 +168,7 @@ class SourceManagement extends Page implements HasTable
                             $record->funnel()->create([
                                 $boardFk            => $record->{$boardFk},
                                 'name'              => $record->name,
-                                'slug'              => \Illuminate\Support\Str::slug($record->name),
+                                'slug'              => Str::slug($record->name),
                                 'design'            => static::resolvePanelDesignForNewFunnel(),
                                 'is_active'         => true,
                                 'views_count'       => 0,
@@ -255,12 +254,12 @@ class SourceManagement extends Page implements HasTable
         $boardFk       = LeadSource::fkColumn('lead_board');
         $boardId       = $data[$boardFk] ?? null;
 
-        if (! $boardId || empty($customMapping)) {
+        if ( ! $boardId || empty($customMapping)) {
             return $data;
         }
 
         $board = LeadBoard::find($boardId);
-        if (! $board) {
+        if ( ! $board) {
             return $data;
         }
 

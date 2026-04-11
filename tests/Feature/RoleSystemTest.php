@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
+use App\Models\Team;
+use App\Models\User;
 use JohnWink\FilamentLeadPipeline\Livewire\KanbanPhaseColumn;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
-use App\Models\Team;
-use App\Models\User;
 use Livewire\Livewire;
 
 beforeEach(function (): void {
