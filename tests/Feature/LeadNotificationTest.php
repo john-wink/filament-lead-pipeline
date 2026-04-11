@@ -76,7 +76,18 @@ it('sends moved notification to assigned user', function (): void {
     Notification::assertSentTo($advisor, LeadMovedNotification::class);
 });
 
-it('does not send moved notification when no user assigned', function (): void {
+it('sends moved notification to board admins even when no user assigned', function (): void {
+    $newPhase = LeadPhase::factory()->for($this->board, 'board')->create();
+    $lead     = Lead::factory()->for($this->phase, 'phase')->for($this->board, 'board')
+        ->create(['assigned_to' => null]);
+
+    event(new LeadMoved($lead, $this->phase, $newPhase));
+
+    Notification::assertSentTo($this->admin, LeadMovedNotification::class);
+});
+
+it('does not send moved notification when no admins and no user assigned', function (): void {
+    $this->board->admins()->detach();
     $newPhase = LeadPhase::factory()->for($this->board, 'board')->create();
     $lead     = Lead::factory()->for($this->phase, 'phase')->for($this->board, 'board')
         ->create(['assigned_to' => null]);
