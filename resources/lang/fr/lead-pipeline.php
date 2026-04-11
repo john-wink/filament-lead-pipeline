@@ -66,6 +66,8 @@ return [
         'api_token'               => 'Token API',
         'draft_hint'              => 'Aucun tableau disponible — la source sera enregistrée comme brouillon',
         'back_to_sources'         => 'Retour à la gestion des sources',
+        'back_to_boards'          => 'Retour aux tableaux',
+        'open_board'              => 'Ouvrir le tableau',
         'connection'              => 'Connexion',
         'last_received'           => 'Dernière réception',
     ],

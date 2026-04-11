@@ -12,6 +12,7 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
+use JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
@@ -92,35 +93,44 @@ class SourceManagement extends Page implements HasTable
                     ->since(),
             ])
             ->actions([
-                Tables\Actions\EditAction::make()
-                    ->form(function (LeadSource $record): array {
-                        $baseFields = [
-                            Forms\Components\TextInput::make('name')
-                                ->label(__('lead-pipeline::lead-pipeline.field.name'))
-                                ->required()
-                                ->maxLength(255),
-                            Forms\Components\Select::make('driver')
-                                ->label(__('lead-pipeline::lead-pipeline.field.driver'))
-                                ->options(LeadSourceTypeEnum::class)
-                                ->disabled(),
-                            Forms\Components\Select::make('status')
-                                ->label(__('lead-pipeline::lead-pipeline.field.status'))
-                                ->options(LeadSourceStatusEnum::class),
-                            Forms\Components\Select::make(LeadSource::fkColumn('lead_board'))
-                                ->label(__('lead-pipeline::lead-pipeline.board.singular'))
-                                ->options(LeadBoard::query()->pluck('name', LeadBoard::pkColumn()))
-                                ->required(),
-                        ];
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('open_board')
+                        ->label(__('lead-pipeline::lead-pipeline.source.open_board'))
+                        ->icon('heroicon-o-view-columns')
+                        ->url(fn (LeadSource $record): ?string => $record->board
+                            ? KanbanBoard::getUrl(['board' => $record->board->getKey()])
+                            : null)
+                        ->visible(fn (LeadSource $record): bool => (bool) $record->board),
+                    Tables\Actions\EditAction::make()
+                        ->form(function (LeadSource $record): array {
+                            $baseFields = [
+                                Forms\Components\TextInput::make('name')
+                                    ->label(__('lead-pipeline::lead-pipeline.field.name'))
+                                    ->required()
+                                    ->maxLength(255),
+                                Forms\Components\Select::make('driver')
+                                    ->label(__('lead-pipeline::lead-pipeline.field.driver'))
+                                    ->options(LeadSourceTypeEnum::class)
+                                    ->disabled(),
+                                Forms\Components\Select::make('status')
+                                    ->label(__('lead-pipeline::lead-pipeline.field.status'))
+                                    ->options(LeadSourceStatusEnum::class),
+                                Forms\Components\Select::make(LeadSource::fkColumn('lead_board'))
+                                    ->label(__('lead-pipeline::lead-pipeline.board.singular'))
+                                    ->options(LeadBoard::query()->pluck('name', LeadBoard::pkColumn()))
+                                    ->required(),
+                            ];
 
-                        $driverFields = $this->getDriverConfigFields($record->driver);
+                            $driverFields = $this->getDriverConfigFields($record->driver);
 
-                        return [...$baseFields, ...$driverFields];
-                    })
-                    ->mutateFormDataUsing(function (array $data): array {
-                        return $this->autoCreateFieldDefinitions($data);
-                    }),
-                ...$this->getDriverTableActions(),
-                Tables\Actions\DeleteAction::make(),
+                            return [...$baseFields, ...$driverFields];
+                        })
+                        ->mutateFormDataUsing(function (array $data): array {
+                            return $this->autoCreateFieldDefinitions($data);
+                        }),
+                    ...$this->getDriverTableActions(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()

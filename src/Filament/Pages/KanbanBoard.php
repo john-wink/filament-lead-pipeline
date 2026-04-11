@@ -7,6 +7,7 @@ namespace JohnWink\FilamentLeadPipeline\Filament\Pages;
 use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
+use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 
 class KanbanBoard extends Page
@@ -32,6 +33,21 @@ class KanbanBoard extends Page
     {
         $this->board   = $board;
         $this->filters = session("lead-pipeline.filters.{$board->getKey()}", []);
+
+        // If the current user is a board admin and there are unassigned leads
+        // in a list-type phase, start on that phase tab instead of the board.
+        $user = auth()->user();
+        if ($user && $board->isAdmin($user)) {
+            $listPhaseWithUnassigned = $board->phases()
+                ->where('display_type', LeadPhaseDisplayTypeEnum::List)
+                ->whereHas('leads', fn ($q) => $q->whereNull('assigned_to'))
+                ->ordered()
+                ->first();
+
+            if ($listPhaseWithUnassigned) {
+                $this->activeTab = $listPhaseWithUnassigned->getKey();
+            }
+        }
     }
 
     public function toggleFilters(): void

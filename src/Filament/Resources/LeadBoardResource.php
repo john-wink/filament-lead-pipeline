@@ -80,6 +80,7 @@ class LeadBoardResource extends Resource
                             ->multiple()
                             ->searchable()
                             ->preload()
+                            ->default(fn () => auth()->check() ? [auth()->id()] : [])
                             ->helperText(__('lead-pipeline::lead-pipeline.board.admins_helper')),
                         Forms\Components\Select::make('settings.auto_move_on_assign_phase')
                             ->label(__('lead-pipeline::lead-pipeline.board.auto_move_phase'))
@@ -203,7 +204,17 @@ class LeadBoardResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn ($query) => $query->withCount(['phases', 'leads', 'sources']))
+            ->modifyQueryUsing(function ($query) {
+                $query->withCount(['phases', 'leads', 'sources']);
+
+                $userId  = auth()->id();
+                $userFk  = config('lead-pipeline.user_foreign_key', 'user_uuid');
+
+                $query->where(function ($q) use ($userId, $userFk): void {
+                    $q->whereHas('admins', fn ($aq) => $aq->where('lead_board_admins.' . $userFk, $userId))
+                        ->orWhereHas('leads', fn ($lq) => $lq->where('assigned_to', $userId));
+                });
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label(__('lead-pipeline::lead-pipeline.field.name'))
@@ -228,12 +239,11 @@ class LeadBoardResource extends Resource
             ])
             ->defaultSort('sort')
             ->actions([
-                Tables\Actions\Action::make('kanban')
-                    ->label(__('lead-pipeline::lead-pipeline.board.open'))
-                    ->tooltip(__('lead-pipeline::lead-pipeline.board.open'))
-                    ->icon('heroicon-o-view-columns')
-                    ->url(fn (LeadBoard $record): string => KanbanBoard::getUrl(['board' => $record->getKey()])),
                 Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('kanban')
+                        ->label(__('lead-pipeline::lead-pipeline.board.open'))
+                        ->icon('heroicon-o-view-columns')
+                        ->url(fn (LeadBoard $record): string => KanbanBoard::getUrl(['board' => $record->getKey()])),
                     Tables\Actions\EditAction::make(),
                     Tables\Actions\DeleteAction::make(),
                 ]),

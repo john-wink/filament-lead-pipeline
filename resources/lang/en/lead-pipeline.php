@@ -66,6 +66,8 @@ return [
         'api_token'               => 'API Token',
         'draft_hint'              => 'No board available — source will be saved as draft',
         'back_to_sources'         => 'Back to Source Management',
+        'back_to_boards'          => 'Back to Boards',
+        'open_board'              => 'Open Board',
         'connection'              => 'Connection',
         'last_received'           => 'Last Received',
     ],

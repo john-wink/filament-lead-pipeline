@@ -66,6 +66,8 @@ return [
         'api_token'               => 'API Token',
         'draft_hint'              => 'Kein Board verfügbar - Quelle wird als Entwurf angelegt',
         'back_to_sources'         => 'Zurück zur Quellenverwaltung',
+        'back_to_boards'          => 'Zurück zu den Boards',
+        'open_board'              => 'Board öffnen',
         'connection'              => 'Verbindung',
         'last_received'           => 'Letzter Empfang',
     ],
