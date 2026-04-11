@@ -22,6 +22,11 @@ beforeEach(function (): void {
     $this->actingAs($this->user);
     filament()->setCurrentPanel(filament()->getPanel('admin'));
     filament()->setTenant($this->team);
+
+    // Auto-attach the test user as board admin for every board created during tests
+    LeadBoard::created(function (LeadBoard $board): void {
+        $board->admins()->syncWithoutDetaching([$this->user->getKey()]);
+    });
 });
 
 // ==========================================

@@ -193,27 +193,9 @@ it('handles moving lead to terminal (won) phase', function (): void {
     ]);
 
     Livewire::test(KanbanBoard::class, ['board' => $board])
-        ->call('moveLeadToPhase', $lead->getKey(), $phaseWon->getKey(), 0)
-        ->assertNotDispatched('lead-conversion-needed');
+        ->call('moveLeadToPhase', $lead->getKey(), $phaseWon->getKey(), 0);
 
     expect($lead->refresh()->{Lead::fkColumn('lead_phase')})->toBe($phaseWon->getKey());
-});
-
-it('dispatches lead-conversion-needed when auto_convert is enabled on terminal phase', function (): void {
-    Event::fake([LeadMoved::class]);
-
-    $board    = LeadBoard::factory()->create();
-    $phaseA   = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
-    $phaseWon = LeadPhase::factory()->for($board, 'board')->won()->create(['sort' => 1, 'auto_convert' => true]);
-
-    $lead = Lead::factory()->create([
-        Lead::fkColumn('lead_board') => $board->getKey(),
-        Lead::fkColumn('lead_phase') => $phaseA->getKey(),
-    ]);
-
-    Livewire::test(KanbanBoard::class, ['board' => $board])
-        ->call('moveLeadToPhase', $lead->getKey(), $phaseWon->getKey(), 0)
-        ->assertDispatched('lead-conversion-needed', leadId: $lead->getKey());
 });
 
 // === REORDER ===

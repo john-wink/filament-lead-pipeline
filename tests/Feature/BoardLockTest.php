@@ -16,6 +16,10 @@ beforeEach(function (): void {
     $this->actingAs($this->user);
     filament()->setCurrentPanel(filament()->getPanel('admin'));
     filament()->setTenant($this->team);
+
+    LeadBoard::created(function (LeadBoard $board): void {
+        $board->admins()->syncWithoutDetaching([$this->user->getKey()]);
+    });
 });
 
 it('shows lock banner when board has leads', function (): void {
