@@ -80,7 +80,6 @@ class LeadBoardResource extends Resource
                             ->multiple()
                             ->searchable()
                             ->preload()
-                            ->default(fn () => auth()->check() ? [auth()->id()] : [])
                             ->helperText(__('lead-pipeline::lead-pipeline.board.admins_helper')),
                         Forms\Components\Select::make('settings.auto_move_on_assign_phase')
                             ->label(__('lead-pipeline::lead-pipeline.board.auto_move_phase'))

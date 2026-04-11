@@ -70,6 +70,10 @@ class CreateLeadBoard extends CreateRecord
             ])->toArray();
         }
 
+        if (auth()->check()) {
+            $data['admins'] = [auth()->id()];
+        }
+
         return $data;
     }
 }
