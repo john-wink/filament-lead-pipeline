@@ -123,7 +123,6 @@ class KanbanBoard extends Component
                 ],
             ]);
 
-            LeadMoved::dispatch($lead->refresh(), $oldPhase ?? $newPhase, $newPhase);
         }
 
         if ($oldPhase) {

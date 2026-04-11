@@ -81,16 +81,6 @@ class LeadDetailModal extends Component
             'lost_reason' => $reason,
         ]);
 
-        $originalStatus = $this->lead->getOriginal('status');
-        $oldStatus      = $originalStatus instanceof LeadStatusEnum
-            ? $originalStatus
-            : LeadStatusEnum::tryFrom((string) ($originalStatus ?? '')) ?? LeadStatusEnum::Active;
-        \JohnWink\FilamentLeadPipeline\Events\LeadStatusChanged::dispatch(
-            $this->lead,
-            $oldStatus,
-            LeadStatusEnum::Lost,
-        );
-
         $this->lead->activities()->create([
             'type'        => LeadActivityTypeEnum::Updated->value,
             'description' => '' !== $reason
@@ -141,12 +131,6 @@ class LeadDetailModal extends Component
         ]);
 
         $this->lead->load(['assignedUser', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer', 'fieldValues.definition']);
-
-        \JohnWink\FilamentLeadPipeline\Events\LeadAssigned::dispatch(
-            $this->lead,
-            filled($userId) ? config('lead-pipeline.user_model')::find($userId) : null,
-            auth()->user(),
-        );
 
         // Auto-move: if lead is in Open phase and gets assigned, move to first InProgress phase
         if (filled($userId) && $this->lead->phase) {
@@ -226,18 +210,7 @@ class LeadDetailModal extends Component
 
         $this->authorizeAccess();
 
-        $originalStatus = $this->lead->getOriginal('status');
-        $oldStatus      = $originalStatus instanceof LeadStatusEnum
-            ? $originalStatus
-            : LeadStatusEnum::tryFrom((string) ($originalStatus ?? '')) ?? LeadStatusEnum::Active;
-
         $this->lead->update(['status' => LeadStatusEnum::Won]);
-
-        \JohnWink\FilamentLeadPipeline\Events\LeadStatusChanged::dispatch(
-            $this->lead,
-            $oldStatus,
-            LeadStatusEnum::Won,
-        );
 
         $this->lead->activities()->create([
             'type'        => LeadActivityTypeEnum::Updated->value,

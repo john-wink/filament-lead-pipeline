@@ -153,11 +153,6 @@ class FunnelWizard extends Component
                 'properties'  => ['funnel_id' => $this->funnel->getKey(), 'auto' => true],
             ]);
 
-            \JohnWink\FilamentLeadPipeline\Events\LeadAssigned::dispatch(
-                $lead,
-                $userModel::find($autoAssignTo),
-                null,
-            );
         }
 
         $this->funnel->incrementSubmissions();

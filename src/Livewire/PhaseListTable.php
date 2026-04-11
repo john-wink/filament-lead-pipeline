@@ -142,12 +142,6 @@ class PhaseListTable extends Component implements HasForms, HasTable
                             'causer_id'   => auth()->id(),
                         ]);
 
-                        LeadAssigned::dispatch(
-                            $record,
-                            config('lead-pipeline.user_model')::find($data['assigned_to']),
-                            auth()->user(),
-                        );
-
                         // Auto-move from Open to first InProgress
                         $phase = $record->phase;
                         if ($phase && LeadPhaseTypeEnum::Open === $phase->type) {
@@ -202,8 +196,6 @@ class PhaseListTable extends Component implements HasForms, HasTable
                                 'causer_type' => config('lead-pipeline.user_model'),
                                 'causer_id'   => auth()->id(),
                             ]);
-
-                            LeadAssigned::dispatch($record, $assignee, auth()->user());
 
                             // Auto-move from Open to InProgress
                             $phase = $record->phase;

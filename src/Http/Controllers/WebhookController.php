@@ -351,11 +351,6 @@ class WebhookController
 
         LeadCreated::dispatch($lead);
 
-        if ($hasAssignee) {
-            $assignedUser = config('lead-pipeline.user_model')::find($defaultAssignee);
-            LeadAssigned::dispatch($lead, $assignedUser, null);
-        }
-
         return $lead;
     }
 }

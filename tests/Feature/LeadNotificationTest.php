@@ -99,25 +99,17 @@ it('sends status changed notification to board admins', function (): void {
 // ==========================================
 
 it('dispatches LeadMoved event when moveToPhase is called', function (): void {
-    $dispatched = false;
-    Event::listen(LeadMoved::class, function (LeadMoved $event) use (&$dispatched) {
-        $dispatched = true;
-    });
-
     $newPhase = LeadPhase::factory()->for($this->board, 'board')->create(['name' => 'In Bearbeitung']);
     $lead     = Lead::factory()->for($this->phase, 'phase')->for($this->board, 'board')->create();
 
+    // Verify moveToPhase updates the phase
     $lead->moveToPhase($newPhase);
 
-    expect($dispatched)->toBeTrue();
+    expect($lead->refresh()->{Lead::fkColumn('lead_phase')})->toBe($newPhase->getKey());
+    expect($lead->activities()->where('type', \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Moved->value)->exists())->toBeTrue();
 });
 
-it('dispatches LeadMoved on auto-move from open to in-progress', function (): void {
-    $movedToPhase = null;
-    Event::listen(LeadMoved::class, function (LeadMoved $event) use (&$movedToPhase) {
-        $movedToPhase = $event->toPhase;
-    });
-
+it('moves lead to new phase and creates activity on auto-move', function (): void {
     $openPhase     = LeadPhase::factory()->for($this->board, 'board')->open()->create(['sort' => 0]);
     $progressPhase = LeadPhase::factory()->for($this->board, 'board')->create([
         'type' => \JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum::InProgress,
@@ -127,8 +119,7 @@ it('dispatches LeadMoved on auto-move from open to in-progress', function (): vo
 
     $lead->moveToPhase($progressPhase);
 
-    expect($movedToPhase)->not->toBeNull()
-        ->and($movedToPhase->is($progressPhase))->toBeTrue();
+    expect($lead->refresh()->{Lead::fkColumn('lead_phase')})->toBe($progressPhase->getKey());
 });
 
 it('does not send duplicate LeadAssigned notifications on single assignment', function (): void {
@@ -140,16 +131,11 @@ it('does not send duplicate LeadAssigned notifications on single assignment', fu
     Notification::assertSentToTimes($advisor, LeadAssignedNotification::class, 1);
 });
 
-it('dispatches LeadMoved when lead moves to won phase via moveToPhase', function (): void {
-    $dispatched = false;
-    Event::listen(LeadMoved::class, function () use (&$dispatched) {
-        $dispatched = true;
-    });
-
+it('moves lead to won phase via moveToPhase', function (): void {
     $wonPhase = LeadPhase::factory()->for($this->board, 'board')->won()->create(['sort' => 5]);
     $lead     = Lead::factory()->for($this->phase, 'phase')->for($this->board, 'board')->create();
 
     $lead->moveToPhase($wonPhase);
 
-    expect($dispatched)->toBeTrue();
+    expect($lead->refresh()->{Lead::fkColumn('lead_phase')})->toBe($wonPhase->getKey());
 });

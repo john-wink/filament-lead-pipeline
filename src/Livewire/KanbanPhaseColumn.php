@@ -90,12 +90,6 @@ class KanbanPhaseColumn extends Component
             'causer_id'   => auth()->id(),
         ]);
 
-        LeadAssigned::dispatch(
-            $lead,
-            filled($userId) ? config('lead-pipeline.user_model')::find($userId) : null,
-            auth()->user(),
-        );
-
         // Auto-move from Open to first InProgress
         if (filled($userId) && $lead->phase) {
             $currentPhase = $lead->phase;

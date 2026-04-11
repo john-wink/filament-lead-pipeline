@@ -99,12 +99,6 @@ class LeadCard extends Component
 
         $this->lead->load(['assignedUser']);
 
-        \JohnWink\FilamentLeadPipeline\Events\LeadAssigned::dispatch(
-            $this->lead,
-            filled($userId) ? config('lead-pipeline.user_model')::find($userId) : null,
-            auth()->user(),
-        );
-
         // Auto-move: if lead is in Open phase and gets assigned, move to first InProgress phase
         if (filled($userId) && $this->lead->phase) {
             $currentPhase = $this->lead->phase;
