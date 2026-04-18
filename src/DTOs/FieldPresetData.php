@@ -16,7 +16,7 @@ class FieldPresetData extends Data
         public bool $is_required = false,
         public bool $is_system = false,
         public bool $show_in_card = false,
-        public bool $show_in_funnel = true,
+        public bool $show_in_funnel = false,
         public ?array $options = null,
     ) {}
 }

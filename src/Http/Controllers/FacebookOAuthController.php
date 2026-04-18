@@ -34,11 +34,15 @@ class FacebookOAuthController
     {
         $stateData     = json_decode(base64_decode($request->query('state', '')), true) ?? [];
         $expectedNonce = $request->session()->pull('facebook_oauth_nonce');
-        $teamId        = $stateData['team'] ?? null;
+        $teamId        = $stateData['team'] ?? auth()->user()?->teams()->first()?->getKey();
         $returnedNonce = $stateData['nonce'] ?? null;
 
         if ( ! $expectedNonce || $returnedNonce !== $expectedNonce) {
             return response('Invalid OAuth state.', 403);
+        }
+
+        if ( ! $teamId) {
+            return response('No team context available for Facebook connection.', 422);
         }
 
         $code = $request->query('code');
