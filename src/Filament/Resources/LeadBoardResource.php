@@ -185,6 +185,7 @@ class LeadBoardResource extends Resource
                                 Forms\Components\Select::make('type')
                                     ->label(__('lead-pipeline::lead-pipeline.field.type'))
                                     ->options(LeadFieldTypeEnum::class)
+                                    ->required()
                                     ->reactive(),
                                 Forms\Components\KeyValue::make('options')
                                     ->label(__('lead-pipeline::lead-pipeline.field.options'))
