@@ -190,13 +190,8 @@ class LeadBoardResource extends Resource
                                 Forms\Components\KeyValue::make('options')
                                     ->label(__('lead-pipeline::lead-pipeline.field.options'))
                                     ->visible(fn (Forms\Get $get): bool => in_array($get('type'), ['select', 'multi_select'])),
-                                Forms\Components\Toggle::make('is_required')
-                                    ->label(__('lead-pipeline::lead-pipeline.field.required')),
                                 Forms\Components\Toggle::make('show_in_card')
                                     ->label(__('lead-pipeline::lead-pipeline.field.show_in_card')),
-                                Forms\Components\Toggle::make('show_in_funnel')
-                                    ->label(__('lead-pipeline::lead-pipeline.field.show_in_funnel'))
-                                    ->default(true),
                             ])
                             ->orderColumn('sort')
                             ->reorderable(fn (?LeadBoard $record): bool => ! $record?->hasLeads())
