@@ -100,7 +100,7 @@ return [
         'client_token'  => env('FACEBOOK_CLIENT_TOKEN'),
         'redirect_uri'  => env('FACEBOOK_REDIRECT_URI'),
         'verify_token'  => env('FACEBOOK_VERIFY_TOKEN'),
-        'graph_version' => 'v21.0',
+        'graph_version' => 'v25.0',
         'scopes'        => ['pages_manage_ads', 'leads_retrieval', 'pages_show_list'],
     ],
 

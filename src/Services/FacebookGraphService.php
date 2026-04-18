@@ -16,7 +16,7 @@ class FacebookGraphService
 
     public function __construct()
     {
-        $this->graphVersion = config('lead-pipeline.facebook.graph_version', 'v21.0');
+        $this->graphVersion = config('lead-pipeline.facebook.graph_version', 'v25.0');
     }
 
     public function getRedirectUri(): string
