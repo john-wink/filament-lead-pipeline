@@ -9,6 +9,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
@@ -167,7 +168,15 @@ class LeadBoardResource extends Resource
                                 Forms\Components\TextInput::make('name')
                                     ->label(__('lead-pipeline::lead-pipeline.field.name'))
                                     ->required()
-                                    ->maxLength(255),
+                                    ->maxLength(255)
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function (?string $state, Forms\Set $set, Forms\Get $get): void {
+                                        if (blank($state) || filled($get('key'))) {
+                                            return;
+                                        }
+
+                                        $set('key', Str::slug($state, '_'));
+                                    }),
                                 Forms\Components\TextInput::make('key')
                                     ->label(__('lead-pipeline::lead-pipeline.field.key'))
                                     ->required()
