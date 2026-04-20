@@ -36,6 +36,18 @@
                             class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
                         @error('newLeadPhone') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </div>
+                    @if($this->isBoardAdmin)
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('lead-pipeline::lead-pipeline.field.assigned_advisor') }}</label>
+                            <select wire:model="newLeadAssignedUserId"
+                                class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+                                <option value="">{{ __('lead-pipeline::lead-pipeline.field.assigned_advisor_none') }}</option>
+                                @foreach($this->advisorOptions as $userId => $label)
+                                    <option value="{{ $userId }}">{{ $label }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    @endif
                 </div>
                 <div class="flex gap-2 mt-6 justify-end">
                     <button wire:click="$set('showCreateModal', false)"

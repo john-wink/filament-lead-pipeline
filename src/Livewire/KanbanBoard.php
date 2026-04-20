@@ -9,9 +9,11 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Events\LeadMoved;
+use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -25,9 +27,43 @@ class KanbanBoard extends Component
 
     public string $newLeadPhone = '';
 
+    public ?string $newLeadAssignedUserId = null;
+
     public ?string $createInPhaseId = null;
 
     public bool $showCreateModal = false;
+
+    #[Computed]
+    public function isBoardAdmin(): bool
+    {
+        $user = auth()->user();
+
+        return $user !== null && $this->board->isAdmin($user);
+    }
+
+    /**
+     * Advisors = all assignable team users minus other board admins.
+     *
+     * Admins of the current board are excluded so the select truly offers advisors,
+     * except for the currently logged-in user: an admin may also work a lead themselves.
+     *
+     * @return array<int|string, string>
+     */
+    #[Computed]
+    public function advisorOptions(): array
+    {
+        $currentUserId = auth()->id();
+
+        $otherAdminIds = $this->board->admins()
+            ->pluck('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'))
+            ->reject(fn ($id) => $id === $currentUserId)
+            ->all();
+
+        return FilamentLeadPipelinePlugin::getAssignableUsers()
+            ->reject(fn ($user) => in_array($user->getKey(), $otherAdminIds, true))
+            ->mapWithKeys(fn ($user) => [$user->getKey() => $user->display_label])
+            ->all();
+    }
 
     public function mount(LeadBoard $board): void
     {
@@ -40,15 +76,21 @@ class KanbanBoard extends Component
     {
         $this->createInPhaseId = $phaseId;
         $this->showCreateModal = true;
-        $this->reset(['newLeadName', 'newLeadEmail', 'newLeadPhone']);
+        $this->reset(['newLeadName', 'newLeadEmail', 'newLeadPhone', 'newLeadAssignedUserId']);
+
+        // Advisors (non-admins) are auto-assigned to leads they create themselves.
+        if ( ! $this->isBoardAdmin) {
+            $this->newLeadAssignedUserId = (string) auth()->id();
+        }
     }
 
     public function createLead(): void
     {
         $this->validate([
-            'newLeadName'  => 'required|string|max:255',
-            'newLeadEmail' => 'nullable|email|max:255',
-            'newLeadPhone' => 'nullable|string|max:50',
+            'newLeadName'           => 'required|string|max:255',
+            'newLeadEmail'          => 'nullable|email|max:255',
+            'newLeadPhone'          => 'nullable|string|max:50',
+            'newLeadAssignedUserId' => 'nullable|string',
         ]);
 
         $boardFk = LeadBoard::fkColumn('lead_board');
@@ -57,14 +99,19 @@ class KanbanBoard extends Component
         $phaseId = $this->createInPhaseId
             ?? $this->board->phases()->kanban()->ordered()->first()?->getKey();
 
+        $assignedTo = $this->isBoardAdmin
+            ? ($this->newLeadAssignedUserId ?: null)
+            : (string) auth()->id();
+
         $lead = Lead::query()->create([
-            $boardFk => $this->board->getKey(),
-            $phaseFk => $phaseId,
-            'name'   => $this->newLeadName,
-            'email'  => $this->newLeadEmail ?: null,
-            'phone'  => $this->newLeadPhone ?: null,
-            'status' => LeadStatusEnum::Active,
-            'sort'   => 0,
+            $boardFk      => $this->board->getKey(),
+            $phaseFk      => $phaseId,
+            'name'        => $this->newLeadName,
+            'email'       => $this->newLeadEmail ?: null,
+            'phone'       => $this->newLeadPhone ?: null,
+            'status'      => LeadStatusEnum::Active,
+            'sort'        => 0,
+            'assigned_to' => $assignedTo,
         ]);
 
         $lead->activities()->create([

@@ -21,11 +21,6 @@ beforeEach(function (): void {
         'scopes'             => ['pages_show_list'],
         'status'             => 'connected',
     ]);
-
-    // Default: no lead forms returned. Individual tests may override this.
-    Http::fake([
-        'graph.facebook.com/*/leadgen_forms*' => Http::response(['data' => []]),
-    ]);
 });
 
 /**
