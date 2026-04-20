@@ -18,10 +18,12 @@ use JohnWink\FilamentLeadPipeline\Contracts\LeadSourceDriver;
 use JohnWink\FilamentLeadPipeline\DTOs\LeadData;
 use JohnWink\FilamentLeadPipeline\DTOs\WebhookPayloadData;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
+use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
+use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
 use Throwable;
 
 class MetaDriver implements LeadSourceDriver
@@ -97,7 +99,34 @@ class MetaDriver implements LeadSourceDriver
                     ->whereHas('connection', fn ($q) => $q->where('user_uuid', auth()->id()))
                     ->pluck('page_name', 'uuid'))
                 ->live()
-                ->afterStateUpdated(fn (callable $set) => $set('facebook_form_ids', [])),
+                ->afterStateUpdated(fn (callable $set) => $set('facebook_form_ids', []))
+                ->suffixAction(
+                    FormAction::make('sync_pages')
+                        ->label(__('lead-pipeline::lead-pipeline.facebook.sync_pages'))
+                        ->icon('heroicon-o-arrow-path')
+                        ->disabled(fn (): bool => ! FacebookConnection::query()
+                            ->where('user_uuid', auth()->id())
+                            ->where('status', 'connected')
+                            ->exists())
+                        ->action(function (): void {
+                            $connection = FacebookConnection::query()
+                                ->where('user_uuid', auth()->id())
+                                ->where('status', 'connected')
+                                ->first();
+
+                            if ( ! $connection) {
+                                return;
+                            }
+
+                            $summary = app(FacebookPageSynchronizer::class)->sync($connection);
+
+                            \Filament\Notifications\Notification::make()
+                                ->title(__('lead-pipeline::lead-pipeline.facebook.sync_completed'))
+                                ->body(__('lead-pipeline::lead-pipeline.facebook.sync_summary', $summary))
+                                ->success()
+                                ->send();
+                        }),
+                ),
             Select::make('facebook_form_ids')
                 ->label(__('lead-pipeline::lead-pipeline.facebook.forms'))
                 ->multiple()
@@ -116,6 +145,7 @@ class MetaDriver implements LeadSourceDriver
                 FormAction::make('load_fields')
                     ->label(__('lead-pipeline::lead-pipeline.facebook.load_fields'))
                     ->icon('heroicon-o-arrow-path')
+                    ->disabled(fn (callable $get): bool => blank($get('facebook_page_uuid')) || empty($get('facebook_form_ids')))
                     ->action(function (callable $get, callable $set): void {
                         $pageUuid = $get('facebook_page_uuid');
                         $formIds  = $get('facebook_form_ids') ?? [];

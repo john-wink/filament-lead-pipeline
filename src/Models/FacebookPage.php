@@ -9,12 +9,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use JohnWink\FilamentLeadPipeline\Database\Factories\FacebookPageFactory;
 
 class FacebookPage extends Model
 {
     use HasFactory;
     use HasUuids;
+    use SoftDeletes;
 
     protected $table = 'facebook_pages';
 
@@ -54,6 +56,7 @@ class FacebookPage extends Model
         return [
             'page_access_token'      => 'encrypted',
             'is_webhooks_subscribed' => 'boolean',
+            'deleted_at'             => 'datetime',
         ];
     }
 }

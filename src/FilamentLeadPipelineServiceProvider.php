@@ -104,6 +104,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
             '0015_create_facebook_forms_table',
             '0016_add_facebook_fields_to_lead_sources_table',
             '0017_add_created_by_to_lead_sources_table',
+            '0018_add_soft_deletes_to_facebook_pages_table',
         ];
     }
 }

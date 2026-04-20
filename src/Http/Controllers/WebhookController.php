@@ -199,7 +199,7 @@ class WebhookController
 
                 $sources = LeadSource::query()
                     ->where('facebook_page_uuid', $fbPage->uuid)
-                    ->where('status', LeadSourceStatusEnum::Active)
+                    ->where('status', '!=', LeadSourceStatusEnum::Paused)
                     ->get()
                     ->filter(fn ($source) => in_array($formId, $source->facebook_form_ids ?? [], true));
 

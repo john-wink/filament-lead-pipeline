@@ -13,7 +13,9 @@ use Illuminate\Queue\SerializesModels;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
+use JohnWink\FilamentLeadPipeline\Notifications\FacebookConnectionExpired;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
+use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
 
 class RefreshFacebookTokens implements ShouldQueue
 {
@@ -22,10 +24,8 @@ class RefreshFacebookTokens implements ShouldQueue
     use Queueable;
     use SerializesModels;
 
-    public function handle(): void
+    public function handle(FacebookGraphService $facebook, FacebookPageSynchronizer $synchronizer): void
     {
-        $facebook = app(FacebookGraphService::class);
-
         $connections = FacebookConnection::query()
             ->where('status', 'connected')
             ->where('token_expires_at', '<=', now()->addDays(7))
@@ -40,20 +40,7 @@ class RefreshFacebookTokens implements ShouldQueue
                     'token_expires_at' => now()->addSeconds($result['expires_in'] ?? 5184000),
                 ]);
 
-                $pages = $facebook->getUserPages($result['access_token']);
-
-                foreach ($pages as $pageData) {
-                    FacebookPage::query()->updateOrCreate(
-                        [
-                            'facebook_connection_uuid' => $connection->uuid,
-                            'page_id'                  => $pageData['id'],
-                        ],
-                        [
-                            'page_name'         => $pageData['name'],
-                            'page_access_token' => $pageData['access_token'],
-                        ],
-                    );
-                }
+                $synchronizer->sync($connection);
             } catch (Exception $e) {
                 $connection->update(['status' => 'expired']);
 
@@ -65,6 +52,8 @@ class RefreshFacebookTokens implements ShouldQueue
                             'error_message' => 'Facebook-Token abgelaufen: ' . $e->getMessage(),
                         ]);
                     });
+
+                $connection->user?->notify(new FacebookConnectionExpired($connection));
             }
         }
     }
