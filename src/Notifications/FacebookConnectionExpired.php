@@ -13,7 +13,7 @@ class FacebookConnectionExpired extends Notification
     use Queueable;
 
     public function __construct(
-        public FacebookConnection $connection,
+        public FacebookConnection $facebookConnection,
     ) {}
 
     /** @return array<int, string> */
@@ -27,10 +27,10 @@ class FacebookConnectionExpired extends Notification
     {
         return [
             'title'              => 'Facebook-Verbindung abgelaufen',
-            'body'               => 'Deine Facebook-Verbindung für "' . $this->connection->facebook_user_name . '" ist abgelaufen. Bitte verbinde dein Konto neu, damit Leads weiter synchronisiert werden.',
-            'connection_uuid'    => $this->connection->uuid,
-            'facebook_user_id'   => $this->connection->facebook_user_id,
-            'facebook_user_name' => $this->connection->facebook_user_name,
+            'body'               => 'Deine Facebook-Verbindung für "' . $this->facebookConnection->facebook_user_name . '" ist abgelaufen. Bitte verbinde dein Konto neu, damit Leads weiter synchronisiert werden.',
+            'connection_uuid'    => $this->facebookConnection->uuid,
+            'facebook_user_id'   => $this->facebookConnection->facebook_user_id,
+            'facebook_user_name' => $this->facebookConnection->facebook_user_name,
         ];
     }
 }

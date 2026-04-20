@@ -20,6 +20,8 @@ use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\Team;
 use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\User;
 use Livewire\LivewireServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
+use RyanChandler\BladeCaptureDirective\BladeCaptureDirectiveServiceProvider;
+use Spatie\LaravelData\LaravelDataServiceProvider;
 
 class TestCase extends Orchestra
 {
@@ -43,6 +45,8 @@ class TestCase extends Orchestra
             LivewireServiceProvider::class,
             BladeIconsServiceProvider::class,
             BladeHeroiconsServiceProvider::class,
+            BladeCaptureDirectiveServiceProvider::class,
+            LaravelDataServiceProvider::class,
             SupportServiceProvider::class,
             FormsServiceProvider::class,
             TablesServiceProvider::class,
@@ -58,6 +62,9 @@ class TestCase extends Orchestra
 
     protected function defineEnvironment($app): void
     {
+        $app['config']->set('app.locale', 'de');
+        $app['config']->set('app.fallback_locale', 'de');
+
         $app['config']->set('database.default', 'testing');
         $app['config']->set('database.connections.testing', [
             'driver'   => 'sqlite',
