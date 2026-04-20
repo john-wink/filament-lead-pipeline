@@ -22,11 +22,25 @@ beforeEach(function (): void {
     ]);
 });
 
+/**
+ * Facebook page fixture with the tasks that make the page usable
+ * (MANAGE for webhook subscription + ADVERTISE for leads_retrieval).
+ */
+function usablePage(string $id, string $name, string $token): array
+{
+    return [
+        'id'           => $id,
+        'name'         => $name,
+        'access_token' => $token,
+        'tasks'        => ['MANAGE', 'ADVERTISE'],
+    ];
+}
+
 it('creates new pages that do not exist yet', function (): void {
     Http::fake([
         'graph.facebook.com/*/me/accounts*' => Http::response(['data' => [
-            ['id' => 'page-1', 'name' => 'Page One', 'access_token' => 'token-1'],
-            ['id' => 'page-2', 'name' => 'Page Two', 'access_token' => 'token-2'],
+            usablePage('page-1', 'Page One', 'token-1'),
+            usablePage('page-2', 'Page Two', 'token-2'),
         ]]),
     ]);
 
@@ -46,7 +60,7 @@ it('updates page names and tokens for already known pages', function (): void {
 
     Http::fake([
         'graph.facebook.com/*/me/accounts*' => Http::response(['data' => [
-            ['id' => 'page-1', 'name' => 'New Name', 'access_token' => 'new-token'],
+            usablePage('page-1', 'New Name', 'new-token'),
         ]]),
     ]);
 
@@ -87,7 +101,7 @@ it('restores a previously soft-deleted page when it reappears', function (): voi
 
     Http::fake([
         'graph.facebook.com/*/me/accounts*' => Http::response(['data' => [
-            ['id' => 'page-resurrected', 'name' => 'Resurrected', 'access_token' => 'fresh-token'],
+            usablePage('page-resurrected', 'Resurrected', 'fresh-token'),
         ]]),
     ]);
 
@@ -97,4 +111,22 @@ it('restores a previously soft-deleted page when it reappears', function (): voi
         ->and(FacebookPage::query()->where('page_id', 'page-resurrected')->first())
         ->not->toBeNull()
         ->page_name->toBe('Resurrected');
+});
+
+it('ignores pages without the required tasks', function (): void {
+    Http::fake([
+        'graph.facebook.com/*/me/accounts*' => Http::response(['data' => [
+            // Missing MANAGE → cannot subscribe leadgen webhook.
+            ['id' => 'page-no-manage', 'name' => 'No Manage', 'access_token' => 't1', 'tasks' => ['ADVERTISE']],
+            // Missing ADVERTISE/MANAGE_LEADS → cannot read leads.
+            ['id' => 'page-no-leads', 'name' => 'No Leads', 'access_token' => 't2', 'tasks' => ['MANAGE', 'CREATE_CONTENT']],
+            // Page fulfils both requirements via MANAGE_LEADS instead of ADVERTISE.
+            ['id' => 'page-ok', 'name' => 'All Good', 'access_token' => 't3', 'tasks' => ['MANAGE', 'MANAGE_LEADS']],
+        ]]),
+    ]);
+
+    $summary = app(FacebookPageSynchronizer::class)->sync($this->connection);
+
+    expect($summary)->toMatchArray(['added' => 1, 'updated' => 0, 'removed' => 0])
+        ->and(FacebookPage::query()->pluck('page_id')->all())->toBe(['page-ok']);
 });

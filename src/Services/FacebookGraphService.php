@@ -96,7 +96,19 @@ class FacebookGraphService
     }
 
     /**
-     * @return array<int, array{id: string, name: string, access_token: string}>
+     * Required tasks for a page to be usable by the lead pipeline:
+     * - `MANAGE` allows subscribing the leadgen webhook (`POST /{page-id}/subscribed_apps`).
+     * - `ADVERTISE` or `MANAGE_LEADS` is required for `leads_retrieval` on a page.
+     *
+     * @var array{required_all: array<int, string>, required_any: array<int, string>}
+     */
+    public const LEAD_PIPELINE_REQUIRED_TASKS = [
+        'required_all' => ['MANAGE'],
+        'required_any' => ['ADVERTISE', 'MANAGE_LEADS'],
+    ];
+
+    /**
+     * @return array<int, array{id: string, name: string, access_token: string, tasks: array<int, string>}>
      *
      * @throws ConnectionException
      */
@@ -104,7 +116,7 @@ class FacebookGraphService
     {
         $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/me/accounts", [
             'access_token' => $userAccessToken,
-            'fields'       => 'id,name,access_token',
+            'fields'       => 'id,name,access_token,tasks',
         ]);
 
         if ($response->failed()) {

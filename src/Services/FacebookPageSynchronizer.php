@@ -23,8 +23,11 @@ class FacebookPageSynchronizer
      */
     public function sync(FacebookConnection $connection): array
     {
-        $remotePages = $this->facebook->getUserPages($connection->access_token);
-        $remoteIds   = array_column($remotePages, 'id');
+        $remotePages = array_values(array_filter(
+            $this->facebook->getUserPages($connection->access_token),
+            fn (array $page): bool => $this->hasRequiredTasks($page['tasks'] ?? []),
+        ));
+        $remoteIds = array_column($remotePages, 'id');
 
         $added   = 0;
         $updated = 0;
@@ -68,5 +71,18 @@ class FacebookPageSynchronizer
             'updated' => $updated,
             'removed' => $removed,
         ];
+    }
+
+    /**
+     * @param  array<int, string>  $tasks
+     */
+    private function hasRequiredTasks(array $tasks): bool
+    {
+        $requirements = FacebookGraphService::LEAD_PIPELINE_REQUIRED_TASKS;
+
+        $hasAll = [] === array_diff($requirements['required_all'], $tasks);
+        $hasAny = [] !== array_intersect($requirements['required_any'], $tasks);
+
+        return $hasAll && $hasAny;
     }
 }

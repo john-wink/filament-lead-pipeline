@@ -101,7 +101,7 @@ return [
         'redirect_uri'  => env('FACEBOOK_REDIRECT_URI'),
         'verify_token'  => env('FACEBOOK_VERIFY_TOKEN'),
         'graph_version' => 'v25.0',
-        'scopes'        => ['pages_manage_ads', 'leads_retrieval', 'pages_show_list'],
+        'scopes'        => ['pages_manage_ads', 'leads_retrieval', 'pages_show_list', 'business_management'],
     ],
 
     /*
