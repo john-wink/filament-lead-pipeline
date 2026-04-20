@@ -74,39 +74,15 @@ class FacebookOAuthController
 
         $this->synchronizer->sync($connection);
 
-        $pages = $this->facebook->getUserPages($longLived['access_token']);
-
-        // Also load forms for each page
-        foreach ($pages as $pageData) {
-            $fbPage = FacebookPage::query()
-                ->where('facebook_connection_uuid', $connection->uuid)
-                ->where('page_id', $pageData['id'])
-                ->first();
-
-            if ($fbPage) {
-                try {
-                    $forms = $this->facebook->getPageLeadForms($pageData['id'], $pageData['access_token']);
-                    foreach ($forms as $formData) {
-                        \JohnWink\FilamentLeadPipeline\Models\FacebookForm::query()->updateOrCreate(
-                            [
-                                'facebook_page_uuid' => $fbPage->uuid,
-                                'form_id'            => $formData['id'],
-                            ],
-                            [
-                                'form_name' => $formData['name'] ?? "Form {$formData['id']}",
-                                'cached_at' => now(),
-                            ],
-                        );
-                    }
-
-                    // Subscribe to leadgen webhook
-                    if ( ! $fbPage->is_webhooks_subscribed) {
-                        $this->facebook->subscribePageToLeadgen($pageData['id'], $pageData['access_token']);
-                        $fbPage->update(['is_webhooks_subscribed' => true]);
-                    }
-                } catch (Throwable) {
-                    // Non-critical — forms and webhook can be set up later
-                }
+        foreach ($connection->pages()->where('is_webhooks_subscribed', false)->get() as $fbPage) {
+            try {
+                $this->facebook->subscribePageToLeadgen($fbPage->page_id, $fbPage->page_access_token);
+                $fbPage->update(['is_webhooks_subscribed' => true]);
+            } catch (Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Leadgen webhook subscription failed', [
+                    'page_id' => $fbPage->page_id,
+                    'error'   => $e->getMessage(),
+                ]);
             }
         }
 
