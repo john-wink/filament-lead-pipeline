@@ -22,9 +22,9 @@ beforeEach(function (): void {
     $this->openPhase = LeadPhase::factory()->for($this->board, 'board')->create(['type' => LeadPhaseTypeEnum::Open]);
     $this->wonPhase  = LeadPhase::factory()->for($this->board, 'board')->create(['type' => LeadPhaseTypeEnum::Won]);
 
-    $this->ownLead     = Lead::factory()->for($this->openPhase, 'phase')->for($this->board, 'board')->create(['assigned_to' => $this->advisor->id, 'name' => 'Own Lead']);
-    $this->othersLead  = Lead::factory()->for($this->openPhase, 'phase')->for($this->board, 'board')->create(['assigned_to' => $this->admin->id, 'name' => 'Others Lead']);
-    $this->unassigned  = Lead::factory()->for($this->openPhase, 'phase')->for($this->board, 'board')->create(['assigned_to' => null, 'name' => 'Floating']);
+    $this->ownLead    = Lead::factory()->for($this->openPhase, 'phase')->for($this->board, 'board')->create(['assigned_to' => $this->advisor->id, 'name' => 'Own Lead']);
+    $this->othersLead = Lead::factory()->for($this->openPhase, 'phase')->for($this->board, 'board')->create(['assigned_to' => $this->admin->id, 'name' => 'Others Lead']);
+    $this->unassigned = Lead::factory()->for($this->openPhase, 'phase')->for($this->board, 'board')->create(['assigned_to' => null, 'name' => 'Floating']);
 
     $this->exportUrl = '/lead-pipeline/analytics/export?boardId=' . $this->board->getKey() . '&section=berater&preset=365';
 });
@@ -40,7 +40,7 @@ it('streams a CSV with UTF-8 BOM for board admins', function (): void {
 
     $content = $response->streamedContent();
 
-    expect(substr($content, 0, 3))->toBe("\xEF\xBB\xBF")
+    expect(str_starts_with($content, "\xEF\xBB\xBF"))->toBeTrue()
         ->and($response->headers->get('Content-Type'))->toContain('csv');
 });
 
@@ -68,4 +68,3 @@ it('restricts non-admin advisors to their own leads when querying the same board
     expect($content)->toContain('Avi Sor')
         ->and($content)->not->toContain('Others Lead');
 });
-

@@ -21,9 +21,9 @@ it('cascade-deletes lead_field_values when the lead is force-deleted', function 
     $definition = LeadFieldDefinition::factory()->for($this->board, 'board')->create(['key' => 'company']);
 
     LeadFieldValue::query()->create([
-        'lead_uuid'                   => $this->lead->uuid,
-        'lead_field_definition_uuid'  => $definition->uuid,
-        'value'                       => 'Acme',
+        'lead_uuid'                  => $this->lead->uuid,
+        'lead_field_definition_uuid' => $definition->uuid,
+        'value'                      => 'Acme',
     ]);
 
     expect(LeadFieldValue::query()->where('lead_uuid', $this->lead->uuid)->count())->toBe(1);
@@ -37,9 +37,9 @@ it('cascade-deletes lead_field_values when the field definition is force-deleted
     $definition = LeadFieldDefinition::factory()->for($this->board, 'board')->create(['key' => 'budget']);
 
     LeadFieldValue::query()->create([
-        'lead_uuid'                   => $this->lead->uuid,
-        'lead_field_definition_uuid'  => $definition->uuid,
-        'value'                       => '100k',
+        'lead_uuid'                  => $this->lead->uuid,
+        'lead_field_definition_uuid' => $definition->uuid,
+        'value'                      => '100k',
     ]);
 
     $definition->forceDelete();

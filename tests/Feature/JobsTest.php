@@ -10,7 +10,6 @@ use JohnWink\FilamentLeadPipeline\Jobs\RefreshFacebookTokens;
 use JohnWink\FilamentLeadPipeline\Jobs\SyncFacebookPages;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
-use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Notifications\FacebookConnectionExpired;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
@@ -108,7 +107,7 @@ it('refreshes tokens only for connections expiring within 7 days', function (): 
     ]);
 
     (new RefreshFacebookTokens())->handle(
-        app(\JohnWink\FilamentLeadPipeline\Services\FacebookGraphService::class),
+        app(JohnWink\FilamentLeadPipeline\Services\FacebookGraphService::class),
         app(FacebookPageSynchronizer::class),
     );
 
@@ -138,7 +137,7 @@ it('marks a connection expired and notifies the user when refresh fails', functi
     ]);
 
     (new RefreshFacebookTokens())->handle(
-        app(\JohnWink\FilamentLeadPipeline\Services\FacebookGraphService::class),
+        app(JohnWink\FilamentLeadPipeline\Services\FacebookGraphService::class),
         app(FacebookPageSynchronizer::class),
     );
 

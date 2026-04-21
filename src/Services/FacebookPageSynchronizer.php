@@ -44,7 +44,7 @@ class FacebookPageSynchronizer
                 ->where('page_id', $remote['id'])
                 ->first();
 
-            if ($page === null) {
+            if (null === $page) {
                 $page = FacebookPage::query()->create([
                     'facebook_connection_uuid' => $connection->uuid,
                     'page_id'                  => $remote['id'],
@@ -69,7 +69,7 @@ class FacebookPageSynchronizer
 
         $removed = FacebookPage::query()
             ->where('facebook_connection_uuid', $connection->uuid)
-            ->when($remoteIds !== [], fn ($query) => $query->whereNotIn('page_id', $remoteIds))
+            ->when([] !== $remoteIds, fn ($query) => $query->whereNotIn('page_id', $remoteIds))
             ->delete();
 
         return [
@@ -111,7 +111,7 @@ class FacebookPageSynchronizer
 
         FacebookForm::query()
             ->where('facebook_page_uuid', $page->uuid)
-            ->when($remoteFormIds !== [], fn ($query) => $query->whereNotIn('form_id', $remoteFormIds))
+            ->when([] !== $remoteFormIds, fn ($query) => $query->whereNotIn('form_id', $remoteFormIds))
             ->delete();
 
         return count($remoteForms);

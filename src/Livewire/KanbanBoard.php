@@ -8,7 +8,6 @@ use Illuminate\Contracts\View\View;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
-use JohnWink\FilamentLeadPipeline\Events\LeadMoved;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
@@ -38,7 +37,7 @@ class KanbanBoard extends Component
     {
         $user = auth()->user();
 
-        return $user !== null && $this->board->isAdmin($user);
+        return null !== $user && $this->board->isAdmin($user);
     }
 
     /**
@@ -169,7 +168,6 @@ class KanbanBoard extends Component
                     'new_phase' => $newPhase->getKey(),
                 ],
             ]);
-
         }
 
         if ($oldPhase) {

@@ -10,6 +10,18 @@ use RuntimeException;
 
 class FacebookGraphService
 {
+    /**
+     * Required tasks for a page to be usable by the lead pipeline:
+     * - `MANAGE` allows subscribing the leadgen webhook (`POST /{page-id}/subscribed_apps`).
+     * - `ADVERTISE` or `MANAGE_LEADS` is required for `leads_retrieval` on a page.
+     *
+     * @var array{required_all: array<int, string>, required_any: array<int, string>}
+     */
+    public const LEAD_PIPELINE_REQUIRED_TASKS = [
+        'required_all' => ['MANAGE'],
+        'required_any' => ['ADVERTISE', 'MANAGE_LEADS'],
+    ];
+
     private string $graphVersion;
 
     private string $graphUrl = 'https://graph.facebook.com';
@@ -94,18 +106,6 @@ class FacebookGraphService
     {
         return $this->exchangeForLongLivedToken($longLivedToken);
     }
-
-    /**
-     * Required tasks for a page to be usable by the lead pipeline:
-     * - `MANAGE` allows subscribing the leadgen webhook (`POST /{page-id}/subscribed_apps`).
-     * - `ADVERTISE` or `MANAGE_LEADS` is required for `leads_retrieval` on a page.
-     *
-     * @var array{required_all: array<int, string>, required_any: array<int, string>}
-     */
-    public const LEAD_PIPELINE_REQUIRED_TASKS = [
-        'required_all' => ['MANAGE'],
-        'required_any' => ['ADVERTISE', 'MANAGE_LEADS'],
-    ];
 
     /**
      * @return array<int, array{id: string, name: string, access_token: string, tasks: array<int, string>}>

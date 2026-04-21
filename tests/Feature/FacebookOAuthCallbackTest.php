@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Models\Team;
-use App\Models\User;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 

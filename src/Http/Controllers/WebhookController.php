@@ -13,7 +13,6 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
-use JohnWink\FilamentLeadPipeline\Events\LeadAssigned;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Events\LeadReceived;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;

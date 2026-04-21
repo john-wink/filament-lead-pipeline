@@ -152,7 +152,6 @@ class FunnelWizard extends Component
                 'description' => "Automatically assigned to {$assigneeName} (Funnel)",
                 'properties'  => ['funnel_id' => $this->funnel->getKey(), 'auto' => true],
             ]);
-
         }
 
         $this->funnel->incrementSubmissions();

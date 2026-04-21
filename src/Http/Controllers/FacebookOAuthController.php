@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
-use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
 use Throwable;
@@ -86,7 +85,7 @@ class FacebookOAuthController
             }
         }
 
-        $targetOrigin = json_encode(rtrim((string) config('app.url'), '/'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+        $targetOrigin = json_encode(mb_rtrim((string) config('app.url'), '/'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
 
         return response(<<<HTML
             <!DOCTYPE html>

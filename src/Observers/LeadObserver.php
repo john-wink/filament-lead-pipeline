@@ -27,7 +27,7 @@ class LeadObserver
     {
         $phaseFk = Lead::fkColumn('lead_phase');
 
-        if (! $lead->wasChanged($phaseFk)) {
+        if ( ! $lead->wasChanged($phaseFk)) {
             return;
         }
 
@@ -35,7 +35,7 @@ class LeadObserver
         $oldPhase   = $oldPhaseId ? LeadPhase::find($oldPhaseId) : null;
         $newPhase   = LeadPhase::find($lead->{$phaseFk});
 
-        if (! $newPhase) {
+        if ( ! $newPhase) {
             return;
         }
 
@@ -43,7 +43,7 @@ class LeadObserver
 
         // Auto-convert on terminal phases
         if ($newPhase->auto_convert && $newPhase->type->isTerminal() && filled($newPhase->conversion_target)) {
-            if (! $lead->conversions()->exists()) {
+            if ( ! $lead->conversions()->exists()) {
                 try {
                     app(LeadConversionService::class)->convert($lead, $newPhase->conversion_target);
                 } catch (Throwable $e) {
@@ -59,7 +59,7 @@ class LeadObserver
 
     private function handleStatusChanged(Lead $lead): void
     {
-        if (! $lead->wasChanged('status')) {
+        if ( ! $lead->wasChanged('status')) {
             return;
         }
 
@@ -78,7 +78,7 @@ class LeadObserver
 
     private function handleAssignmentChanged(Lead $lead): void
     {
-        if (! $lead->wasChanged('assigned_to')) {
+        if ( ! $lead->wasChanged('assigned_to')) {
             return;
         }
 

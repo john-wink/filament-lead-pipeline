@@ -15,7 +15,6 @@ use Filament\Tables\Table;
 use Illuminate\Contracts\View\View;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
-use JohnWink\FilamentLeadPipeline\Events\LeadAssigned;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;

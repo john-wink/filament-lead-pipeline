@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use App\Models\Team;
-use App\Models\User;
 use Illuminate\Support\Facades\Event;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
@@ -37,7 +36,7 @@ it('dispatches LeadStatusChanged when status changes', function (): void {
 
     $this->lead->update(['status' => LeadStatusEnum::Converted]);
 
-    Event::assertDispatched(LeadStatusChanged::class, fn (LeadStatusChanged $e): bool => $e->newStatus === LeadStatusEnum::Converted);
+    Event::assertDispatched(LeadStatusChanged::class, fn (LeadStatusChanged $e): bool => LeadStatusEnum::Converted === $e->newStatus);
 });
 
 it('dispatches LeadAssigned when assigned_to is set', function (): void {
