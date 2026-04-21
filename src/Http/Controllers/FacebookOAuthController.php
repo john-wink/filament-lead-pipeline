@@ -96,13 +96,24 @@ class FacebookOAuthController
                 <script>
                     (function () {
                         var targetOrigin = {$targetOrigin};
+                        var timestamp = Date.now().toString();
+
+                        // Cross-tab signal via localStorage (robust against COOP / tab-mode)
+                        try {
+                            localStorage.setItem('lead-pipeline:facebook-connected', timestamp);
+                        } catch (e) { /* storage disabled */ }
+
+                        // Same-window opener notification (when popup mode is available)
                         if (window.opener) {
                             try {
-                                window.opener.postMessage({ type: 'facebook-connected' }, targetOrigin);
+                                window.opener.postMessage({ type: 'facebook-connected', timestamp: timestamp }, targetOrigin);
                             } catch (e) { /* ignore */ }
                             window.close();
                         } else {
-                            window.location.href = '/';
+                            // Opener unavailable (tab mode / COOP blocked) — give the parent tab a moment to react to the storage event before navigating away.
+                            setTimeout(function () {
+                                window.location.href = '/';
+                            }, 500);
                         }
                     })();
                 </script>

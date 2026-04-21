@@ -1,11 +1,20 @@
 <div
     x-data="{ checking: false }"
     x-init="
+        const reloadOnConnect = () => { window.location.reload(); };
+
+        // Same-window popup message (works when popup keeps an opener)
         window.addEventListener('message', (event) => {
             if (event.origin !== window.location.origin) return;
             if (event.data && event.data.type === 'facebook-connected') {
-                checking = false;
-                $wire.$parent.$refresh();
+                reloadOnConnect();
+            }
+        });
+
+        // Cross-tab signal (works when browser opened the OAuth flow in a new tab or COOP blocked the opener)
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'lead-pipeline:facebook-connected' && event.newValue) {
+                reloadOnConnect();
             }
         });
     "
@@ -21,16 +30,22 @@
 
         $openPopup = "
             checking = true;
+
+            // Clear any previous signal so the storage listener only fires for the new attempt.
+            try { localStorage.removeItem('lead-pipeline:facebook-connected'); } catch (e) {}
+
             const popup = window.open(
                 '" . route('lead-pipeline.facebook.redirect') . "',
                 'facebook_connect',
                 'width=600,height=700,scrollbars=yes,status=yes'
             );
+
+            // Fallback: if the popup is closed (manual cancel or auth completed without signals reaching us), do a hard reload so the form reflects whatever state is now persisted.
             const interval = setInterval(() => {
                 if (!popup || popup.closed) {
                     clearInterval(interval);
                     checking = false;
-                    \$wire.\$parent.\$refresh();
+                    window.location.reload();
                 }
             }, 500);
         ";
