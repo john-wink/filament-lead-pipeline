@@ -1,20 +1,27 @@
 <div
     x-data="{ checking: false }"
     x-init="
-        const reloadOnConnect = () => { window.location.reload(); };
+        const refreshLivewire = () => {
+            checking = false;
+            if (window.Livewire && typeof window.Livewire.all === 'function') {
+                window.Livewire.all().forEach((component) => {
+                    try { component.$refresh(); } catch (e) { /* ignore components that cannot refresh */ }
+                });
+            }
+        };
 
         // Same-window popup message (works when popup keeps an opener)
         window.addEventListener('message', (event) => {
             if (event.origin !== window.location.origin) return;
             if (event.data && event.data.type === 'facebook-connected') {
-                reloadOnConnect();
+                refreshLivewire();
             }
         });
 
         // Cross-tab signal (works when browser opened the OAuth flow in a new tab or COOP blocked the opener)
         window.addEventListener('storage', (event) => {
             if (event.key === 'lead-pipeline:facebook-connected' && event.newValue) {
-                reloadOnConnect();
+                refreshLivewire();
             }
         });
     "
@@ -40,12 +47,11 @@
                 'width=600,height=700,scrollbars=yes,status=yes'
             );
 
-            // Fallback: if the popup is closed (manual cancel or auth completed without signals reaching us), do a hard reload so the form reflects whatever state is now persisted.
+            // Fallback: if the popup is closed (manual cancel or auth completed without signals reaching us), refresh all Livewire components so the form picks up any persisted state.
             const interval = setInterval(() => {
                 if (!popup || popup.closed) {
                     clearInterval(interval);
-                    checking = false;
-                    window.location.reload();
+                    refreshLivewire();
                 }
             }, 500);
         ";
