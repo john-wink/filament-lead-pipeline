@@ -167,4 +167,23 @@
         @livewire('lead-pipeline::lead-detail-modal')
         @livewire('lead-pipeline::lead-analytics-modal')
     </div>
+
+    {{--
+        JS-Bridge für Live-Filter-Updates: Browser-Events erreichen #[Isolate]
+        PhaseColumns nach einem Page-Roundtrip nicht zuverlässig. Hier hören wir
+        einmalig global auf 'filters-updated' und rufen `applyFilters` direkt
+        auf jeder KanbanPhaseColumn-Instanz auf — unabhängig von Livewire's
+        Component-Event-Routing.
+    --}}
+    @script
+    <script>
+        Livewire.on('filters-updated', ({ filters }) => {
+            Livewire.all().forEach((component) => {
+                if (component.name === 'lead-pipeline::kanban-phase-column') {
+                    component.call('applyFilters', filters ?? {});
+                }
+            });
+        });
+    </script>
+    @endscript
 </x-filament-panels::page>
