@@ -157,17 +157,21 @@
         @if($this->activeTab === 'board')
             {{--
                 Page rendert die PhaseColumns DIREKT — analog zum Loan-Kanban.
-                Eine zusätzliche Livewire-Layer würde Browser-Events zu den
-                isolierten PhaseColumns nach Page-Roundtrips abschneiden, was
-                Live-Filter-Updates kaputt macht.
+                Der wire:key enthält einen Hash der aktuellen Filter, sodass
+                Livewire die isolierten PhaseColumns bei jeder Filter-Änderung
+                deterministisch neu mountet. Damit umgehen wir das fragile
+                Browser-Event-Routing zu #[Isolate]-Children komplett.
             --}}
+            @php
+                $filterKey = md5(json_encode($this->filters));
+            @endphp
             <div
                 data-kanban-board
                 data-kanban-component-id="{{ $this->getId() }}"
                 class="flex-1 overflow-hidden min-h-0 lead-kanban-board"
             >
                 @foreach($this->getKanbanPhases() as $phase)
-                    @livewire('lead-pipeline::kanban-phase-column', ['phaseId' => $phase->getKey(), 'filters' => $this->filters], key('phase-' . $phase->getKey()))
+                    @livewire('lead-pipeline::kanban-phase-column', ['phaseId' => $phase->getKey(), 'filters' => $this->filters], key('phase-' . $phase->getKey() . '-' . $filterKey))
                 @endforeach
             </div>
         @else
