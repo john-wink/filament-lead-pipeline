@@ -8,7 +8,7 @@
         "build:scripts": "node bin/build.js",
         "purge": "filament-purge -i resources/dist/lead-pipeline.css -o resources/dist/lead-pipeline.css -v 3.x",
         "dev": "npm-run-all --parallel dev:*",
-        "build": "npm-run-all build:*"
+        "build": "npm run build:styles && npm run build:scripts"
     },
     "devDependencies": {
         "@awcodes/filament-plugin-purge": "^1.1.1",
