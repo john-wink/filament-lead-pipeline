@@ -20,6 +20,9 @@ class KanbanBoard extends Component
 {
     public LeadBoard $board;
 
+    /** @var array<string, mixed> */
+    public array $filters = [];
+
     public string $newLeadName = '';
 
     public string $newLeadEmail = '';
@@ -64,9 +67,27 @@ class KanbanBoard extends Component
             ->all();
     }
 
-    public function mount(LeadBoard $board): void
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    public function mount(LeadBoard $board, array $filters = []): void
     {
-        $this->board = $board;
+        $this->board   = $board;
+        $this->filters = $filters;
+    }
+
+    /**
+     * Wird vom Page-Component beim Filter-Update gefeuert. Hält den
+     * Filter-State auch im inneren Livewire-Component synchron, sodass beim
+     * nächsten Render die isolierten PhaseColumns die aktuellen Werte
+     * mitbekommen.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    #[On('filters-updated')]
+    public function refreshFilters(array $filters): void
+    {
+        $this->filters = $filters;
     }
 
     #[On('create-lead')]
@@ -198,7 +219,8 @@ class KanbanBoard extends Component
             ->get() ?? collect();
 
         return view('lead-pipeline::kanban.board', [
-            'phases' => $phases,
+            'phases'  => $phases,
+            'filters' => $this->filters,
         ]);
     }
 }

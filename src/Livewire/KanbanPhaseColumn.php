@@ -33,11 +33,15 @@ class KanbanPhaseColumn extends Component
     /** @var array<string, mixed> */
     public array $filters = [];
 
-    public function mount(string $phaseId): void
+    /**
+     * @param  array<string, mixed>  $filters
+     */
+    public function mount(string $phaseId, array $filters = []): void
     {
         $this->phaseId = $phaseId;
         $this->phase   = LeadPhase::findOrFail($phaseId);
         $this->perPage = (int) config('lead-pipeline.kanban.leads_per_page', 20);
+        $this->filters = $filters;
     }
 
     public function init(): void

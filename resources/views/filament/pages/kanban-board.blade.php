@@ -1,65 +1,14 @@
 <x-filament-panels::page>
-    @if($this->activeTab === 'board')
-    <style>
-        /* Kanban: kill scrolling on ancestors so the board fills the viewport */
-        html, body { overflow: hidden !important; height: 100vh !important; }
-        .fi-layout, .fi-main, .fi-main-ctn, .fi-topbar + div,
-        .fi-page, .fi-page-content, .fi-section, .fi-section-content-ctn,
-        [class*="fi-body"], [class*="fi-main"] {
-            overflow: hidden !important;
-            max-height: 100vh !important;
-        }
-    </style>
-    @else
-    <style>
-        /* Non-board tabs: ensure scrolling works normally */
-        html, body { overflow: auto !important; height: auto !important; }
-        .fi-layout, .fi-main, .fi-main-ctn, .fi-topbar + div,
-        .fi-page, .fi-page-content, .fi-section, .fi-section-content-ctn,
-        [class*="fi-body"], [class*="fi-main"] {
-            overflow: visible !important;
-            max-height: none !important;
-        }
-    </style>
-    @endif
-    <style>
-        [data-kanban-page] {
-            display: flex; flex-direction: column; min-height: 0;
-        }
-    </style>
-    <script>
-        requestAnimationFrame(() => {
-            const el = document.querySelector('[data-kanban-page]');
-            if (!el) return;
-
-            const isBoard = !!el.querySelector('[data-kanban-board]');
-
-            if (isBoard) {
-                // Board tab: lock height and overflow so the kanban fills the viewport
-                const top = el.getBoundingClientRect().top;
-                el.style.height = (window.innerHeight - top - 8) + 'px';
-                el.style.overflow = 'hidden';
-
-                let node = el.parentElement;
-                while (node && node !== document.documentElement) {
-                    node.style.overflow = 'hidden';
-                    node = node.parentElement;
-                }
-            } else {
-                // Non-board tabs (tables): restore scrolling
-                el.style.height = '';
-                el.style.overflow = '';
-
-                let node = el.parentElement;
-                while (node && node !== document.documentElement) {
-                    node.style.overflow = '';
-                    node = node.parentElement;
-                }
-            }
-        });
-    </script>
-
-    <div data-kanban-page>
+    <div
+        data-kanban-page
+        @class([
+            'flex flex-col min-h-0',
+            'overflow-hidden' => $this->activeTab === 'board',
+        ])
+        @if($this->activeTab === 'board')
+            style="height: calc(100vh - 12rem); max-height: calc(100dvh - 12rem);"
+        @endif
+    >
         {{-- Tab Navigation + Toolbar in one row --}}
         <div class="border-b border-gray-200 dark:border-gray-700 mb-2 flex-shrink-0">
             <div class="flex items-center justify-between gap-4">
@@ -207,7 +156,7 @@
         {{-- Content (fills remaining space) --}}
         @if($this->activeTab === 'board')
             <div class="flex-1 overflow-hidden min-h-0">
-                @livewire('lead-pipeline::kanban-board', ['board' => $this->board])
+                @livewire('lead-pipeline::kanban-board', ['board' => $this->board, 'filters' => $this->filters])
             </div>
         @else
             <div class="flex-1 min-h-0">

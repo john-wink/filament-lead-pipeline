@@ -1,62 +1,52 @@
+@php
+    $connection = \JohnWink\FilamentLeadPipeline\Models\FacebookConnection::query()
+        ->where('user_uuid', auth()->id())
+        ->orderByDesc('updated_at')
+        ->first();
+
+    $isConnected = $connection && $connection->status === 'connected' && ! $connection->isExpired();
+    $isExpired   = $connection && ($connection->status === 'expired' || $connection->isExpired());
+    $redirectUrl = route('lead-pipeline.facebook.redirect');
+@endphp
+
 <div
-    x-data="{ checking: false }"
-    x-init="
-        const refreshLivewire = () => {
-            checking = false;
-            if (window.Livewire && typeof window.Livewire.all === 'function') {
-                window.Livewire.all().forEach((component) => {
-                    try { component.$refresh(); } catch (e) { /* ignore components that cannot refresh */ }
-                });
+    x-data="{
+        refresh() {
+            if (window.Livewire && typeof $wire !== 'undefined') {
+                try { $wire.$refresh(); } catch (e) { /* ignore */ }
             }
-        };
+        },
 
-        // Same-window popup message (works when popup keeps an opener)
-        window.addEventListener('message', (event) => {
-            if (event.origin !== window.location.origin) return;
-            if (event.data && event.data.type === 'facebook-connected') {
-                refreshLivewire();
-            }
-        });
-
-        // Cross-tab signal (works when browser opened the OAuth flow in a new tab or COOP blocked the opener)
-        window.addEventListener('storage', (event) => {
-            if (event.key === 'lead-pipeline:facebook-connected' && event.newValue) {
-                refreshLivewire();
-            }
-        });
-    "
->
-    @php
-        $connection = \JohnWink\FilamentLeadPipeline\Models\FacebookConnection::query()
-            ->where('user_uuid', auth()->id())
-            ->orderByDesc('updated_at')
-            ->first();
-
-        $isConnected = $connection && $connection->status === 'connected' && ! $connection->isExpired();
-        $isExpired   = $connection && ($connection->status === 'expired' || $connection->isExpired());
-
-        $openPopup = "
-            checking = true;
-
-            // Clear any previous signal so the storage listener only fires for the new attempt.
+        openOauth() {
             try { localStorage.removeItem('lead-pipeline:facebook-connected'); } catch (e) {}
 
+            const startedAt = Date.now();
             const popup = window.open(
-                '" . route('lead-pipeline.facebook.redirect') . "',
+                @js($redirectUrl),
                 'facebook_connect',
                 'width=600,height=700,scrollbars=yes,status=yes'
             );
 
-            // Fallback: if the popup is closed (manual cancel or auth completed without signals reaching us), refresh all Livewire components so the form picks up any persisted state.
-            const interval = setInterval(() => {
-                if (!popup || popup.closed) {
-                    clearInterval(interval);
-                    refreshLivewire();
+            // Poll localStorage for the cross-tab signal from the callback.
+            const pollInterval = setInterval(() => {
+                const raw = (() => { try { return localStorage.getItem('lead-pipeline:facebook-connected'); } catch (e) { return null; } })();
+                const signalTs = raw ? parseInt(raw, 10) : 0;
+
+                if (signalTs > startedAt) {
+                    clearInterval(pollInterval);
+                    try { localStorage.removeItem('lead-pipeline:facebook-connected'); } catch (e) {}
+                    this.refresh();
+                    return;
+                }
+
+                // Safety net: stop polling after 3 minutes.
+                if (Date.now() - startedAt > 180000) {
+                    clearInterval(pollInterval);
                 }
             }, 500);
-        ";
-    @endphp
-
+        },
+    }"
+>
     @if($isConnected)
         <div class="flex items-center gap-2 text-sm text-success-600 dark:text-success-400">
             <x-heroicon-o-check-circle class="w-5 h-5" />
@@ -70,32 +60,20 @@
             </div>
             <button
                 type="button"
-                x-on:click="{{ $openPopup }}"
-                x-bind:disabled="checking"
+                x-on:click="openOauth()"
                 class="self-start fi-btn fi-btn-size-sm relative grid-flow-col items-center justify-center font-semibold outline-none transition duration-75 focus-visible:ring-2 rounded-lg fi-size-sm gap-1.5 px-3 py-1.5 text-sm inline-grid shadow-sm bg-warning-600 text-white hover:bg-warning-500 dark:bg-warning-500 dark:hover:bg-warning-400"
             >
-                <template x-if="!checking">
-                    <span>{{ __('lead-pipeline::lead-pipeline.facebook.reconnect') }}</span>
-                </template>
-                <template x-if="checking">
-                    <span>{{ __('lead-pipeline::lead-pipeline.facebook.connecting') }}</span>
-                </template>
+                {{ __('lead-pipeline::lead-pipeline.facebook.reconnect') }}
             </button>
         </div>
     @else
         <button
             type="button"
-            x-on:click="{{ $openPopup }}"
-            x-bind:disabled="checking"
+            x-on:click="openOauth()"
             class="fi-btn fi-btn-size-md relative grid-flow-col items-center justify-center font-semibold outline-none transition duration-75 focus-visible:ring-2 rounded-lg fi-color-custom fi-btn-color-primary fi-size-md gap-1.5 px-3 py-2 text-sm inline-grid shadow-sm bg-custom-600 text-white hover:bg-custom-500 dark:bg-custom-500 dark:hover:bg-custom-400 focus-visible:ring-custom-500/50 dark:focus-visible:ring-custom-400/50"
             style="--c-400: var(--primary-400); --c-500: var(--primary-500); --c-600: var(--primary-600);"
         >
-            <template x-if="!checking">
-                <span>{{ __('lead-pipeline::lead-pipeline.facebook.connect') }}</span>
-            </template>
-            <template x-if="checking">
-                <span>{{ __('lead-pipeline::lead-pipeline.facebook.connecting') }}</span>
-            </template>
+            {{ __('lead-pipeline::lead-pipeline.facebook.connect') }}
         </button>
     @endif
 </div>

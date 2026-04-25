@@ -196,3 +196,32 @@ it('filters leads by date range', function (): void {
         ->assertDontSee('Old Lead')
         ->assertSee('Recent Lead');
 });
+
+it('inner KanbanBoard accepts filters and exposes them to phase columns', function (): void {
+    $component = Livewire::test(KanbanBoard::class, [
+        'board'   => $this->board,
+        'filters' => ['source_id' => 'abc-123'],
+    ]);
+
+    $component->assertSet('filters', ['source_id' => 'abc-123']);
+});
+
+it('inner KanbanBoard updates filters when filters-updated event is dispatched', function (): void {
+    $component = Livewire::test(KanbanBoard::class, ['board' => $this->board])
+        ->dispatch('filters-updated', filters: ['status' => 'active']);
+
+    $component->assertSet('filters', ['status' => 'active']);
+});
+
+it('Page KanbanBoard dispatches filters-updated event when filter property changes', function (): void {
+    Livewire::test(JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard::class, ['board' => $this->board])
+        ->set('filters.source_id', 'abc-123')
+        ->assertDispatched('filters-updated');
+});
+
+it('Page KanbanBoard hydrates filters from session on mount', function (): void {
+    session(["lead-pipeline.filters.{$this->board->getKey()}" => ['status' => 'lost']]);
+
+    Livewire::test(JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard::class, ['board' => $this->board])
+        ->assertSet('filters', ['status' => 'lost']);
+});

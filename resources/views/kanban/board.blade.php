@@ -9,7 +9,7 @@
     {{-- Kanban Board --}}
     <div class="lead-kanban-board">
         @foreach($phases as $phase)
-            @livewire('lead-pipeline::kanban-phase-column', ['phaseId' => $phase->getKey()], key('phase-'.$phase->getKey()))
+            @livewire('lead-pipeline::kanban-phase-column', ['phaseId' => $phase->getKey(), 'filters' => $filters], key('phase-'.$phase->getKey()))
         @endforeach
     </div>
 
