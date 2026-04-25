@@ -225,3 +225,27 @@ it('Page KanbanBoard hydrates filters from session on mount', function (): void 
     Livewire::test(JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard::class, ['board' => $this->board])
         ->assertSet('filters', ['status' => 'lost']);
 });
+
+it('Page KanbanBoard dispatches filters-updated targeted at KanbanPhaseColumn (so isolated children update without a reload)', function (): void {
+    $component = Livewire::test(JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard::class, ['board' => $this->board])
+        ->set('filters.source_id', 'abc-123');
+
+    $dispatches = data_get($component->effects, 'dispatches', []);
+    $targeted   = collect($dispatches)->firstWhere(fn (array $d): bool => 'filters-updated' === ($d['name'] ?? null)
+        && 'lead-pipeline::kanban-phase-column' === ($d['to'] ?? null));
+
+    expect($targeted)->not->toBeNull('Page must dispatch filters-updated directly to KanbanPhaseColumn class');
+});
+
+it('clearFilters also dispatches event directly to KanbanPhaseColumn', function (): void {
+    session(["lead-pipeline.filters.{$this->board->getKey()}" => ['status' => 'lost']]);
+
+    $component = Livewire::test(JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard::class, ['board' => $this->board])
+        ->call('clearFilters');
+
+    $dispatches = data_get($component->effects, 'dispatches', []);
+    $targeted   = collect($dispatches)->firstWhere(fn (array $d): bool => 'filters-updated' === ($d['name'] ?? null)
+        && 'lead-pipeline::kanban-phase-column' === ($d['to'] ?? null));
+
+    expect($targeted)->not->toBeNull('clearFilters must dispatch filters-updated directly to KanbanPhaseColumn class');
+});

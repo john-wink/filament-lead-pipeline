@@ -8,6 +8,7 @@ use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
+use JohnWink\FilamentLeadPipeline\Livewire\KanbanPhaseColumn;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 
 class KanbanBoard extends Page
@@ -60,14 +61,14 @@ class KanbanBoard extends Page
         $cleaned       = array_filter($this->filters, fn ($v) => filled($v));
         $this->filters = $cleaned;
         session(["lead-pipeline.filters.{$this->board->getKey()}" => $cleaned]);
-        $this->dispatch('filters-updated', filters: $cleaned);
+        $this->dispatchFiltersUpdated($cleaned);
     }
 
     public function clearFilters(): void
     {
         $this->filters = [];
         session()->forget("lead-pipeline.filters.{$this->board->getKey()}");
-        $this->dispatch('filters-updated', filters: []);
+        $this->dispatchFiltersUpdated([]);
     }
 
     public function getListPhases(): Collection
@@ -93,5 +94,21 @@ class KanbanBoard extends Page
     public function getHeading(): string|Htmlable
     {
         return $this->getBoard()->name;
+    }
+
+    /**
+     * Versendet das `filters-updated`-Event sowohl als globales Browser-Event
+     * (für den inneren KanbanBoard-Wrapper, der den Filter-State spiegelt) als
+     * auch direkt an alle KanbanPhaseColumn-Instanzen. Ohne den expliziten
+     * `to()`-Dispatch erreichen Browser-Events die isolierten PhaseColumns
+     * nach einem Page-Roundtrip nicht zuverlässig — Folge: Filter wirken erst
+     * nach einem manuellen Reload.
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    protected function dispatchFiltersUpdated(array $filters): void
+    {
+        $this->dispatch('filters-updated', filters: $filters);
+        $this->dispatch('filters-updated', filters: $filters)->to(KanbanPhaseColumn::class);
     }
 }
