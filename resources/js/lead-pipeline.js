@@ -49,14 +49,20 @@
 
                     if (!leadId || !toPhaseId) return;
 
+                    // The kanban board is now rendered directly inside the Filament
+                    // Page component (no more inner Livewire wrapper). The page
+                    // exposes its component id via `data-kanban-component-id` so we
+                    // can dispatch directly to the right Livewire instance.
                     const boardElement = document.querySelector('[data-kanban-board]');
                     if (!boardElement) return;
 
-                    const wireId = boardElement.getAttribute('wire:id');
-                    const boardComponent = Livewire.find(wireId);
+                    const componentId = boardElement.getAttribute('data-kanban-component-id');
+                    if (!componentId) return;
 
-                    if (boardComponent) {
-                        boardComponent.call('moveLeadToPhase', leadId, toPhaseId, newSort);
+                    const pageComponent = Livewire.find(componentId);
+
+                    if (pageComponent) {
+                        pageComponent.call('moveLeadToPhase', leadId, toPhaseId, newSort);
                     }
                 },
             });
