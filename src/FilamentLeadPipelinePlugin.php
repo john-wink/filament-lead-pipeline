@@ -7,6 +7,7 @@ namespace JohnWink\FilamentLeadPipeline;
 use Closure;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use JohnWink\FilamentLeadPipeline\Contracts\StatsAggregatorContract;
 use JohnWink\FilamentLeadPipeline\DTOs\FieldPresetData;
 use JohnWink\FilamentLeadPipeline\DTOs\PhasePresetData;
 use JohnWink\FilamentLeadPipeline\DTOs\SourcePresetData;
@@ -31,6 +32,13 @@ class FilamentLeadPipelinePlugin implements Plugin
     protected array $defaultSources = [];
 
     protected ?Closure $assignableUsersQuery = null;
+
+    /** @var array<class-string<Contracts\RecipientResolverContract>> */
+    protected array $recipientResolvers = [];
+
+    protected ?Closure $shareableTenants = null;
+
+    protected ?StatsAggregatorContract $statsAggregator = null;
 
     public static function make(): static
     {
@@ -181,6 +189,44 @@ class FilamentLeadPipelinePlugin implements Plugin
         $this->assignableUsersQuery = $callback;
 
         return $this;
+    }
+
+    /** @param array<class-string<Contracts\RecipientResolverContract>> $resolvers */
+    public function recipientResolvers(array $resolvers): static
+    {
+        $this->recipientResolvers = $resolvers;
+
+        return $this;
+    }
+
+    /** @return array<class-string<Contracts\RecipientResolverContract>> */
+    public function getRecipientResolvers(): array
+    {
+        return $this->recipientResolvers;
+    }
+
+    public function shareableTenants(?Closure $callback): static
+    {
+        $this->shareableTenants = $callback;
+
+        return $this;
+    }
+
+    public function getShareableTenants(): ?Closure
+    {
+        return $this->shareableTenants;
+    }
+
+    public function statsAggregator(?StatsAggregatorContract $aggregator): static
+    {
+        $this->statsAggregator = $aggregator;
+
+        return $this;
+    }
+
+    public function getStatsAggregator(): ?StatsAggregatorContract
+    {
+        return $this->statsAggregator;
     }
 
     public function register(Panel $panel): void
