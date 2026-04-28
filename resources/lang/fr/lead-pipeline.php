@@ -280,6 +280,11 @@ return [
         'won'         => 'Gagné',
         'lost'        => 'Perdu',
     ],
+    'routing_mode' => [
+        'manual' => 'Manuel',
+        'fixed'  => 'Destinataire fixe',
+        'open'   => 'Ouvert (choisir par lead)',
+    ],
     'source_status' => [
         'draft'  => 'Brouillon',
         'active' => 'Actif',
