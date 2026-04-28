@@ -282,6 +282,11 @@ return [
         'won'         => 'Gewonnen',
         'lost'        => 'Verloren',
     ],
+    'routing_mode' => [
+        'manual' => 'Manuell',
+        'fixed'  => 'Fester Empfänger',
+        'open'   => 'Offen (pro Lead wählen)',
+    ],
     'source_status' => [
         'draft'  => 'Entwurf',
         'active' => 'Aktiv',
