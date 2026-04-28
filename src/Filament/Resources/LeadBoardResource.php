@@ -18,6 +18,7 @@ use JohnWink\FilamentLeadPipeline\Filament\Pages\SourceManagement;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use Throwable;
 
 class LeadBoardResource extends Resource
 {
@@ -48,6 +49,29 @@ class LeadBoardResource extends Resource
     public static function getNavigationGroup(): ?string
     {
         return config('lead-pipeline.navigation.group');
+    }
+
+    /**
+     * Returns the schema components contributed by registered
+     * board form extensions (apps register these via
+     * FilamentLeadPipelinePlugin::extendBoardForm()).
+     *
+     * @return array<int, mixed>
+     */
+    public static function getBoardFormExtensionComponents(): array
+    {
+        try {
+            $plugin = filament()->getPlugin('filament-lead-pipeline');
+        } catch (Throwable) {
+            return [];
+        }
+
+        $components = [];
+        foreach ($plugin->getBoardFormExtensions() as $closure) {
+            $components = [...$components, ...$closure()];
+        }
+
+        return $components;
     }
 
     public static function form(Form $form): Form
@@ -202,6 +226,8 @@ class LeadBoardResource extends Resource
                             ->defaultItems(0)
                             ->columns(2),
                     ]),
+
+                ...static::getBoardFormExtensionComponents(),
             ]);
     }
 
