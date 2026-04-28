@@ -65,14 +65,14 @@ enum FunnelFieldTypeEnum: string implements HasLabel
     public function validationRules(): array
     {
         return match ($this) {
-            self::TextInput, self::PhoneInput => ['string', 'max:255'],
-            self::EmailInput => ['email', 'max:255'],
-            self::Textarea   => ['string', 'max:65535'],
+            self::TextInput, self::PhoneInput  => ['string', 'max:255'],
+            self::EmailInput                   => ['email', 'max:255'],
+            self::Textarea                     => ['string', 'max:65535'],
             self::OptionCards, self::IconCards => ['string'],
-            self::MultiOptionCards => ['array'],
-            self::YesNo            => ['boolean'],
-            self::Slider           => ['numeric'],
-            self::DatePicker       => ['date'],
+            self::MultiOptionCards             => ['array'],
+            self::YesNo                        => ['boolean'],
+            self::Slider                       => ['numeric'],
+            self::DatePicker                   => ['date'],
         };
     }
 

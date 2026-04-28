@@ -67,11 +67,11 @@ enum LeadFieldTypeEnum: string implements HasLabel
     public function castValue(mixed $value): mixed
     {
         return match ($this) {
-            self::Number => (int) $value,
+            self::Number                  => (int) $value,
             self::Decimal, self::Currency => (float) $value,
-            self::Boolean     => (bool) $value,
-            self::MultiSelect => is_array($value) ? $value : json_decode((string) $value, true),
-            default           => (string) $value,
+            self::Boolean                 => (bool) $value,
+            self::MultiSelect             => is_array($value) ? $value : json_decode((string) $value, true),
+            default                       => (string) $value,
         };
     }
 
@@ -79,17 +79,17 @@ enum LeadFieldTypeEnum: string implements HasLabel
     public function validationRules(): array
     {
         return match ($this) {
-            self::String => ['string', 'max:255'],
-            self::Email  => ['email', 'max:255'],
-            self::Phone  => ['string', 'max:50'],
-            self::Number => ['integer'],
+            self::String                  => ['string', 'max:255'],
+            self::Email                   => ['email', 'max:255'],
+            self::Phone                   => ['string', 'max:50'],
+            self::Number                  => ['integer'],
             self::Decimal, self::Currency => ['numeric'],
-            self::Boolean     => ['boolean'],
-            self::Date        => ['date'],
-            self::Select      => ['string'],
-            self::MultiSelect => ['array'],
-            self::Textarea    => ['string', 'max:65535'],
-            self::Url         => ['url', 'max:2048'],
+            self::Boolean                 => ['boolean'],
+            self::Date                    => ['date'],
+            self::Select                  => ['string'],
+            self::MultiSelect             => ['array'],
+            self::Textarea                => ['string', 'max:65535'],
+            self::Url                     => ['url', 'max:2048'],
         };
     }
 

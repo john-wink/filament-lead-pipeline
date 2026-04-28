@@ -7,10 +7,12 @@ namespace JohnWink\FilamentLeadPipeline\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use JohnWink\FilamentLeadPipeline\Concerns\BelongsToTeam;
 use JohnWink\FilamentLeadPipeline\Concerns\HasConfigurablePrimaryKey;
 use JohnWink\FilamentLeadPipeline\Database\Factories\LeadBoardFactory;
+use JohnWink\FilamentLeadPipeline\Enums\RoutingModeEnum;
 
 class LeadBoard extends Model
 {
@@ -28,6 +30,10 @@ class LeadBoard extends Model
         'is_active',
         'sort',
         'team_uuid',
+        'routing_mode',
+        'recipient_type',
+        'recipient_id',
+        'routing_settings',
     ];
 
     public function phases(): HasMany
@@ -53,6 +59,39 @@ class LeadBoard extends Model
     public function funnels(): HasMany
     {
         return $this->hasMany(LeadFunnel::class, static::fkColumn('lead_board'));
+    }
+
+    public function recipient(): MorphTo
+    {
+        return $this->morphTo('recipient');
+    }
+
+    public function sharedTenants(): HasMany
+    {
+        return $this->hasMany(LeadBoardSharedTenant::class, 'lead_board_uuid', 'uuid');
+    }
+
+    public function stats(): HasMany
+    {
+        return $this->hasMany(LeadBoardStat::class, 'lead_board_uuid', 'uuid');
+    }
+
+    public function routingModeIs(RoutingModeEnum $mode): bool
+    {
+        return $this->routing_mode === $mode;
+    }
+
+    public function isSharedWith(Model $tenant, ?string $permission = null): bool
+    {
+        $query = $this->sharedTenants()
+            ->where('shared_with_type', $tenant::class)
+            ->where('shared_with_id', $tenant->getKey());
+
+        if (null !== $permission) {
+            $query->whereJsonContains('permissions', $permission);
+        }
+
+        return $query->exists();
     }
 
     public function hasLeads(): bool
@@ -122,9 +161,11 @@ class LeadBoard extends Model
     protected function casts(): array
     {
         return [
-            'settings'  => 'array',
-            'is_active' => 'boolean',
-            'sort'      => 'integer',
+            'settings'         => 'array',
+            'is_active'        => 'boolean',
+            'sort'             => 'integer',
+            'routing_mode'     => RoutingModeEnum::class,
+            'routing_settings' => 'array',
         ];
     }
 }

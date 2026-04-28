@@ -43,7 +43,7 @@ enum LeadPhaseTypeEnum: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Won, self::Lost => LeadPhaseDisplayTypeEnum::List,
-            default => LeadPhaseDisplayTypeEnum::Kanban,
+            default               => LeadPhaseDisplayTypeEnum::Kanban,
         };
     }
 }
