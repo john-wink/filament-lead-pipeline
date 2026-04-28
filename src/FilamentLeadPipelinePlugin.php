@@ -40,6 +40,9 @@ class FilamentLeadPipelinePlugin implements Plugin
 
     protected ?StatsAggregatorContract $statsAggregator = null;
 
+    /** @var array<int, Closure> */
+    protected array $boardFormExtensions = [];
+
     public static function make(): static
     {
         return app(static::class);
@@ -227,6 +230,25 @@ class FilamentLeadPipelinePlugin implements Plugin
     public function getStatsAggregator(): ?StatsAggregatorContract
     {
         return $this->statsAggregator;
+    }
+
+    /**
+     * Register a closure that contributes additional schema components
+     * (e.g. tabs, sections) to the LeadBoard edit form. Apps use this to
+     * inject panel-specific routing/sharing tabs without forking the
+     * plugin resource.
+     */
+    public function extendBoardForm(Closure $extender): static
+    {
+        $this->boardFormExtensions[] = $extender;
+
+        return $this;
+    }
+
+    /** @return array<int, Closure> */
+    public function getBoardFormExtensions(): array
+    {
+        return $this->boardFormExtensions;
     }
 
     public function register(Panel $panel): void
