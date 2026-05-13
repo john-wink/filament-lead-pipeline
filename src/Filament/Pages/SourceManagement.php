@@ -38,6 +38,8 @@ class SourceManagement extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
+            ->modelLabel(__('lead-pipeline::lead-pipeline.source.singular'))
+            ->pluralModelLabel(__('lead-pipeline::lead-pipeline.source.plural'))
             ->query(
                 LeadSource::query()
                     ->with('funnel')
