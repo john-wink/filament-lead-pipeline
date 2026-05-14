@@ -51,14 +51,6 @@
                     @endforeach
                 </div>
             </div>
-            <button
-                type="button"
-                x-data
-                @click="$dispatch('create-lead', { phaseId: '{{ $phase->getKey() }}' })"
-                class="flex items-center justify-center h-6 w-6 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-200/60 dark:hover:text-gray-300 dark:hover:bg-gray-700/60 transition-colors"
-                title="Lead hinzufuegen">
-                <x-heroicon-o-plus class="h-4 w-4" />
-            </button>
         </div>
     </div>
 
