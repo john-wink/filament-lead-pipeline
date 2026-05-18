@@ -45,6 +45,13 @@ class Lead extends Model
         'lost_reason',
         'assigned_to',
         'raw_data',
+        'source_campaign_id',
+        'source_campaign_name',
+        'source_adgroup_id',
+        'source_adgroup_name',
+        'source_ad_id',
+        'source_ad_name',
+        'source_channel',
     ];
 
     public function board(): BelongsTo

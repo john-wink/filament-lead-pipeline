@@ -335,6 +335,12 @@ return [
         'reimport_description'  => 'Bestehende Leads werden mit aktuellen Facebook-Daten aktualisiert (Name, E-Mail, Telefon, Custom Fields). Neue Leads werden ebenfalls importiert.',
         'reimport_started'      => 'Re-Import gestartet',
         'reimport_started_body' => 'Die Leads werden im Hintergrund aktualisiert.',
+        'reactivate_webhook'             => 'Webhook reaktivieren',
+        'reactivate_webhook_description' => 'Erneuert das Leadgen-Webhook-Abo dieser Facebook-Seite. Nutze das, wenn keine Leads mehr ankommen oder der Live-Status "NICHT ABONNIERT" anzeigt.',
+        'reactivate_webhook_success'      => 'Webhook reaktiviert',
+        'reactivate_webhook_success_body' => 'Die Page :page ist wieder für Leadgen-Events abonniert.',
+        'reactivate_webhook_failed'       => 'Webhook-Reaktivierung fehlgeschlagen',
+        'reactivate_webhook_no_page'      => 'Diese Quelle hat keine Facebook-Page verbunden.',
     ],
     'analytics' => [
         'title_board'        => 'Board-Auswertung',

@@ -153,7 +153,16 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     // Update existing lead (re-import mode)
                     if ($existingLead) {
                         if ($this->updateExisting) {
-                            $updates = ['raw_data' => $fbLead];
+                            $updates = [
+                                'raw_data'             => $fbLead,
+                                'source_campaign_id'   => $this->attribution($fbLead, 'campaign_id'),
+                                'source_campaign_name' => $this->attribution($fbLead, 'campaign_name'),
+                                'source_adgroup_id'    => $this->attribution($fbLead, 'adset_id', 'adgroup_id'),
+                                'source_adgroup_name'  => $this->attribution($fbLead, 'adset_name', 'adgroup_name'),
+                                'source_ad_id'         => $this->attribution($fbLead, 'ad_id'),
+                                'source_ad_name'       => $this->attribution($fbLead, 'ad_name'),
+                                'source_channel'       => $this->attribution($fbLead, 'platform'),
+                            ];
 
                             if ($name && '' !== $name && ( ! $existingLead->name || '' === $existingLead->name || 'Unknown' === $existingLead->name)) {
                                 $updates['name'] = (string) $name;
@@ -206,6 +215,13 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     $lead->sort                            = $maxSort + 1;
                     $lead->assigned_to                     = $hasAssignee ? $defaultAssignee : null;
                     $lead->raw_data                        = $fbLead;
+                    $lead->source_campaign_id              = $this->attribution($fbLead, 'campaign_id');
+                    $lead->source_campaign_name            = $this->attribution($fbLead, 'campaign_name');
+                    $lead->source_adgroup_id               = $this->attribution($fbLead, 'adset_id', 'adgroup_id');
+                    $lead->source_adgroup_name             = $this->attribution($fbLead, 'adset_name', 'adgroup_name');
+                    $lead->source_ad_id                    = $this->attribution($fbLead, 'ad_id');
+                    $lead->source_ad_name                  = $this->attribution($fbLead, 'ad_name');
+                    $lead->source_channel                  = $this->attribution($fbLead, 'platform');
                     $lead->save();
 
                     foreach ($customMapping as $item) {
@@ -234,5 +250,20 @@ class ImportFacebookLeadsJob implements ShouldQueue
         }
 
         $source->update(['last_received_at' => now()]);
+    }
+
+    /**
+     * @param  array<string, mixed>  $fbLead
+     */
+    private function attribution(array $fbLead, string ...$keys): ?string
+    {
+        foreach ($keys as $key) {
+            $value = $fbLead[$key] ?? null;
+            if (null !== $value && '' !== $value) {
+                return (string) $value;
+            }
+        }
+
+        return null;
     }
 }

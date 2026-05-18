@@ -99,6 +99,13 @@ class WebhookController
             $lead->sort                            = $maxSort + 1;
             $lead->assigned_to                     = $hasAssignee ? $defaultAssignee : null;
             $lead->raw_data                        = $request->all();
+            $lead->source_campaign_id              = $leadData->source_campaign_id;
+            $lead->source_campaign_name            = $leadData->source_campaign_name;
+            $lead->source_adgroup_id               = $leadData->source_adgroup_id;
+            $lead->source_adgroup_name             = $leadData->source_adgroup_name;
+            $lead->source_ad_id                    = $leadData->source_ad_id;
+            $lead->source_ad_name                  = $leadData->source_ad_name;
+            $lead->source_channel                  = $leadData->source_channel;
             $lead->save();
 
             $fieldDefinitions = $board->fieldDefinitions()->get();
@@ -318,6 +325,13 @@ class WebhookController
         $lead->sort                            = $maxSort + 1;
         $lead->assigned_to                     = $hasAssignee ? $defaultAssignee : null;
         $lead->raw_data                        = $rawData ?: null;
+        $lead->source_campaign_id              = $this->attributionValue($rawData, 'campaign_id');
+        $lead->source_campaign_name            = $this->attributionValue($rawData, 'campaign_name');
+        $lead->source_adgroup_id               = $this->attributionValue($rawData, 'adset_id', 'adgroup_id');
+        $lead->source_adgroup_name             = $this->attributionValue($rawData, 'adset_name', 'adgroup_name');
+        $lead->source_ad_id                    = $this->attributionValue($rawData, 'ad_id');
+        $lead->source_ad_name                  = $this->attributionValue($rawData, 'ad_name');
+        $lead->source_channel                  = $this->attributionValue($rawData, 'platform');
         $lead->save();
 
         // Apply custom field mapping
@@ -351,5 +365,20 @@ class WebhookController
         LeadCreated::dispatch($lead);
 
         return $lead;
+    }
+
+    /**
+     * @param  array<string, mixed>  $rawData
+     */
+    private function attributionValue(array $rawData, string ...$keys): ?string
+    {
+        foreach ($keys as $key) {
+            $value = $rawData[$key] ?? null;
+            if (null !== $value && '' !== $value) {
+                return (string) $value;
+            }
+        }
+
+        return null;
     }
 }

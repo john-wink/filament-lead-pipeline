@@ -29,6 +29,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
             ->hasCommands([
                 GenerateDemoDataCommand::class,
                 Commands\ConnectFacebookCommand::class,
+                Commands\FacebookWebhookStatusCommand::class,
             ])
             ->hasInstallCommand(function (InstallCommand $command): void {
                 $command

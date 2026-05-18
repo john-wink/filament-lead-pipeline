@@ -44,6 +44,7 @@ class MetaDriver implements LeadSourceDriver
         $fieldMapping  = $config['field_mapping'] ?? [];
         $customMapping = $config['custom_field_mapping'] ?? [];
         $fieldData     = $this->extractFieldData($payload->raw_payload);
+        $attribution   = $this->extractAttribution($payload->raw_payload);
 
         $name      = $this->findFirstMatch($fieldData, $fieldMapping['name'] ?? ['full_name', 'vollständiger_name']);
         $firstName = $this->findFirstMatch($fieldData, $fieldMapping['first_name'] ?? ['first_name', 'vorname']);
@@ -71,7 +72,66 @@ class MetaDriver implements LeadSourceDriver
             custom_fields: $customFields,
             source_driver: 'meta',
             source_identifier: (string) $source->getKey(),
+            source_campaign_id: $attribution['campaign_id'],
+            source_campaign_name: $attribution['campaign_name'],
+            source_adgroup_id: $attribution['adgroup_id'],
+            source_adgroup_name: $attribution['adgroup_name'],
+            source_ad_id: $attribution['ad_id'],
+            source_ad_name: $attribution['ad_name'],
+            source_channel: $attribution['channel'],
         );
+    }
+
+    /**
+     * Extracts Meta attribution fields from either the raw webhook payload
+     * (entry[].changes[].value.ad_id / adgroup_id) or a Graph-API-shaped payload
+     * (top-level ad_id / adset_id / campaign_id / ...).
+     *
+     * @param  array<string, mixed>  $rawPayload
+     * @return array{campaign_id: ?string, campaign_name: ?string, adgroup_id: ?string, adgroup_name: ?string, ad_id: ?string, ad_name: ?string, channel: ?string}
+     */
+    private function extractAttribution(array $rawPayload): array
+    {
+        $result = [
+            'campaign_id'   => null,
+            'campaign_name' => null,
+            'adgroup_id'    => null,
+            'adgroup_name'  => null,
+            'ad_id'         => null,
+            'ad_name'       => null,
+            'channel'       => null,
+        ];
+
+        $sources = [$rawPayload];
+
+        foreach ($rawPayload['entry'] ?? [] as $entry) {
+            foreach ($entry['changes'] ?? [] as $change) {
+                if (isset($change['value']) && is_array($change['value'])) {
+                    $sources[] = $change['value'];
+                }
+            }
+        }
+
+        foreach ($sources as $src) {
+            $result['campaign_id']   ??= $this->stringOrNull($src['campaign_id'] ?? null);
+            $result['campaign_name'] ??= $this->stringOrNull($src['campaign_name'] ?? null);
+            $result['adgroup_id']    ??= $this->stringOrNull($src['adset_id'] ?? $src['adgroup_id'] ?? null);
+            $result['adgroup_name']  ??= $this->stringOrNull($src['adset_name'] ?? $src['adgroup_name'] ?? null);
+            $result['ad_id']         ??= $this->stringOrNull($src['ad_id'] ?? null);
+            $result['ad_name']       ??= $this->stringOrNull($src['ad_name'] ?? null);
+            $result['channel']       ??= $this->stringOrNull($src['platform'] ?? null);
+        }
+
+        return $result;
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        if (null === $value || '' === $value) {
+            return null;
+        }
+
+        return (string) $value;
     }
 
     public function verifySignature(string $payload, string $signature, LeadSource $source): bool
@@ -337,6 +397,48 @@ class MetaDriver implements LeadSourceDriver
                         ->body(__('lead-pipeline::lead-pipeline.facebook.reimport_started_body'))
                         ->success()
                         ->send();
+                }),
+            TableAction::make('reactivate_webhook')
+                ->label(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook'))
+                ->icon('heroicon-o-bolt-slash')
+                ->color('warning')
+                ->requiresConfirmation()
+                ->modalDescription(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_description'))
+                ->hidden(fn (LeadSource $record) => blank($record->facebook_page_uuid))
+                ->action(function (LeadSource $record): void {
+                    $page = $record->facebookPage;
+
+                    if ( ! $page) {
+                        \Filament\Notifications\Notification::make()
+                            ->title(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_failed'))
+                            ->body(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_no_page'))
+                            ->danger()
+                            ->send();
+
+                        return;
+                    }
+
+                    try {
+                        app(FacebookGraphService::class)->subscribePageToLeadgen(
+                            $page->page_id,
+                            $page->page_access_token,
+                        );
+                        $page->update(['is_webhooks_subscribed' => true]);
+
+                        \Filament\Notifications\Notification::make()
+                            ->title(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_success'))
+                            ->body(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_success_body', ['page' => $page->page_name]))
+                            ->success()
+                            ->send();
+                    } catch (Throwable $e) {
+                        $page->update(['is_webhooks_subscribed' => false]);
+
+                        \Filament\Notifications\Notification::make()
+                            ->title(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_failed'))
+                            ->body($e->getMessage())
+                            ->danger()
+                            ->send();
+                    }
                 }),
         ];
     }

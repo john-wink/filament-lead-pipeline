@@ -163,6 +163,42 @@ class FacebookGraphService
     }
 
     /**
+     * Returns the apps subscribed to this page (live truth from Graph API).
+     *
+     * @return array<int, array{id?: string, name?: string, subscribed_fields?: array<int, string>}>
+     *
+     * @throws ConnectionException
+     */
+    public function getPageSubscribedApps(string $pageId, string $pageAccessToken): array
+    {
+        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
+            'access_token' => $pageAccessToken,
+        ]);
+
+        if ($response->failed()) {
+            throw new RuntimeException('Failed to fetch subscribed apps: ' . $response->body());
+        }
+
+        return $response->json('data', []);
+    }
+
+    /**
+     * Convenience: is at least one app subscribed to the `leadgen` field on this page?
+     *
+     * @throws ConnectionException
+     */
+    public function isPageSubscribedToLeadgen(string $pageId, string $pageAccessToken): bool
+    {
+        foreach ($this->getPageSubscribedApps($pageId, $pageAccessToken) as $app) {
+            if (in_array('leadgen', $app['subscribed_fields'] ?? [], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array{id: string, form_id: string, field_data: array<int, array{name: string, values: array<string>}>}
      *
      * @throws ConnectionException
@@ -171,7 +207,7 @@ class FacebookGraphService
     {
         $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$leadId}", [
             'access_token' => $pageAccessToken,
-            'fields'       => 'id,form_id,field_data,created_time',
+            'fields'       => 'id,form_id,field_data,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,platform,is_organic',
         ]);
 
         if ($response->failed()) {
@@ -220,7 +256,7 @@ class FacebookGraphService
     {
         $params = [
             'access_token' => $pageAccessToken,
-            'fields'       => 'id,form_id,field_data,created_time',
+            'fields'       => 'id,form_id,field_data,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,platform,is_organic',
             'limit'        => 25,
         ];
 

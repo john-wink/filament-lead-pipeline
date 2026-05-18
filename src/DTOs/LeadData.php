@@ -19,6 +19,13 @@ class LeadData extends Data
         public ?string $source_driver = null,
         public ?string $source_identifier = null,
         public ?float $value = null,
+        public ?string $source_campaign_id = null,
+        public ?string $source_campaign_name = null,
+        public ?string $source_adgroup_id = null,
+        public ?string $source_adgroup_name = null,
+        public ?string $source_ad_id = null,
+        public ?string $source_ad_name = null,
+        public ?string $source_channel = null,
     ) {}
 
     /** @return array<string, array<string>> */
