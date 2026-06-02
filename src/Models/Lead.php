@@ -62,7 +62,7 @@ class Lead extends Model
      */
     public static function nextSortForPhase(int|string $phaseKey): int
     {
-        return (int) DB::transaction(function () use ($phaseKey): int {
+        return DB::transaction(function () use ($phaseKey): int {
             $max = static::query()
                 ->where(static::fkColumn('lead_phase'), $phaseKey)
                 ->lockForUpdate()
