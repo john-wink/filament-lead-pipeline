@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Models;
 
+use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use JohnWink\FilamentLeadPipeline\Database\Factories\FacebookConnectionFactory;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 
 class FacebookConnection extends Model
 {
@@ -27,6 +30,12 @@ class FacebookConnection extends Model
         'facebook_user_name',
         'access_token',
         'token_expires_at',
+        'last_refreshed_at',
+        'acquired_at',
+        'refresh_attempts',
+        'refresh_failed_at',
+        'last_error',
+        'expiring_soon_notified_at',
         'scopes',
         'status',
     ];
@@ -48,12 +57,32 @@ class FacebookConnection extends Model
 
     public function isConnected(): bool
     {
-        return 'connected' === $this->status;
+        return FacebookConnectionStatusEnum::Connected === $this->status;
     }
 
-    public function isExpired(): bool
+    public function needsReauth(): bool
     {
-        return 'expired' === $this->status || ($this->token_expires_at && $this->token_expires_at->isPast());
+        return FacebookConnectionStatusEnum::NeedsReauth === $this->status;
+    }
+
+    public function isInWarningWindow(CarbonInterface $threshold): bool
+    {
+        return null !== $this->token_expires_at && $this->token_expires_at->lessThanOrEqualTo($threshold);
+    }
+
+    /**
+     * Connections the refresher should act on: connected AND either inside the
+     * warning window, previously failed transiently, or with unknown expiry.
+     */
+    public function scopeDueForRefresh(Builder $query, CarbonInterface $threshold): Builder
+    {
+        return $query
+            ->where('status', FacebookConnectionStatusEnum::Connected)
+            ->where(function (Builder $q) use ($threshold): void {
+                $q->where('token_expires_at', '<=', $threshold)
+                    ->orWhereNotNull('refresh_failed_at')
+                    ->orWhereNull('token_expires_at');
+            });
     }
 
     protected static function newFactory(): FacebookConnectionFactory
@@ -65,9 +94,15 @@ class FacebookConnection extends Model
     protected function casts(): array
     {
         return [
-            'access_token'     => 'encrypted',
-            'token_expires_at' => 'datetime',
-            'scopes'           => 'array',
+            'access_token'              => 'encrypted',
+            'token_expires_at'          => 'datetime',
+            'last_refreshed_at'         => 'datetime',
+            'acquired_at'               => 'datetime',
+            'refresh_failed_at'         => 'datetime',
+            'expiring_soon_notified_at' => 'datetime',
+            'refresh_attempts'          => 'integer',
+            'scopes'                    => 'array',
+            'status'                    => FacebookConnectionStatusEnum::class,
         ];
     }
 }
