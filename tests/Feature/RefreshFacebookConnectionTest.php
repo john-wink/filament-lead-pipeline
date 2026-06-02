@@ -131,9 +131,14 @@ it('skips while inside the backoff window', function (): void {
     runRefresh($this->connection->fresh());
 
     Http::assertNothingSent();
+
+    expect($this->connection->fresh()->refresh_attempts)->toBe(1)
+        ->and($this->connection->fresh()->last_refreshed_at)->toBeNull();
 });
 
 it('treats a malformed refresh response as a transient failure', function (): void {
+    Event::fake([FacebookTokenRefreshFailed::class]);
+
     Http::fake([
         'graph.facebook.com/*/oauth/access_token*' => Http::response(['unexpected' => true]),
     ]);
@@ -144,4 +149,21 @@ it('treats a malformed refresh response as a transient failure', function (): vo
     expect($fresh->status)->toBe(FacebookConnectionStatusEnum::Connected)
         ->and($fresh->refresh_attempts)->toBe(1)
         ->and($fresh->access_token)->not->toBe('');
+
+    Event::assertDispatched(FacebookTokenRefreshFailed::class);
+});
+
+it('marks needs-reauth when page sync hits a dead token after a successful refresh', function (): void {
+    Event::fake([FacebookConnectionNeedsReauth::class, FacebookTokenRefreshed::class]);
+
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*' => Http::response(['access_token' => 'fresh', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'        => Http::response(['error' => ['code' => 190, 'message' => 'dead']], 400),
+    ]);
+
+    runRefresh($this->connection->fresh());
+
+    expect($this->connection->fresh()->status)->toBe(FacebookConnectionStatusEnum::NeedsReauth);
+    Event::assertDispatched(FacebookConnectionNeedsReauth::class);
+    Event::assertNotDispatched(FacebookTokenRefreshed::class);
 });

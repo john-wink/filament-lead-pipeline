@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Jobs;
 
+use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -23,12 +24,19 @@ use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
 use Throwable;
 
+/**
+ * Refreshes a single Facebook connection's long-lived token, surviving transient
+ * failures with exponential backoff and only escalating to NeedsReauth on terminal
+ * (token-invalid) errors or after repeated transient failures past expiry.
+ */
 class RefreshFacebookConnection implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
     use Queueable;
     use SerializesModels;
+
+    public int $tries = 1;
 
     public function __construct(public FacebookConnection $facebookConnection) {}
 
@@ -109,7 +117,7 @@ class RefreshFacebookConnection implements ShouldQueue
             'last_error'        => Str::limit($reason, 1000),
         ])->save();
 
-        if ($this->shouldEscalate($connection)) {
+        if ($this->shouldEscalate($attempts, $connection->token_expires_at)) {
             $this->markNeedsReauth($connection, 'Escalated to re-auth after repeated transient failures.');
 
             return;
@@ -137,13 +145,13 @@ class RefreshFacebookConnection implements ShouldQueue
         FacebookConnectionNeedsReauth::dispatch($connection, $reason);
     }
 
-    private function shouldEscalate(FacebookConnection $connection): bool
+    private function shouldEscalate(int $attempts, ?CarbonInterface $tokenExpiresAt): bool
     {
         $maxAttempts = (int) config('lead-pipeline.facebook.refresh.max_attempts', 5);
 
-        return $connection->refresh_attempts >= $maxAttempts
-            && null !== $connection->token_expires_at
-            && $connection->token_expires_at->isPast();
+        return $attempts >= $maxAttempts
+            && null !== $tokenExpiresAt
+            && $tokenExpiresAt->isPast();
     }
 
     private function backoffSeconds(int $attempts): int
