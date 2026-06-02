@@ -40,11 +40,7 @@ return new class() extends Migration {
             ->whereNotIn($sourceFk, fn ($q) => $q->select($pkCol)->from('lead_sources'))
             ->update([$sourceFk => null]);
 
-        // 2. SQLite cannot add foreign keys to existing tables; apply on other drivers.
-        if ('sqlite' === DB::connection()->getDriverName()) {
-            return;
-        }
-
+        // 2. Add foreign-key constraints.
         Schema::table('facebook_pages', function (Blueprint $table): void {
             $table->foreign('facebook_connection_uuid')
                 ->references('uuid')->on('facebook_connections')
@@ -75,10 +71,6 @@ return new class() extends Migration {
 
     public function down(): void
     {
-        if ('sqlite' === DB::connection()->getDriverName()) {
-            return;
-        }
-
         $isUuid   = 'uuid' === config('lead-pipeline.primary_key_type', 'uuid');
         $boardFk  = $isUuid ? 'lead_board_uuid' : 'lead_board_id';
         $sourceFk = $isUuid ? 'lead_source_uuid' : 'lead_source_id';
