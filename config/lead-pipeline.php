@@ -102,6 +102,16 @@ return [
         'verify_token'  => env('FACEBOOK_VERIFY_TOKEN'),
         'graph_version' => 'v25.0',
         'scopes'        => ['pages_manage_ads', 'pages_manage_metadata', 'leads_retrieval', 'pages_show_list', 'business_management'],
+        'refresh'       => [
+            'enabled'      => env('LEAD_PIPELINE_FB_REFRESH_ENABLED', true),
+            'cadence'      => env('LEAD_PIPELINE_FB_REFRESH_CADENCE', 'hourly'),
+            'queue'        => env('LEAD_PIPELINE_FB_REFRESH_QUEUE', false),
+            'warning_days' => 7,
+            'max_attempts' => 5,
+            'backoff_base' => 300,    // seconds
+            'backoff_max'  => 21600,  // 6 hours
+            'health_hours' => 3,      // alert if a connected token is >N h past expiry
+        ],
     ],
 
     /*
