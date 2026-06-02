@@ -335,6 +335,7 @@ return [
         'reimport_description'  => 'Existing leads will be updated with current Facebook data (name, email, phone, custom fields). New leads will also be imported.',
         'reimport_started'      => 'Re-import started',
         'reimport_started_body' => 'Leads are being updated in the background.',
+        'token_health'          => 'Token status',
         'status'                => [
             'connected'    => 'Connected',
             'needs_reauth' => 'Reconnect required',

@@ -42,7 +42,7 @@ class SourceManagement extends Page implements HasTable
             ->pluralModelLabel(__('lead-pipeline::lead-pipeline.source.plural'))
             ->query(
                 LeadSource::query()
-                    ->with('funnel')
+                    ->with(['funnel', 'facebookPage.connection'])
                     ->when(
                         filament()->getTenant(),
                         fn ($q) => $q->where(config('lead-pipeline.tenancy.foreign_key'), filament()->getTenant()->getKey())
@@ -84,6 +84,12 @@ class SourceManagement extends Page implements HasTable
                 Tables\Columns\TextColumn::make('status')
                     ->label(__('lead-pipeline::lead-pipeline.field.status'))
                     ->badge(),
+                Tables\Columns\TextColumn::make('facebook_health')
+                    ->label(__('lead-pipeline::lead-pipeline.facebook.token_health'))
+                    ->badge()
+                    ->state(fn (LeadSource $record) => 'meta' === $record->driver
+                        ? $record->facebookPage?->connection?->status
+                        : null),
                 Tables\Columns\TextColumn::make('board.name')
                     ->label(__('lead-pipeline::lead-pipeline.board.singular')),
                 Tables\Columns\TextColumn::make('leads_count')

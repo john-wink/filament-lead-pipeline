@@ -335,6 +335,7 @@ return [
         'reimport_description'            => 'Bestehende Leads werden mit aktuellen Facebook-Daten aktualisiert (Name, E-Mail, Telefon, Custom Fields). Neue Leads werden ebenfalls importiert.',
         'reimport_started'                => 'Re-Import gestartet',
         'reimport_started_body'           => 'Die Leads werden im Hintergrund aktualisiert.',
+        'token_health'                    => 'Token-Status',
         'reactivate_webhook'              => 'Webhook reaktivieren',
         'reactivate_webhook_description'  => 'Erneuert das Leadgen-Webhook-Abo dieser Facebook-Seite. Nutze das, wenn keine Leads mehr ankommen oder der Live-Status "NICHT ABONNIERT" anzeigt.',
         'reactivate_webhook_success'      => 'Webhook reaktiviert',
