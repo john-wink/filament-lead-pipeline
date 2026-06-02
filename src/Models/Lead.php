@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\DB;
 use JohnWink\FilamentLeadPipeline\Concerns\HasConfigurablePrimaryKey;
 use JohnWink\FilamentLeadPipeline\Database\Factories\LeadFactory;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
@@ -34,6 +35,7 @@ class Lead extends Model
         'lead_phase_id',
         'lead_source_uuid',
         'lead_source_id',
+        'external_id',
         'name',
         'email',
         'phone',
@@ -53,6 +55,22 @@ class Lead extends Model
         'source_ad_name',
         'source_channel',
     ];
+
+    /**
+     * Atomically determine the next sort value for a phase, avoiding the
+     * read-then-write race that collides under concurrent webhook deliveries.
+     */
+    public static function nextSortForPhase(int|string $phaseKey): int
+    {
+        return (int) DB::transaction(function () use ($phaseKey): int {
+            $max = static::query()
+                ->where(static::fkColumn('lead_phase'), $phaseKey)
+                ->lockForUpdate()
+                ->max('sort');
+
+            return (int) ($max ?? 0) + 1;
+        });
+    }
 
     public function board(): BelongsTo
     {
