@@ -17,6 +17,7 @@ use Filament\Tables\Actions\Action as TableAction;
 use JohnWink\FilamentLeadPipeline\Contracts\LeadSourceDriver;
 use JohnWink\FilamentLeadPipeline\DTOs\LeadData;
 use JohnWink\FilamentLeadPipeline\DTOs\WebhookPayloadData;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
@@ -82,58 +83,6 @@ class MetaDriver implements LeadSourceDriver
         );
     }
 
-    /**
-     * Extracts Meta attribution fields from either the raw webhook payload
-     * (entry[].changes[].value.ad_id / adgroup_id) or a Graph-API-shaped payload
-     * (top-level ad_id / adset_id / campaign_id / ...).
-     *
-     * @param  array<string, mixed>  $rawPayload
-     * @return array{campaign_id: ?string, campaign_name: ?string, adgroup_id: ?string, adgroup_name: ?string, ad_id: ?string, ad_name: ?string, channel: ?string}
-     */
-    private function extractAttribution(array $rawPayload): array
-    {
-        $result = [
-            'campaign_id'   => null,
-            'campaign_name' => null,
-            'adgroup_id'    => null,
-            'adgroup_name'  => null,
-            'ad_id'         => null,
-            'ad_name'       => null,
-            'channel'       => null,
-        ];
-
-        $sources = [$rawPayload];
-
-        foreach ($rawPayload['entry'] ?? [] as $entry) {
-            foreach ($entry['changes'] ?? [] as $change) {
-                if (isset($change['value']) && is_array($change['value'])) {
-                    $sources[] = $change['value'];
-                }
-            }
-        }
-
-        foreach ($sources as $src) {
-            $result['campaign_id']   ??= $this->stringOrNull($src['campaign_id'] ?? null);
-            $result['campaign_name'] ??= $this->stringOrNull($src['campaign_name'] ?? null);
-            $result['adgroup_id']    ??= $this->stringOrNull($src['adset_id'] ?? $src['adgroup_id'] ?? null);
-            $result['adgroup_name']  ??= $this->stringOrNull($src['adset_name'] ?? $src['adgroup_name'] ?? null);
-            $result['ad_id']         ??= $this->stringOrNull($src['ad_id'] ?? null);
-            $result['ad_name']       ??= $this->stringOrNull($src['ad_name'] ?? null);
-            $result['channel']       ??= $this->stringOrNull($src['platform'] ?? null);
-        }
-
-        return $result;
-    }
-
-    private function stringOrNull(mixed $value): ?string
-    {
-        if (null === $value || '' === $value) {
-            return null;
-        }
-
-        return (string) $value;
-    }
-
     public function verifySignature(string $payload, string $signature, LeadSource $source): bool
     {
         $appSecret         = config('lead-pipeline.facebook.client_secret');
@@ -166,12 +115,12 @@ class MetaDriver implements LeadSourceDriver
                         ->icon('heroicon-o-arrow-path')
                         ->disabled(fn (): bool => ! FacebookConnection::query()
                             ->where('user_uuid', auth()->id())
-                            ->where('status', 'connected')
+                            ->where('status', FacebookConnectionStatusEnum::Connected)
                             ->exists())
                         ->action(function (): void {
                             $connection = FacebookConnection::query()
                                 ->where('user_uuid', auth()->id())
-                                ->where('status', 'connected')
+                                ->where('status', FacebookConnectionStatusEnum::Connected)
                                 ->first();
 
                             if ( ! $connection) {
@@ -440,7 +389,78 @@ class MetaDriver implements LeadSourceDriver
                             ->send();
                     }
                 }),
+            TableAction::make('reconnect')
+                ->label(__('lead-pipeline::lead-pipeline.facebook.reconnect'))
+                ->icon('heroicon-o-arrow-path-rounded-square')
+                ->color('danger')
+                ->url(fn (): string => route('lead-pipeline.facebook.redirect'))
+                ->openUrlInNewTab()
+                ->hidden(fn (LeadSource $record): bool => ! $this->connectionNeedsAttention($record)),
         ];
+    }
+
+    /**
+     * Extracts Meta attribution fields from either the raw webhook payload
+     * (entry[].changes[].value.ad_id / adgroup_id) or a Graph-API-shaped payload
+     * (top-level ad_id / adset_id / campaign_id / ...).
+     *
+     * @param  array<string, mixed>  $rawPayload
+     * @return array{campaign_id: ?string, campaign_name: ?string, adgroup_id: ?string, adgroup_name: ?string, ad_id: ?string, ad_name: ?string, channel: ?string}
+     */
+    private function extractAttribution(array $rawPayload): array
+    {
+        $result = [
+            'campaign_id'   => null,
+            'campaign_name' => null,
+            'adgroup_id'    => null,
+            'adgroup_name'  => null,
+            'ad_id'         => null,
+            'ad_name'       => null,
+            'channel'       => null,
+        ];
+
+        $sources = [$rawPayload];
+
+        foreach ($rawPayload['entry'] ?? [] as $entry) {
+            foreach ($entry['changes'] ?? [] as $change) {
+                if (isset($change['value']) && is_array($change['value'])) {
+                    $sources[] = $change['value'];
+                }
+            }
+        }
+
+        foreach ($sources as $src) {
+            $result['campaign_id'] ??= $this->stringOrNull($src['campaign_id'] ?? null);
+            $result['campaign_name'] ??= $this->stringOrNull($src['campaign_name'] ?? null);
+            $result['adgroup_id'] ??= $this->stringOrNull($src['adset_id'] ?? $src['adgroup_id'] ?? null);
+            $result['adgroup_name'] ??= $this->stringOrNull($src['adset_name'] ?? $src['adgroup_name'] ?? null);
+            $result['ad_id'] ??= $this->stringOrNull($src['ad_id'] ?? null);
+            $result['ad_name'] ??= $this->stringOrNull($src['ad_name'] ?? null);
+            $result['channel'] ??= $this->stringOrNull($src['platform'] ?? null);
+        }
+
+        return $result;
+    }
+
+    private function stringOrNull(mixed $value): ?string
+    {
+        if (null === $value || '' === $value) {
+            return null;
+        }
+
+        return (string) $value;
+    }
+
+    private function connectionNeedsAttention(LeadSource $source): bool
+    {
+        $connection = $source->facebookPage?->connection;
+
+        if (null === $connection) {
+            return false;
+        }
+
+        return $connection->needsReauth()
+            || $connection->isInWarningWindow(now()->addDays((int) config('lead-pipeline.facebook.refresh.warning_days', 7)));
     }
 
     /** @return array<string, mixed> */

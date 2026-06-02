@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Http\Controllers;
 
 use Exception;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Str;
+use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\DTOs\WebhookPayloadData;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
@@ -15,6 +18,7 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Events\LeadReceived;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
@@ -24,6 +28,8 @@ use RuntimeException;
 
 class WebhookController
 {
+    use MarksConnectionNeedsReauth;
+
     public function __construct(
         public LeadSourceManager $manager,
     ) {}
@@ -83,10 +89,6 @@ class WebhookController
                 return response()->json(['error' => 'No suitable phase found on board.'], 422);
             }
 
-            $maxSort = Lead::query()
-                ->where(Lead::fkColumn('lead_phase'), $targetPhase->getKey())
-                ->max('sort') ?? 0;
-
             $lead                                  = new Lead();
             $lead->{Lead::fkColumn('lead_board')}  = $board->getKey();
             $lead->{Lead::fkColumn('lead_phase')}  = $targetPhase->getKey();
@@ -96,7 +98,7 @@ class WebhookController
             $lead->phone                           = $leadData->phone;
             $lead->value                           = $leadData->value;
             $lead->status                          = LeadStatusEnum::Active;
-            $lead->sort                            = $maxSort + 1;
+            $lead->sort                            = Lead::nextSortForPhase($targetPhase->getKey());
             $lead->assigned_to                     = $hasAssignee ? $defaultAssignee : null;
             $lead->raw_data                        = $request->all();
             $lead->source_campaign_id              = $leadData->source_campaign_id;
@@ -214,14 +216,27 @@ class WebhookController
                 }
 
                 $facebook = app(FacebookGraphService::class);
-                $leadData = $facebook->getLeadData($leadgenId, $fbPage->page_access_token);
+
+                try {
+                    $leadData = $facebook->getLeadData($leadgenId, $fbPage->page_access_token);
+                } catch (FacebookTokenInvalidException $e) {
+                    $connection = $fbPage->connection;
+                    if ($connection) {
+                        $this->markConnectionNeedsReauth($connection, $e->getMessage());
+                    }
+
+                    // ACK (200 at the end) so Facebook stops retrying — prevents the 36h
+                    // retry cascade + webhook subscription disablement. Missed leads are
+                    // backfilled via ImportFacebookLeadsJob after reconnect.
+                    continue;
+                }
 
                 $fieldData = [];
                 foreach ($leadData['field_data'] ?? [] as $field) {
                     $value            = $field['values'][0] ?? null;
                     $name             = $field['name'] ?? '';
                     $fieldData[$name] = $value;
-                    $slug             = \Illuminate\Support\Str::slug($name, '_');
+                    $slug             = Str::slug($name, '_');
                     if ($slug !== $name && ! isset($fieldData[$slug])) {
                         $fieldData[$slug] = $value;
                     }
@@ -229,8 +244,10 @@ class WebhookController
 
                 foreach ($sources as $source) {
                     try {
-                        $lead           = $this->createLeadFromFacebookData($source, $fieldData, $leadData);
-                        $leadsCreated[] = $lead->getKey();
+                        $lead = $this->createLeadFromFacebookData($source, $fieldData, $leadData);
+                        if ($lead->wasRecentlyCreated) {
+                            $leadsCreated[] = $lead->getKey();
+                        }
                     } catch (Exception $e) {
                         $source->update([
                             'status'        => LeadSourceStatusEnum::Error,
@@ -263,7 +280,20 @@ class WebhookController
      */
     private function createLeadFromFacebookData(LeadSource $source, array $fieldData, array $rawData = []): Lead
     {
-        $board         = $source->board;
+        $board      = $source->board;
+        $externalId = $rawData['id'] ?? null;
+
+        if ($externalId) {
+            $existing = Lead::query()
+                ->where(Lead::fkColumn('lead_source'), $source->getKey())
+                ->where('external_id', $externalId)
+                ->first();
+
+            if ($existing) {
+                return $existing;
+            }
+        }
+
         $config        = $source->config ?? [];
         $mapping       = $config['field_mapping'] ?? [];
         $customMapping = $config['custom_field_mapping'] ?? [];
@@ -310,10 +340,6 @@ class WebhookController
             throw new RuntimeException('No suitable phase found on board.');
         }
 
-        $maxSort = Lead::query()
-            ->where(Lead::fkColumn('lead_phase'), $targetPhase->getKey())
-            ->max('sort') ?? 0;
-
         $lead                                  = new Lead();
         $lead->{Lead::fkColumn('lead_board')}  = $board->getKey();
         $lead->{Lead::fkColumn('lead_phase')}  = $targetPhase->getKey();
@@ -322,7 +348,7 @@ class WebhookController
         $lead->email                           = $email;
         $lead->phone                           = $phone;
         $lead->status                          = LeadStatusEnum::Active;
-        $lead->sort                            = $maxSort + 1;
+        $lead->sort                            = Lead::nextSortForPhase($targetPhase->getKey());
         $lead->assigned_to                     = $hasAssignee ? $defaultAssignee : null;
         $lead->raw_data                        = $rawData ?: null;
         $lead->source_campaign_id              = $this->attributionValue($rawData, 'campaign_id');
@@ -332,7 +358,16 @@ class WebhookController
         $lead->source_ad_id                    = $this->attributionValue($rawData, 'ad_id');
         $lead->source_ad_name                  = $this->attributionValue($rawData, 'ad_name');
         $lead->source_channel                  = $this->attributionValue($rawData, 'platform');
-        $lead->save();
+        $lead->external_id                     = $externalId;
+
+        try {
+            $lead->save();
+        } catch (UniqueConstraintViolationException) {
+            return Lead::query()
+                ->where(Lead::fkColumn('lead_source'), $source->getKey())
+                ->where('external_id', $externalId)
+                ->first() ?? $lead;
+        }
 
         // Apply custom field mapping
         $fieldDefinitions = $board->fieldDefinitions()->get();

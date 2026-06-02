@@ -55,7 +55,7 @@ beforeEach(function (): void {
     ]);
 });
 
-function metaCentralCall(array $payload): \Illuminate\Testing\TestResponse
+function metaCentralCall(array $payload): Illuminate\Testing\TestResponse
 {
     $url     = '/' . config('lead-pipeline.webhooks.prefix', 'api/lead-pipeline/webhooks') . '/meta';
     $content = json_encode($payload);

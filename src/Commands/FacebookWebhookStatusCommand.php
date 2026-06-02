@@ -42,7 +42,7 @@ class FacebookWebhookStatusCommand extends Command
         foreach ($connections as $connection) {
             $teamName   = $connection->team?->name ?? '—';
             $connUser   = $connection->facebook_user_name ?? '—';
-            $tokenStale = $connection->isExpired() || 'connected' !== $connection->status;
+            $tokenStale = $connection->isExpired();
 
             foreach ($connection->pages as $page) {
                 $totalCount++;
@@ -93,12 +93,12 @@ class FacebookWebhookStatusCommand extends Command
     private function renderPageBlock(string $teamName, string $connUser, FacebookPage $page, string $status): void
     {
         $marker = match (true) {
-            'OK' === $status                          => '<fg=green>✓</>',
-            'TOKEN ABGELAUFEN' === $status            => '<fg=yellow>!</>',
+            'OK' === $status                           => '<fg=green>✓</>',
+            'TOKEN ABGELAUFEN' === $status             => '<fg=yellow>!</>',
             str_starts_with($status, 'TOKEN UNLESBAR') => '<fg=yellow>!</>',
-            str_starts_with($status, 'FEHLER')        => '<fg=red>✗</>',
-            'NICHT ABONNIERT' === $status             => '<fg=red>✗</>',
-            default                                   => '·',
+            str_starts_with($status, 'FEHLER')         => '<fg=red>✗</>',
+            'NICHT ABONNIERT' === $status              => '<fg=red>✗</>',
+            default                                    => '·',
         };
 
         $this->line('');

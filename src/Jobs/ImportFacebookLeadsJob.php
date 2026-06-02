@@ -7,14 +7,19 @@ namespace JohnWink\FilamentLeadPipeline\Jobs;
 use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
+use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
@@ -23,6 +28,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
+    use MarksConnectionNeedsReauth;
     use Queueable;
     use SerializesModels;
 
@@ -80,12 +86,23 @@ class ImportFacebookLeadsJob implements ShouldQueue
             do {
                 try {
                     $result = $facebook->getFormLeads($formId, $page->page_access_token, $since, $afterCursor);
-                } catch (Exception $e) {
-                    if (str_contains($e->getMessage(), 'rate limit') || str_contains($e->getMessage(), '429')) {
-                        $this->release(60);
+                } catch (FacebookTransientException) {
+                    $this->release(60);
 
-                        return;
+                    return;
+                } catch (FacebookTokenInvalidException $e) {
+                    $connection = $page->connection;
+                    if ($connection) {
+                        $this->markConnectionNeedsReauth($connection, $e->getMessage());
+                    } else {
+                        $source->update([
+                            'status'        => LeadSourceStatusEnum::Error,
+                            'error_message' => 'Facebook-Verbindung erfordert einen erneuten Login.',
+                        ]);
                     }
+
+                    return;
+                } catch (Exception $e) {
                     $source->update([
                         'status'        => LeadSourceStatusEnum::Error,
                         'error_message' => $e->getMessage(),
@@ -109,7 +126,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                         $value            = $f['values'][0] ?? null;
                         $name             = $f['name'] ?? '';
                         $fieldData[$name] = $value;
-                        $slug             = \Illuminate\Support\Str::slug($name, '_');
+                        $slug             = Str::slug($name, '_');
                         if ($slug !== $name && ! isset($fieldData[$slug])) {
                             $fieldData[$slug] = $value;
                         }
@@ -140,7 +157,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     if ($fbLeadId) {
                         $existingLead = Lead::query()
                             ->where(Lead::fkColumn('lead_board'), $board->getKey())
-                            ->whereJsonContains('raw_data->id', $fbLeadId)
+                            ->where('external_id', $fbLeadId)
                             ->first();
                     }
                     if ( ! $existingLead && $email) {
@@ -154,6 +171,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     if ($existingLead) {
                         if ($this->updateExisting) {
                             $updates = [
+                                'external_id'          => $fbLeadId ?? $existingLead->external_id,
                                 'raw_data'             => $fbLead,
                                 'source_campaign_id'   => $this->attribution($fbLead, 'campaign_id'),
                                 'source_campaign_name' => $this->attribution($fbLead, 'campaign_name'),
@@ -200,10 +218,6 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     }
 
                     // Create new lead
-                    $maxSort = Lead::query()
-                        ->where(Lead::fkColumn('lead_phase'), $targetPhase->getKey())
-                        ->max('sort') ?? 0;
-
                     $lead                                  = new Lead();
                     $lead->{Lead::fkColumn('lead_board')}  = $board->getKey();
                     $lead->{Lead::fkColumn('lead_phase')}  = $targetPhase->getKey();
@@ -212,7 +226,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     $lead->email                           = $email;
                     $lead->phone                           = $phone;
                     $lead->status                          = LeadStatusEnum::Active;
-                    $lead->sort                            = $maxSort + 1;
+                    $lead->sort                            = Lead::nextSortForPhase($targetPhase->getKey());
                     $lead->assigned_to                     = $hasAssignee ? $defaultAssignee : null;
                     $lead->raw_data                        = $fbLead;
                     $lead->source_campaign_id              = $this->attribution($fbLead, 'campaign_id');
@@ -222,7 +236,13 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     $lead->source_ad_id                    = $this->attribution($fbLead, 'ad_id');
                     $lead->source_ad_name                  = $this->attribution($fbLead, 'ad_name');
                     $lead->source_channel                  = $this->attribution($fbLead, 'platform');
-                    $lead->save();
+                    $lead->external_id                     = $fbLeadId;
+
+                    try {
+                        $lead->save();
+                    } catch (UniqueConstraintViolationException) {
+                        continue; // already imported via a concurrent path
+                    }
 
                     foreach ($customMapping as $item) {
                         $fbKey    = $item['facebook_key'] ?? '';

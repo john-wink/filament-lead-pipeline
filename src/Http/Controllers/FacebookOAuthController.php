@@ -8,6 +8,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
+use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionReconnected;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
@@ -53,8 +55,16 @@ class FacebookOAuthController
         }
 
         $shortLived = $this->facebook->exchangeCodeForToken($code);
-        $longLived  = $this->facebook->exchangeForLongLivedToken($shortLived['access_token']);
-        $me         = $this->facebook->getMe($longLived['access_token']);
+        $longLived  = $this->facebook->exchangeForLongLivedToken($shortLived['access_token'] ?? '');
+        $me         = $this->facebook->getMe($longLived['access_token'] ?? '');
+
+        if (empty($longLived['access_token']) || empty($me['id'])) {
+            return response('Facebook returned an incomplete response.', 502);
+        }
+
+        $expiresIn = is_int($longLived['expires_in'] ?? null) && $longLived['expires_in'] > 0
+            ? $longLived['expires_in']
+            : 5184000;
 
         $connection = FacebookConnection::query()->updateOrCreate(
             [
@@ -62,16 +72,28 @@ class FacebookOAuthController
                 'facebook_user_id' => $me['id'],
             ],
             [
-                'team_uuid'          => $teamId,
-                'facebook_user_name' => $me['name'] ?? null,
-                'access_token'       => $longLived['access_token'],
-                'token_expires_at'   => now()->addSeconds($longLived['expires_in'] ?? 5184000),
-                'scopes'             => config('lead-pipeline.facebook.scopes'),
-                'status'             => 'connected',
+                'team_uuid'                 => $teamId,
+                'facebook_user_name'        => $me['name'] ?? null,
+                'access_token'              => $longLived['access_token'],
+                'token_expires_at'          => now()->addSeconds($expiresIn),
+                'acquired_at'               => now(),
+                'last_refreshed_at'         => now(),
+                'refresh_attempts'          => 0,
+                'refresh_failed_at'         => null,
+                'last_error'                => null,
+                'expiring_soon_notified_at' => null,
+                'scopes'                    => config('lead-pipeline.facebook.scopes'),
+                'status'                    => FacebookConnectionStatusEnum::Connected,
             ],
         );
 
+        $wasReconnect = ! $connection->wasRecentlyCreated;
+
         $this->synchronizer->sync($connection);
+
+        if ($wasReconnect) {
+            FacebookConnectionReconnected::dispatch($connection);
+        }
 
         foreach ($connection->pages()->where('is_webhooks_subscribed', false)->get() as $fbPage) {
             try {

@@ -11,6 +11,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
@@ -42,7 +43,7 @@ class SourceManagement extends Page implements HasTable
             ->pluralModelLabel(__('lead-pipeline::lead-pipeline.source.plural'))
             ->query(
                 LeadSource::query()
-                    ->with('funnel')
+                    ->with(['funnel', 'facebookPage.connection'])
                     ->when(
                         filament()->getTenant(),
                         fn ($q) => $q->where(config('lead-pipeline.tenancy.foreign_key'), filament()->getTenant()->getKey())
@@ -84,6 +85,12 @@ class SourceManagement extends Page implements HasTable
                 Tables\Columns\TextColumn::make('status')
                     ->label(__('lead-pipeline::lead-pipeline.field.status'))
                     ->badge(),
+                Tables\Columns\TextColumn::make('facebook_health')
+                    ->label(__('lead-pipeline::lead-pipeline.facebook.token_health'))
+                    ->badge()
+                    ->state(fn (LeadSource $record): ?FacebookConnectionStatusEnum => 'meta' === $record->driver
+                        ? $record->facebookPage?->connection?->status
+                        : null),
                 Tables\Columns\TextColumn::make('board.name')
                     ->label(__('lead-pipeline::lead-pipeline.board.singular')),
                 Tables\Columns\TextColumn::make('leads_count')

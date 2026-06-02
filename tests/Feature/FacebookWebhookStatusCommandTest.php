@@ -78,7 +78,7 @@ it('reports a page as NICHT ABONNIERT when graph api shows no leadgen', function
 
 it('skips graph api calls for expired connections', function (): void {
     $connection = makeConnection($this->team, $this->user, [
-        'status'           => 'expired',
+        'status'           => 'needs_reauth',
         'token_expires_at' => now()->subDay(),
     ]);
     makePage($connection, 'page-skip', 'Expired Page');
@@ -124,13 +124,13 @@ it('shows forms mapped to active lead sources for a page', function (): void {
     $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
 
     LeadSource::query()->create([
-        'name'                   => 'Source A',
-        'driver'                 => 'meta',
-        'status'                 => 'active',
+        'name'                             => 'Source A',
+        'driver'                           => 'meta',
+        'status'                           => 'active',
         LeadSource::fkColumn('lead_board') => $board->getKey(),
-        'team_uuid'              => $this->team->uuid,
-        'facebook_page_uuid'     => $page->uuid,
-        'facebook_form_ids'      => ['form-a', 'form-b'],
+        'team_uuid'                        => $this->team->uuid,
+        'facebook_page_uuid'               => $page->uuid,
+        'facebook_form_ids'                => ['form-a', 'form-b'],
     ]);
 
     Http::fake([

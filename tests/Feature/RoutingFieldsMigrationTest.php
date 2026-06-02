@@ -10,7 +10,7 @@ it('adds routing_mode column with manual default to lead_boards', function (): v
 
     $board = LeadBoard::factory()->create();
 
-    expect($board->fresh()->routing_mode)->toBe('manual');
+    expect($board->fresh()->routing_mode)->toBe(JohnWink\FilamentLeadPipeline\Enums\RoutingModeEnum::Manual);
 });
 
 it('adds nullable recipient morph columns to lead_boards', function (): void {

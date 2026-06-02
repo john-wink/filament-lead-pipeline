@@ -6,6 +6,7 @@ namespace JohnWink\FilamentLeadPipeline\Commands;
 
 use Exception;
 use Illuminate\Console\Command;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookForm;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
@@ -65,7 +66,7 @@ class ConnectFacebookCommand extends Command
                 'access_token'       => $token,
                 'token_expires_at'   => now()->addSeconds($expiresIn),
                 'scopes'             => config('lead-pipeline.facebook.scopes'),
-                'status'             => 'connected',
+                'status'             => FacebookConnectionStatusEnum::Connected,
             ],
         );
 

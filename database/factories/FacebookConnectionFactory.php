@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 
 class FacebookConnectionFactory extends Factory
@@ -20,12 +21,23 @@ class FacebookConnectionFactory extends Factory
             'access_token'       => $this->faker->sha256(),
             'token_expires_at'   => now()->addDays(60),
             'scopes'             => ['pages_manage_ads', 'leads_retrieval', 'pages_show_list'],
-            'status'             => 'connected',
+            'status'             => FacebookConnectionStatusEnum::Connected,
         ];
     }
 
-    public function expired(): static
+    public function needsReauth(): static
     {
-        return $this->state(['status' => 'expired', 'token_expires_at' => now()->subDay()]);
+        return $this->state([
+            'status'           => FacebookConnectionStatusEnum::NeedsReauth,
+            'token_expires_at' => now()->subDay(),
+        ]);
+    }
+
+    public function expiringSoon(): static
+    {
+        return $this->state([
+            'status'           => FacebookConnectionStatusEnum::Connected,
+            'token_expires_at' => now()->addDays(3),
+        ]);
     }
 }
