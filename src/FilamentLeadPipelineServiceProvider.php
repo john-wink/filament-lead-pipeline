@@ -70,7 +70,8 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                     ->onOneServer();
 
                 $cadence = (string) config('lead-pipeline.facebook.refresh.cadence', 'hourly');
-                method_exists($event, $cadence) ? $event->{$cadence}() : $event->hourly();
+                $allowed = ['everyMinute', 'everyFiveMinutes', 'everyTenMinutes', 'everyFifteenMinutes', 'everyThirtyMinutes', 'hourly', 'daily', 'twiceDaily', 'weekly'];
+                in_array($cadence, $allowed, true) ? $event->{$cadence}() : $event->hourly();
             });
         }
 

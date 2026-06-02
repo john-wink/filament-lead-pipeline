@@ -46,11 +46,12 @@ class RefreshFacebookTokensCommand extends Command
         FacebookConnection::query()
             ->where('status', FacebookConnectionStatusEnum::Connected)
             ->whereNotNull('token_expires_at')
+            ->where('token_expires_at', '>', now())
             ->where('token_expires_at', '<=', $threshold)
             ->whereNull('expiring_soon_notified_at')
             ->get()
             ->each(function (FacebookConnection $connection): void {
-                $daysLeft = max(0, (int) now()->diffInDays($connection->token_expires_at));
+                $daysLeft = max(0, (int) ceil((float) now()->diffInDays($connection->token_expires_at)));
                 $connection->forceFill(['expiring_soon_notified_at' => now()])->save();
                 FacebookTokenExpiringSoon::dispatch($connection, $daysLeft);
             });
@@ -63,7 +64,11 @@ class RefreshFacebookTokensCommand extends Command
         $stuck = FacebookConnection::query()
             ->where('status', FacebookConnectionStatusEnum::Connected)
             ->whereNotNull('token_expires_at')
-            ->where('token_expires_at', '<', now()->subHours($hours))
+            ->where('token_expires_at', '<', now())
+            ->where(function (\Illuminate\Database\Eloquent\Builder $q) use ($hours): void {
+                $q->whereNull('last_refreshed_at')
+                    ->orWhere('last_refreshed_at', '<', now()->subHours($hours));
+            })
             ->get();
 
         if ($stuck->isNotEmpty()) {
