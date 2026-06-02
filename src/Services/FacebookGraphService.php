@@ -6,11 +6,13 @@ namespace JohnWink\FilamentLeadPipeline\Services;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookGraphException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
+use Throwable;
 
 class FacebookGraphService
 {
@@ -63,6 +65,7 @@ class FacebookGraphService
      * @return array{access_token: string, token_type: string, expires_in: int}
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function exchangeCodeForToken(string $code): array
     {
@@ -84,6 +87,7 @@ class FacebookGraphService
      * @return array{access_token: string, token_type: string, expires_in: int}
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function exchangeForLongLivedToken(string $shortLivedToken): array
     {
@@ -115,6 +119,7 @@ class FacebookGraphService
      * @return array<int, array{id: string, name: string, access_token: string, tasks: array<int, string>}>
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function getUserPages(string $userAccessToken): array
     {
@@ -134,6 +139,7 @@ class FacebookGraphService
      * @return array<int, array{id: string, name: string}>
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function getPageLeadForms(string $pageId, string $pageAccessToken): array
     {
@@ -151,6 +157,7 @@ class FacebookGraphService
 
     /**
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function subscribePageToLeadgen(string $pageId, string $pageAccessToken): bool
     {
@@ -172,6 +179,7 @@ class FacebookGraphService
      * @return array<int, array{id?: string, name?: string, subscribed_fields?: array<int, string>}>
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function getPageSubscribedApps(string $pageId, string $pageAccessToken): array
     {
@@ -206,6 +214,7 @@ class FacebookGraphService
      * @return array{id: string, form_id: string, field_data: array<int, array{name: string, values: array<string>}>}
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function getLeadData(string $leadId, string $pageAccessToken): array
     {
@@ -227,6 +236,7 @@ class FacebookGraphService
      * @return array<int, array{key: string, label: string, type: string}>
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function getFormQuestions(string $formId, string $pageAccessToken): array
     {
@@ -255,6 +265,7 @@ class FacebookGraphService
      * @return array{data: array<int, array>, paging: array}
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function getFormLeads(string $formId, string $pageAccessToken, ?int $since = null, ?string $afterCursor = null): array
     {
@@ -290,6 +301,7 @@ class FacebookGraphService
      * @return array{id: string, name: string}
      *
      * @throws ConnectionException
+     * @throws FacebookGraphException
      */
     public function getMe(string $accessToken): array
     {
@@ -309,14 +321,24 @@ class FacebookGraphService
     {
         return Http::timeout(10)
             ->connectTimeout(5)
-            ->retry(2, 200, throw: false);
+            ->retry(2, 200, when: function (Throwable $exception): bool {
+                if ($exception instanceof ConnectionException) {
+                    return true;
+                }
+
+                if ($exception instanceof RequestException) {
+                    $status = $exception->response->status();
+
+                    return 429 === $status || $status >= 500;
+                }
+
+                return false;
+            }, throw: false);
     }
 
     /**
      * Classify a failed Graph response into a typed exception.
-     *
-     * USER-CONTRIBUTION (domain policy): the exact Graph error-code mapping
-     * lives here. Defaults below are sensible; refine per Facebook's docs.
+     * The terminal-vs-transient mapping is the integration's domain policy.
      */
     private function classifyError(Response $response, string $context): FacebookGraphException
     {
