@@ -7,7 +7,9 @@ namespace JohnWink\FilamentLeadPipeline;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Console\Scheduling\Schedule;
 use JohnWink\FilamentLeadPipeline\Commands\GenerateDemoDataCommand;
+use JohnWink\FilamentLeadPipeline\Commands\RefreshFacebookTokensCommand;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
@@ -30,6 +32,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                 GenerateDemoDataCommand::class,
                 Commands\ConnectFacebookCommand::class,
                 Commands\FacebookWebhookStatusCommand::class,
+                RefreshFacebookTokensCommand::class,
             ])
             ->hasInstallCommand(function (InstallCommand $command): void {
                 $command
@@ -60,6 +63,17 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
     {
         parent::boot();
 
+        if (config('lead-pipeline.facebook.refresh.enabled', true)) {
+            $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+                $event = $schedule->command(RefreshFacebookTokensCommand::class)
+                    ->withoutOverlapping()
+                    ->onOneServer();
+
+                $cadence = (string) config('lead-pipeline.facebook.refresh.cadence', 'hourly');
+                method_exists($event, $cadence) ? $event->{$cadence}() : $event->hourly();
+            });
+        }
+
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->registerLivewireComponents();
 
@@ -82,30 +96,5 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
         Livewire::component('lead-pipeline::funnel-builder', \JohnWink\FilamentLeadPipeline\Livewire\FunnelBuilder::class);
         Livewire::component('lead-pipeline::phase-list-table', \JohnWink\FilamentLeadPipeline\Livewire\PhaseListTable::class);
         Livewire::component('lead-pipeline::lead-analytics-modal', \JohnWink\FilamentLeadPipeline\Livewire\LeadAnalyticsModal::class);
-    }
-
-    /** @return array<string> */
-    protected function getMigrations(): array
-    {
-        return [
-            '0001_create_lead_boards_table',
-            '0002_create_lead_phases_table',
-            '0003_create_lead_field_definitions_table',
-            '0004_create_leads_table',
-            '0005_create_lead_field_values_table',
-            '0006_create_lead_sources_table',
-            '0007_create_lead_funnels_table',
-            '0008_create_lead_funnel_steps_table',
-            '0009_create_lead_funnel_step_fields_table',
-            '0010_create_lead_activities_table',
-            '0011_create_lead_conversions_table',
-            '0012_create_lead_board_admins_table',
-            '0013_create_facebook_connections_table',
-            '0014_create_facebook_pages_table',
-            '0015_create_facebook_forms_table',
-            '0016_add_facebook_fields_to_lead_sources_table',
-            '0017_add_created_by_to_lead_sources_table',
-            '0018_add_soft_deletes_to_facebook_pages_table',
-        ];
     }
 }
