@@ -5,8 +5,12 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Services;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookGraphException;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
 
 class FacebookGraphService
 {
@@ -62,7 +66,7 @@ class FacebookGraphService
      */
     public function exchangeCodeForToken(string $code): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
             'client_id'     => config('lead-pipeline.facebook.client_id'),
             'client_secret' => config('lead-pipeline.facebook.client_secret'),
             'redirect_uri'  => $this->getRedirectUri(),
@@ -70,7 +74,7 @@ class FacebookGraphService
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Facebook token exchange failed: ' . $response->body());
+            throw $this->classifyError($response, 'Facebook token exchange failed');
         }
 
         return $response->json();
@@ -83,7 +87,7 @@ class FacebookGraphService
      */
     public function exchangeForLongLivedToken(string $shortLivedToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
             'grant_type'        => 'fb_exchange_token',
             'client_id'         => config('lead-pipeline.facebook.client_id'),
             'client_secret'     => config('lead-pipeline.facebook.client_secret'),
@@ -91,7 +95,7 @@ class FacebookGraphService
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Facebook long-lived token exchange failed: ' . $response->body());
+            throw $this->classifyError($response, 'Facebook long-lived token exchange failed');
         }
 
         return $response->json();
@@ -114,13 +118,13 @@ class FacebookGraphService
      */
     public function getUserPages(string $userAccessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/me/accounts", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/me/accounts", [
             'access_token' => $userAccessToken,
             'fields'       => 'id,name,access_token,tasks',
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to fetch Facebook pages: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to fetch Facebook pages');
         }
 
         return $response->json('data', []);
@@ -133,13 +137,13 @@ class FacebookGraphService
      */
     public function getPageLeadForms(string $pageId, string $pageAccessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/leadgen_forms", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/leadgen_forms", [
             'access_token' => $pageAccessToken,
             'fields'       => 'id,name,status',
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to fetch lead forms: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to fetch lead forms');
         }
 
         return $response->json('data', []);
@@ -150,13 +154,13 @@ class FacebookGraphService
      */
     public function subscribePageToLeadgen(string $pageId, string $pageAccessToken): bool
     {
-        $response = Http::post("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
+        $response = $this->client()->post("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
             'access_token'      => $pageAccessToken,
             'subscribed_fields' => 'leadgen',
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to subscribe to leadgen: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to subscribe to leadgen');
         }
 
         return $response->json('success', false);
@@ -171,12 +175,12 @@ class FacebookGraphService
      */
     public function getPageSubscribedApps(string $pageId, string $pageAccessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
             'access_token' => $pageAccessToken,
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to fetch subscribed apps: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to fetch subscribed apps');
         }
 
         return $response->json('data', []);
@@ -205,13 +209,13 @@ class FacebookGraphService
      */
     public function getLeadData(string $leadId, string $pageAccessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$leadId}", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$leadId}", [
             'access_token' => $pageAccessToken,
             'fields'       => 'id,form_id,field_data,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,platform,is_organic',
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to fetch lead data: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to fetch lead data');
         }
 
         return $response->json();
@@ -226,13 +230,13 @@ class FacebookGraphService
      */
     public function getFormQuestions(string $formId, string $pageAccessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$formId}", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$formId}", [
             'access_token' => $pageAccessToken,
             'fields'       => 'id,name,questions',
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to fetch form questions: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to fetch form questions');
         }
 
         return collect($response->json('questions', []))
@@ -270,10 +274,10 @@ class FacebookGraphService
             $params['after'] = $afterCursor;
         }
 
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$formId}/leads", $params);
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$formId}/leads", $params);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to fetch form leads: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to fetch form leads');
         }
 
         return [
@@ -289,15 +293,60 @@ class FacebookGraphService
      */
     public function getMe(string $accessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/me", [
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/me", [
             'access_token' => $accessToken,
             'fields'       => 'id,name',
         ]);
 
         if ($response->failed()) {
-            throw new RuntimeException('Failed to fetch Facebook user: ' . $response->body());
+            throw $this->classifyError($response, 'Failed to fetch Facebook user');
         }
 
         return $response->json();
+    }
+
+    private function client(): PendingRequest
+    {
+        return Http::timeout(10)
+            ->connectTimeout(5)
+            ->retry(2, 200, throw: false);
+    }
+
+    /**
+     * Classify a failed Graph response into a typed exception.
+     *
+     * USER-CONTRIBUTION (domain policy): the exact Graph error-code mapping
+     * lives here. Defaults below are sensible; refine per Facebook's docs.
+     */
+    private function classifyError(Response $response, string $context): FacebookGraphException
+    {
+        /** @var array<string, mixed> $error */
+        $error  = (array) $response->json('error', []);
+        $status = $response->status();
+        $code   = isset($error['code']) && is_numeric($error['code']) ? (int) $error['code'] : null;
+
+        $message = $this->sanitize($context . ': ' . ($error['message'] ?? $response->body()));
+
+        if (401 === $status || 190 === $code) {
+            return new FacebookTokenInvalidException($message, $status, $error);
+        }
+
+        if (429 === $status || $status >= 500 || in_array($code, [4, 17, 32, 613], true)) {
+            return new FacebookTransientException($message, $status, $error);
+        }
+
+        return new FacebookGraphException($message, $status, $error);
+    }
+
+    /**
+     * Redact token-like material so secrets never reach logs or exceptions.
+     */
+    private function sanitize(string $body): string
+    {
+        return (string) preg_replace(
+            '/(access_token|appsecret_proof|client_secret|fb_exchange_token)=[^&\s"\']+/i',
+            '$1=[REDACTED]',
+            $body,
+        );
     }
 }
