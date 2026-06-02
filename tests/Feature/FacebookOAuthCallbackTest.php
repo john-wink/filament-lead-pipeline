@@ -3,7 +3,10 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
+use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionReconnected;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 
 beforeEach(function (): void {
@@ -53,4 +56,35 @@ it('rejects the callback with 422 when no team can be resolved', function (): vo
         ->assertStatus(422);
 
     expect(FacebookConnection::query()->count())->toBe(0);
+});
+
+it('restores an expired connection and fires the reconnected event', function (): void {
+    Event::fake([FacebookConnectionReconnected::class]);
+
+    $existing = FacebookConnection::factory()->needsReauth()->create([
+        'user_uuid'        => $this->user->id,
+        'team_uuid'        => $this->team->uuid,
+        'facebook_user_id' => 'fb-reconnect',
+    ]);
+
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*' => Http::response(['access_token' => 'restored', 'token_type' => 'bearer', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'        => Http::response(['data' => []]),
+        'graph.facebook.com/*/me*'                 => Http::response(['id' => 'fb-reconnect', 'name' => 'Reconnected User']),
+    ]);
+
+    $nonce = 'reconnect-nonce';
+    $state = base64_encode(json_encode(['nonce' => $nonce, 'team' => $this->team->uuid]));
+
+    $this->withSession(['facebook_oauth_nonce' => $nonce])
+        ->get(route('lead-pipeline.facebook.callback', ['code' => 'auth-code', 'state' => $state]))
+        ->assertOk();
+
+    $fresh = $existing->fresh();
+    expect($fresh->status)->toBe(FacebookConnectionStatusEnum::Connected)
+        ->and($fresh->access_token)->toBe('restored')
+        ->and($fresh->acquired_at)->not->toBeNull()
+        ->and($fresh->refresh_attempts)->toBe(0);
+
+    Event::assertDispatched(FacebookConnectionReconnected::class);
 });
