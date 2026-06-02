@@ -9,7 +9,7 @@ use RuntimeException;
 class FacebookGraphException extends RuntimeException
 {
     /**
-     * @param  array<string, mixed>|null  $error  The Graph `error` object, if any.
+     * @param  array{message?: string, type?: string, code?: int|string, error_subcode?: int|string, fbtrace_id?: string}|null  $error  The Graph `error` object, if any.
      */
     public function __construct(
         string $message,
