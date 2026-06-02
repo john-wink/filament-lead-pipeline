@@ -11,12 +11,11 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
-use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
+use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
-use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
@@ -28,6 +27,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
+    use MarksConnectionNeedsReauth;
     use Queueable;
     use SerializesModels;
 
@@ -92,16 +92,13 @@ class ImportFacebookLeadsJob implements ShouldQueue
                 } catch (FacebookTokenInvalidException $e) {
                     $connection = $page->connection;
                     if ($connection) {
-                        $connection->forceFill([
-                            'status'     => FacebookConnectionStatusEnum::NeedsReauth,
-                            'last_error' => Str::limit($e->getMessage(), 1000),
-                        ])->save();
-                        FacebookConnectionNeedsReauth::dispatch($connection, $e->getMessage());
+                        $this->markConnectionNeedsReauth($connection, $e->getMessage());
+                    } else {
+                        $source->update([
+                            'status'        => LeadSourceStatusEnum::Error,
+                            'error_message' => 'Facebook-Verbindung erfordert einen erneuten Login.',
+                        ]);
                     }
-                    $source->update([
-                        'status'        => LeadSourceStatusEnum::Error,
-                        'error_message' => 'Facebook-Verbindung erfordert einen erneuten Login.',
-                    ]);
 
                     return;
                 } catch (Exception $e) {

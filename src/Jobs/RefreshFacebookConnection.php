@@ -11,15 +11,12 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
-use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
-use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
-use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionNeedsReauth;
+use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Events\FacebookTokenRefreshed;
 use JohnWink\FilamentLeadPipeline\Events\FacebookTokenRefreshFailed;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
-use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
 use Throwable;
@@ -33,6 +30,7 @@ class RefreshFacebookConnection implements ShouldQueue
 {
     use Dispatchable;
     use InteractsWithQueue;
+    use MarksConnectionNeedsReauth;
     use Queueable;
     use SerializesModels;
 
@@ -55,7 +53,7 @@ class RefreshFacebookConnection implements ShouldQueue
         try {
             $result = $facebook->refreshLongLivedToken($connection->access_token);
         } catch (FacebookTokenInvalidException $e) {
-            $this->markNeedsReauth($connection, $e->getMessage());
+            $this->markConnectionNeedsReauth($connection, $e->getMessage());
 
             return;
         } catch (FacebookTransientException $e) {
@@ -86,7 +84,7 @@ class RefreshFacebookConnection implements ShouldQueue
         try {
             $synchronizer->sync($connection);
         } catch (FacebookTokenInvalidException $e) {
-            $this->markNeedsReauth($connection, $e->getMessage());
+            $this->markConnectionNeedsReauth($connection, $e->getMessage());
 
             return;
         } catch (Throwable) {
@@ -118,31 +116,12 @@ class RefreshFacebookConnection implements ShouldQueue
         ])->save();
 
         if ($this->shouldEscalate($attempts, $connection->token_expires_at)) {
-            $this->markNeedsReauth($connection, 'Escalated to re-auth after repeated transient failures.');
+            $this->markConnectionNeedsReauth($connection, 'Escalated to re-auth after repeated transient failures.');
 
             return;
         }
 
         FacebookTokenRefreshFailed::dispatch($connection, $attempts);
-    }
-
-    private function markNeedsReauth(FacebookConnection $connection, string $reason): void
-    {
-        $connection->forceFill([
-            'status'     => FacebookConnectionStatusEnum::NeedsReauth,
-            'last_error' => Str::limit($reason, 1000),
-        ])->save();
-
-        $connection->pages()
-            ->whereHas('leadSources')
-            ->each(function (FacebookPage $page): void {
-                $page->leadSources()->update([
-                    'status'        => LeadSourceStatusEnum::Error,
-                    'error_message' => 'Facebook-Verbindung erfordert einen erneuten Login.',
-                ]);
-            });
-
-        FacebookConnectionNeedsReauth::dispatch($connection, $reason);
     }
 
     private function shouldEscalate(int $attempts, ?CarbonInterface $tokenExpiresAt): bool

@@ -10,17 +10,15 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
+use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\DTOs\WebhookPayloadData;
-use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
-use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Events\LeadReceived;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
-use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
@@ -30,6 +28,8 @@ use RuntimeException;
 
 class WebhookController
 {
+    use MarksConnectionNeedsReauth;
+
     public function __construct(
         public LeadSourceManager $manager,
     ) {}
@@ -400,23 +400,6 @@ class WebhookController
         LeadCreated::dispatch($lead);
 
         return $lead;
-    }
-
-    private function markConnectionNeedsReauth(FacebookConnection $connection, string $reason): void
-    {
-        $connection->forceFill([
-            'status'     => FacebookConnectionStatusEnum::NeedsReauth,
-            'last_error' => Str::limit($reason, 1000),
-        ])->save();
-
-        $connection->pages()
-            ->whereHas('leadSources')
-            ->each(fn (FacebookPage $page) => $page->leadSources()->update([
-                'status'        => LeadSourceStatusEnum::Error,
-                'error_message' => 'Facebook-Verbindung erfordert einen erneuten Login.',
-            ]));
-
-        FacebookConnectionNeedsReauth::dispatch($connection, $reason);
     }
 
     /**
