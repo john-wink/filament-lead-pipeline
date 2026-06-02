@@ -4,8 +4,8 @@
         ->orderByDesc('updated_at')
         ->first();
 
-    $isConnected = $connection && $connection->status === 'connected' && ! $connection->isExpired();
-    $isExpired   = $connection && ($connection->status === 'expired' || $connection->isExpired());
+    $isConnected = $connection && $connection->isConnected();
+    $isExpired   = $connection && $connection->needsReauth();
     $redirectUrl = route('lead-pipeline.facebook.redirect');
 @endphp
 
@@ -21,27 +21,47 @@
             try { localStorage.removeItem('lead-pipeline:facebook-connected'); } catch (e) {}
 
             const startedAt = Date.now();
+
+            const redirectUrl = new URL(@js($redirectUrl), window.location.href);
+            redirectUrl.searchParams.set('opener_origin', window.location.origin);
+
             const popup = window.open(
-                @js($redirectUrl),
+                redirectUrl.toString(),
                 'facebook_connect',
                 'width=600,height=700,scrollbars=yes,status=yes'
             );
 
-            // Poll localStorage for the cross-tab signal from the callback.
-            const pollInterval = setInterval(() => {
+            let pollInterval = null;
+
+            const finish = () => {
+                if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+                window.removeEventListener('message', onMessage);
+                try { localStorage.removeItem('lead-pipeline:facebook-connected'); } catch (e) {}
+                this.refresh();
+            };
+
+            // Primary signal: cross-origin postMessage from the callback popup.
+            // The callback runs on the fixed redirect-URI domain, not this
+            // panel's subdomain, so localStorage cannot bridge the two origins.
+            const onMessage = (event) => {
+                if (event && event.data && event.data.type === 'facebook-connected') {
+                    finish();
+                }
+            };
+            window.addEventListener('message', onMessage);
+
+            // Fallback: same-origin localStorage signal (fires only when the
+            // callback shares this page's origin).
+            pollInterval = setInterval(() => {
                 const raw = (() => { try { return localStorage.getItem('lead-pipeline:facebook-connected'); } catch (e) { return null; } })();
                 const signalTs = raw ? parseInt(raw, 10) : 0;
 
-                if (signalTs > startedAt) {
-                    clearInterval(pollInterval);
-                    try { localStorage.removeItem('lead-pipeline:facebook-connected'); } catch (e) {}
-                    this.refresh();
-                    return;
-                }
+                if (signalTs > startedAt) { finish(); return; }
 
-                // Safety net: stop polling after 3 minutes.
                 if (Date.now() - startedAt > 180000) {
                     clearInterval(pollInterval);
+                    pollInterval = null;
+                    window.removeEventListener('message', onMessage);
                 }
             }, 500);
         },

@@ -17,6 +17,7 @@ beforeEach(function (): void {
     config()->set('lead-pipeline.facebook.client_id', 'test-client-id');
     config()->set('lead-pipeline.facebook.client_secret', 'test-client-secret');
     config()->set('lead-pipeline.facebook.scopes', ['pages_show_list']);
+    config()->set('app.url', 'https://finance-estate.test');
 });
 
 it('falls back to the users first team when state carries a null team', function (): void {
@@ -87,4 +88,52 @@ it('restores an expired connection and fires the reconnected event', function ()
         ->and($fresh->refresh_attempts)->toBe(0);
 
     Event::assertDispatched(FacebookConnectionReconnected::class);
+});
+
+it('targets the opener origin from the OAuth state for postMessage', function (): void {
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*' => Http::response(['access_token' => 'll', 'token_type' => 'bearer', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'        => Http::response(['data' => []]),
+        'graph.facebook.com/*/me*'                 => Http::response(['id' => 'fb-origin-1', 'name' => 'Origin User']),
+    ]);
+
+    $nonce = 'origin-nonce-1';
+    $state = base64_encode(json_encode(['nonce' => $nonce, 'team' => $this->team->uuid, 'origin' => 'https://makler.finance-estate.test']));
+
+    $this->withSession(['facebook_oauth_nonce' => $nonce])
+        ->get(route('lead-pipeline.facebook.callback', ['code' => 'auth-code', 'state' => $state]))
+        ->assertOk()
+        ->assertSee('var targetOrigin = "https://makler.finance-estate.test"', false);
+});
+
+it('falls back to app.url when the state carries no origin', function (): void {
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*' => Http::response(['access_token' => 'll', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'        => Http::response(['data' => []]),
+        'graph.facebook.com/*/me*'                 => Http::response(['id' => 'fb-origin-2', 'name' => 'No Origin']),
+    ]);
+
+    $nonce = 'origin-nonce-2';
+    $state = base64_encode(json_encode(['nonce' => $nonce, 'team' => $this->team->uuid]));
+
+    $this->withSession(['facebook_oauth_nonce' => $nonce])
+        ->get(route('lead-pipeline.facebook.callback', ['code' => 'auth-code', 'state' => $state]))
+        ->assertOk()
+        ->assertSee('var targetOrigin = "https://finance-estate.test"', false);
+});
+
+it('rejects an untrusted opener origin and falls back to app.url', function (): void {
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*' => Http::response(['access_token' => 'll', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'        => Http::response(['data' => []]),
+        'graph.facebook.com/*/me*'                 => Http::response(['id' => 'fb-origin-3', 'name' => 'Evil']),
+    ]);
+
+    $nonce = 'origin-nonce-3';
+    $state = base64_encode(json_encode(['nonce' => $nonce, 'team' => $this->team->uuid, 'origin' => 'https://evil.example.com']));
+
+    $this->withSession(['facebook_oauth_nonce' => $nonce])
+        ->get(route('lead-pipeline.facebook.callback', ['code' => 'auth-code', 'state' => $state]))
+        ->assertOk()
+        ->assertSee('var targetOrigin = "https://finance-estate.test"', false);
 });
