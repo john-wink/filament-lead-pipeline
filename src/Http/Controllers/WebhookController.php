@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Http\Controllers;
 
 use Exception;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -243,8 +244,10 @@ class WebhookController
 
                 foreach ($sources as $source) {
                     try {
-                        $lead           = $this->createLeadFromFacebookData($source, $fieldData, $leadData);
-                        $leadsCreated[] = $lead->getKey();
+                        $lead = $this->createLeadFromFacebookData($source, $fieldData, $leadData);
+                        if ($lead->wasRecentlyCreated) {
+                            $leadsCreated[] = $lead->getKey();
+                        }
                     } catch (Exception $e) {
                         $source->update([
                             'status'        => LeadSourceStatusEnum::Error,
@@ -282,7 +285,7 @@ class WebhookController
 
         if ($externalId) {
             $existing = Lead::query()
-                ->where(Lead::fkColumn('lead_board'), $board->getKey())
+                ->where(Lead::fkColumn('lead_source'), $source->getKey())
                 ->where('external_id', $externalId)
                 ->first();
 
@@ -356,7 +359,15 @@ class WebhookController
         $lead->source_ad_name                  = $this->attributionValue($rawData, 'ad_name');
         $lead->source_channel                  = $this->attributionValue($rawData, 'platform');
         $lead->external_id                     = $externalId;
-        $lead->save();
+
+        try {
+            $lead->save();
+        } catch (UniqueConstraintViolationException) {
+            return Lead::query()
+                ->where(Lead::fkColumn('lead_source'), $source->getKey())
+                ->where('external_id', $externalId)
+                ->first() ?? $lead;
+        }
 
         // Apply custom field mapping
         $fieldDefinitions = $board->fieldDefinitions()->get();

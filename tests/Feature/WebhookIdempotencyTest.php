@@ -9,6 +9,7 @@ use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionNeedsReauth;
+use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
@@ -43,7 +44,7 @@ beforeEach(function (): void {
 function idemMetaCall(array $payload): Illuminate\Testing\TestResponse
 {
     $url     = '/' . config('lead-pipeline.webhooks.prefix') . '/meta';
-    $content = json_encode($payload);
+    $content = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $secret  = config('lead-pipeline.facebook.client_secret');
 
     return test()->withHeader('X-Hub-Signature-256', 'sha256=' . hash_hmac('sha256', $content, $secret))
@@ -61,6 +62,8 @@ function idemLeadgenPayload(string $leadgenId): array
 }
 
 it('creates only one lead when the same leadgen webhook is delivered twice', function (): void {
+    Event::fake([LeadCreated::class]);
+
     Http::fake([
         'graph.facebook.com/*/lead-dup*' => Http::response([
             'id'         => 'lead-dup', 'form_id' => 'form-1',
@@ -72,6 +75,8 @@ it('creates only one lead when the same leadgen webhook is delivered twice', fun
     idemMetaCall(idemLeadgenPayload('lead-dup'))->assertOk();
 
     expect(Lead::query()->where('email', 'dup@example.com')->count())->toBe(1);
+
+    Event::assertDispatchedTimes(LeadCreated::class, 1);
 });
 
 it('acks with 200 and flags needs-reauth when the page token is dead', function (): void {
@@ -84,5 +89,6 @@ it('acks with 200 and flags needs-reauth when the page token is dead', function 
     idemMetaCall(idemLeadgenPayload('lead-dead'))->assertOk();
 
     expect($this->connection->fresh()->status)->toBe(FacebookConnectionStatusEnum::NeedsReauth);
+    expect($this->source->fresh()->status)->toBe(LeadSourceStatusEnum::Error);
     Event::assertDispatched(FacebookConnectionNeedsReauth::class);
 });
