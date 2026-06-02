@@ -88,7 +88,7 @@ it('imports attribution fields onto each newly imported lead', function (): void
         ]),
     ]);
 
-    (new ImportFacebookLeadsJob($this->source, 90))->handle(app(\JohnWink\FilamentLeadPipeline\Services\FacebookGraphService::class));
+    (new ImportFacebookLeadsJob($this->source, 90))->handle(app(JohnWink\FilamentLeadPipeline\Services\FacebookGraphService::class));
 
     $lead1 = Lead::query()->where('email', 'erste@example.com')->first();
     $lead2 = Lead::query()->where('email', 'zweiter@example.com')->first();

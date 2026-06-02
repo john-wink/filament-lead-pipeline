@@ -11,6 +11,7 @@ use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
 use Illuminate\Support\Str;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
@@ -87,7 +88,7 @@ class SourceManagement extends Page implements HasTable
                 Tables\Columns\TextColumn::make('facebook_health')
                     ->label(__('lead-pipeline::lead-pipeline.facebook.token_health'))
                     ->badge()
-                    ->state(fn (LeadSource $record) => 'meta' === $record->driver
+                    ->state(fn (LeadSource $record): ?FacebookConnectionStatusEnum => 'meta' === $record->driver
                         ? $record->facebookPage?->connection?->status
                         : null),
                 Tables\Columns\TextColumn::make('board.name')

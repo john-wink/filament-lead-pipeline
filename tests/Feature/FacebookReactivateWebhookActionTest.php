@@ -55,8 +55,8 @@ function makeMetaSourceWithPage(Team $team, $user, array $sourceOverrides = []):
         LeadSource::fkColumn('lead_board') => $board->getKey(),
         'team_uuid'                        => $team->uuid,
         'created_by'                       => $user->getKey(),
-        'facebook_page_uuid'                => $page->uuid,
-        'facebook_form_ids'                 => ['form-1'],
+        'facebook_page_uuid'               => $page->uuid,
+        'facebook_form_ids'                => ['form-1'],
     ], $sourceOverrides));
 
     return [$source, $page];

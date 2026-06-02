@@ -274,6 +274,31 @@ When creating a Meta source:
 
 Use the **"Import Leads"** action on a Meta source. Select a time range (30–365 days). Duplicates are detected by Facebook Lead ID and email.
 
+### Facebook token lifecycle events
+
+The package never sends notifications itself — it dispatches events so each app
+decides how to alert. Register listeners in your `EventServiceProvider`:
+
+```php
+use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionNeedsReauth;
+use JohnWink\FilamentLeadPipeline\Events\FacebookTokenExpiringSoon;
+use JohnWink\FilamentLeadPipeline\Events\FacebookRefreshHealthCheckFailed;
+
+protected $listen = [
+    FacebookTokenExpiringSoon::class        => [NotifyTokenExpiringSoon::class],
+    FacebookConnectionNeedsReauth::class    => [NotifyReconnectRequired::class],
+    FacebookRefreshHealthCheckFailed::class => [AlertOpsRefreshStuck::class],
+];
+```
+
+Other events: `FacebookTokenRefreshed`, `FacebookTokenRefreshFailed`, `FacebookConnectionReconnected`.
+
+Token renewal runs hourly via the auto-scheduled `lead-pipeline:facebook:refresh-tokens`
+command (configurable under `config('lead-pipeline.facebook.refresh')`). It survives
+transient Graph failures with exponential backoff and only flags a connection as
+needing re-auth on terminal (token-invalid) errors. Users reconnect via the one-click
+"Reconnect" action in Source Management.
+
 ---
 
 ## Analytics & Reporting

@@ -60,6 +60,11 @@ class FacebookConnection extends Model
         return FacebookConnectionStatusEnum::Connected === $this->status;
     }
 
+    public function isExpired(): bool
+    {
+        return FacebookConnectionStatusEnum::Connected !== $this->status;
+    }
+
     public function needsReauth(): bool
     {
         return FacebookConnectionStatusEnum::NeedsReauth === $this->status;
