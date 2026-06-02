@@ -220,10 +220,6 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     }
 
                     // Create new lead
-                    $maxSort = Lead::query()
-                        ->where(Lead::fkColumn('lead_phase'), $targetPhase->getKey())
-                        ->max('sort') ?? 0;
-
                     $lead                                  = new Lead();
                     $lead->{Lead::fkColumn('lead_board')}  = $board->getKey();
                     $lead->{Lead::fkColumn('lead_phase')}  = $targetPhase->getKey();
@@ -232,7 +228,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     $lead->email                           = $email;
                     $lead->phone                           = $phone;
                     $lead->status                          = LeadStatusEnum::Active;
-                    $lead->sort                            = $maxSort + 1;
+                    $lead->sort                            = Lead::nextSortForPhase($targetPhase->getKey());
                     $lead->assigned_to                     = $hasAssignee ? $defaultAssignee : null;
                     $lead->raw_data                        = $fbLead;
                     $lead->source_campaign_id              = $this->attribution($fbLead, 'campaign_id');
