@@ -57,3 +57,11 @@ it('hides the reconnect action when the connection is healthy', function (): voi
     livewire(SourceManagement::class)
         ->assertTableActionHidden('meta_reconnect', $source);
 });
+
+it('shows the reconnect action when the token is within the warning window', function (): void {
+    $source = reconnectMetaSource($this->team, $this->user, FacebookConnectionStatusEnum::Connected);
+    $source->facebookPage->connection->update(['token_expires_at' => now()->addDays(3)]);
+
+    livewire(SourceManagement::class)
+        ->assertTableActionVisible('meta_reconnect', $source);
+});

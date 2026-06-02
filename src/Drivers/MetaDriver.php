@@ -17,6 +17,7 @@ use Filament\Tables\Actions\Action as TableAction;
 use JohnWink\FilamentLeadPipeline\Contracts\LeadSourceDriver;
 use JohnWink\FilamentLeadPipeline\DTOs\LeadData;
 use JohnWink\FilamentLeadPipeline\DTOs\WebhookPayloadData;
+use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
@@ -114,12 +115,12 @@ class MetaDriver implements LeadSourceDriver
                         ->icon('heroicon-o-arrow-path')
                         ->disabled(fn (): bool => ! FacebookConnection::query()
                             ->where('user_uuid', auth()->id())
-                            ->where('status', 'connected')
+                            ->where('status', FacebookConnectionStatusEnum::Connected)
                             ->exists())
                         ->action(function (): void {
                             $connection = FacebookConnection::query()
                                 ->where('user_uuid', auth()->id())
-                                ->where('status', 'connected')
+                                ->where('status', FacebookConnectionStatusEnum::Connected)
                                 ->first();
 
                             if ( ! $connection) {

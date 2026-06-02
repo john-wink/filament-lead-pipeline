@@ -7,6 +7,7 @@ namespace JohnWink\FilamentLeadPipeline\Jobs;
 use Exception;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
@@ -236,7 +237,12 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     $lead->source_ad_name                  = $this->attribution($fbLead, 'ad_name');
                     $lead->source_channel                  = $this->attribution($fbLead, 'platform');
                     $lead->external_id                     = $fbLeadId;
-                    $lead->save();
+
+                    try {
+                        $lead->save();
+                    } catch (UniqueConstraintViolationException) {
+                        continue; // already imported via a concurrent path
+                    }
 
                     foreach ($customMapping as $item) {
                         $fbKey    = $item['facebook_key'] ?? '';
