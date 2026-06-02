@@ -35,6 +35,9 @@ class FacebookConnectionFactory extends Factory
 
     public function expiringSoon(): static
     {
-        return $this->state(['token_expires_at' => now()->addDays(3)]);
+        return $this->state([
+            'status'           => FacebookConnectionStatusEnum::Connected,
+            'token_expires_at' => now()->addDays(3),
+        ]);
     }
 }

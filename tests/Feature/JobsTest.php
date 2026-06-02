@@ -21,7 +21,7 @@ it('syncs pages for all connected Facebook connections', function (): void {
     $synchronizer = Mockery::mock(FacebookPageSynchronizer::class);
     $synchronizer->shouldReceive('sync')
         ->once()
-        ->with(Mockery::on(fn ($c): bool => $c->uuid === $this->connection->uuid))
+        ->with(Mockery::on(fn ($connection): bool => $connection->uuid === $this->connection->uuid))
         ->andReturn(['added' => 1, 'updated' => 0, 'removed' => 0, 'forms_synced' => 0]);
     app()->instance(FacebookPageSynchronizer::class, $synchronizer);
 
@@ -37,7 +37,10 @@ it('skips needs-reauth connections and continues despite sync failures', functio
     ]);
 
     $synchronizer = Mockery::mock(FacebookPageSynchronizer::class);
-    $synchronizer->shouldReceive('sync')->once()->andThrow(new RuntimeException('boom'));
+    $synchronizer->shouldReceive('sync')
+        ->once()
+        ->with(Mockery::on(fn ($connection): bool => $connection->uuid === $this->connection->uuid))
+        ->andThrow(new RuntimeException('boom'));
     app()->instance(FacebookPageSynchronizer::class, $synchronizer);
 
     (new SyncFacebookPages())->handle(app(FacebookPageSynchronizer::class));
