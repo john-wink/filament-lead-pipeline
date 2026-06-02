@@ -173,7 +173,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     if ($existingLead) {
                         if ($this->updateExisting) {
                             $updates = [
-                                'external_id'          => $fbLeadId,
+                                'external_id'          => $fbLeadId ?? $existingLead->external_id,
                                 'raw_data'             => $fbLead,
                                 'source_campaign_id'   => $this->attribution($fbLead, 'campaign_id'),
                                 'source_campaign_name' => $this->attribution($fbLead, 'campaign_name'),
