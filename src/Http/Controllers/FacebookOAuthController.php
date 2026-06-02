@@ -197,6 +197,13 @@ class FacebookOAuthController
         return false;
     }
 
+    /**
+     * Approximates the registrable domain as the last two labels (e.g.
+     * "admin.finance-estate.test" -> "finance-estate.test"), which lets sibling
+     * panel subdomains be recognised as same-app origins. This assumes the
+     * trusted hosts (app.url, public_url) share one apex domain and a single-label
+     * public suffix; it is intentionally not a full Public Suffix List lookup.
+     */
     private function registrableDomain(string $host): string
     {
         return implode('.', array_slice(explode('.', $host), -2));
