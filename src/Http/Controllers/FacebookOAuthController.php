@@ -26,9 +26,15 @@ class FacebookOAuthController
     {
         $nonce  = Str::random(40);
         $teamId = filament()->getTenant()?->getKey() ?? $request->query('team');
-        $state  = base64_encode(json_encode(['nonce' => $nonce, 'team' => $teamId]));
+        $origin = $this->resolveTrustedOrigin($request->query('opener_origin'));
 
         $request->session()->put('facebook_oauth_nonce', $nonce);
+
+        $state = base64_encode(json_encode([
+            'nonce'  => $nonce,
+            'team'   => $teamId,
+            'origin' => $origin,
+        ]));
 
         return redirect()->away($this->facebook->getOAuthRedirectUrl($state));
     }
@@ -107,7 +113,10 @@ class FacebookOAuthController
             }
         }
 
-        $targetOrigin = json_encode(mb_rtrim((string) config('app.url'), '/'), JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP);
+        $targetOrigin = json_encode(
+            $this->resolveTrustedOrigin($stateData['origin'] ?? null),
+            JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES,
+        );
 
         return response(<<<HTML
             <!DOCTYPE html>
@@ -142,5 +151,54 @@ class FacebookOAuthController
             </body>
             </html>
         HTML);
+    }
+
+    /**
+     * Validate a candidate window origin (from the OAuth flow) against the
+     * application's trusted hosts. Falls back to the app URL when the candidate
+     * is missing, malformed, or untrusted — so postMessage never targets an
+     * arbitrary origin.
+     */
+    private function resolveTrustedOrigin(?string $candidate): string
+    {
+        $fallback = mb_rtrim((string) config('app.url'), '/');
+
+        if ( ! is_string($candidate) || '' === $candidate) {
+            return $fallback;
+        }
+
+        $parts = parse_url($candidate);
+
+        if ( ! isset($parts['scheme'], $parts['host']) || ! in_array($parts['scheme'], ['http', 'https'], true)) {
+            return $fallback;
+        }
+
+        $host   = mb_strtolower($parts['host']);
+        $origin = $parts['scheme'] . '://' . $host . (isset($parts['port']) ? ':' . $parts['port'] : '');
+
+        return $this->isTrustedHost($host) ? $origin : $fallback;
+    }
+
+    private function isTrustedHost(string $host): bool
+    {
+        $trustedHosts = array_filter([
+            parse_url((string) config('app.url'), PHP_URL_HOST),
+            parse_url((string) config('lead-pipeline.public_url'), PHP_URL_HOST),
+        ]);
+
+        foreach ($trustedHosts as $trusted) {
+            $trusted = mb_strtolower((string) $trusted);
+
+            if ($host === $trusted || $this->registrableDomain($host) === $this->registrableDomain($trusted)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function registrableDomain(string $host): string
+    {
+        return implode('.', array_slice(explode('.', $host), -2));
     }
 }
