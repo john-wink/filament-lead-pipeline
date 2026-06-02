@@ -327,6 +327,11 @@ return [
         'reimport_description'  => 'Les leads existants seront mis à jour avec les données Facebook actuelles (nom, e-mail, téléphone, champs personnalisés). Les nouveaux leads seront également importés.',
         'reimport_started'      => 'Réimportation démarrée',
         'reimport_started_body' => 'Les leads sont en cours de mise à jour en arrière-plan.',
+        'status'                => [
+            'connected'    => 'Connecté',
+            'needs_reauth' => 'Reconnexion requise',
+            'disabled'     => 'Désactivé',
+        ],
     ],
     'analytics' => [
         'title_board'        => 'Analyse du tableau',
