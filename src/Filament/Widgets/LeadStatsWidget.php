@@ -20,10 +20,7 @@ class LeadStatsWidget extends StatsOverviewWidget
         if ($this->boardId) {
             $query->where(Lead::fkColumn('lead_board'), $this->boardId);
         } elseif (filament()->getTenant()) {
-            $query->whereHas('board', fn ($q) => $q->where(
-                config('lead-pipeline.tenancy.foreign_key'),
-                filament()->getTenant()->getKey()
-            ));
+            $query->whereHas('board', fn ($q) => $q->visibleToTenant(filament()->getTenant()));
         }
 
         $totalCount     = (clone $query)->count();

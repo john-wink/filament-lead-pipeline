@@ -273,7 +273,7 @@ class LeadDetailModal extends Component
         $teamFk   = config('lead-pipeline.tenancy.foreign_key');
         $tenantId = filament()->getTenant()?->getKey();
 
-        if ($this->lead->board->{$teamFk} !== $tenantId) {
+        if ($this->lead->board->{$teamFk} !== $tenantId && ! $this->lead->board->isSharedWith(filament()->getTenant())) {
             abort(403, 'Nicht autorisiert.');
         }
     }

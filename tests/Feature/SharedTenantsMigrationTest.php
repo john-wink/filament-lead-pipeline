@@ -20,6 +20,21 @@ it('creates lead_board_shared_tenants table with required columns', function ():
     ]))->toBeTrue();
 });
 
+it('creates lead_board_team_shares table with required columns', function (): void {
+    expect(Schema::hasTable('lead_board_team_shares'))->toBeTrue();
+
+    expect(Schema::hasColumns('lead_board_team_shares', [
+        'uuid',
+        'owner_team_id',
+        'shared_with_type',
+        'shared_with_id',
+        'shared_with_relation',
+        'permissions',
+        'created_at',
+        'updated_at',
+    ]))->toBeTrue();
+});
+
 it('allows null permissions when sharing a lead_board with a tenant', function (): void {
     $board = LeadBoard::factory()->create();
 

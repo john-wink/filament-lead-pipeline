@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -13,6 +14,8 @@ use JohnWink\FilamentLeadPipeline\Concerns\BelongsToTeam;
 use JohnWink\FilamentLeadPipeline\Concerns\HasConfigurablePrimaryKey;
 use JohnWink\FilamentLeadPipeline\Database\Factories\LeadBoardFactory;
 use JohnWink\FilamentLeadPipeline\Enums\RoutingModeEnum;
+use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
+use Throwable;
 
 class LeadBoard extends Model
 {
@@ -71,6 +74,25 @@ class LeadBoard extends Model
         return $this->hasMany(LeadBoardSharedTenant::class, 'lead_board_uuid', 'uuid');
     }
 
+    public function teamShares(): HasMany
+    {
+        return $this->hasMany(
+            LeadBoardTeamShare::class,
+            'owner_team_id',
+            config('lead-pipeline.tenancy.foreign_key', 'team_uuid'),
+        );
+    }
+
+    public function explicitTeamShares(): HasMany
+    {
+        return $this->teamShares()->whereNull('shared_with_relation');
+    }
+
+    public function relationTeamShares(): HasMany
+    {
+        return $this->teamShares()->whereNotNull('shared_with_relation');
+    }
+
     public function stats(): HasMany
     {
         return $this->hasMany(LeadBoardStat::class, 'lead_board_uuid', 'uuid');
@@ -84,14 +106,54 @@ class LeadBoard extends Model
     public function isSharedWith(Model $tenant, ?string $permission = null): bool
     {
         $query = $this->sharedTenants()
-            ->where('shared_with_type', $tenant::class)
+            ->whereIn('shared_with_type', static::tenantShareTypes($tenant))
             ->where('shared_with_id', $tenant->getKey());
 
         if (null !== $permission) {
             $query->whereJsonContains('permissions', $permission);
         }
 
-        return $query->exists();
+        if ($query->exists()) {
+            return true;
+        }
+
+        return $this->sharedViaTeamShareWith($tenant, $permission);
+    }
+
+    public function isAccessibleByTenant(?Model $tenant): bool
+    {
+        if (null === $tenant || ! config('lead-pipeline.tenancy.enabled')) {
+            return true;
+        }
+
+        $tenantFk = config('lead-pipeline.tenancy.foreign_key', 'team_uuid');
+
+        return $this->{$tenantFk} === $tenant->getKey()
+            || $this->isSharedWith($tenant);
+    }
+
+    public function scopeVisibleToTenant(Builder $query, ?Model $tenant): Builder
+    {
+        if (null === $tenant || ! config('lead-pipeline.tenancy.enabled')) {
+            return $query;
+        }
+
+        $tenantFk = config('lead-pipeline.tenancy.foreign_key', 'team_uuid');
+        $tenantId = $tenant->getKey();
+
+        return $query->where(function (Builder $q) use ($tenant, $tenantFk, $tenantId): void {
+            $q->where($tenantFk, $tenantId)
+                ->orWhere(fn (Builder $sharedQuery) => static::applySharedWithTenantConstraint($sharedQuery, $tenant));
+        });
+    }
+
+    public function scopeSharedWithTenant(Builder $query, ?Model $tenant): Builder
+    {
+        if (null === $tenant || ! config('lead-pipeline.tenancy.enabled')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return static::applySharedWithTenantConstraint($query, $tenant);
     }
 
     public function hasLeads(): bool
@@ -145,6 +207,37 @@ class LeadBoard extends Model
         }
     }
 
+    protected static function applySharedWithTenantConstraint(Builder $query, Model $tenant): Builder
+    {
+        $tenantId = $tenant->getKey();
+
+        return $query->where(function (Builder $q) use ($tenant, $tenantId): void {
+            $tenantTypes = static::tenantShareTypes($tenant);
+
+            $q->whereHas('sharedTenants', fn (Builder $shareQuery) => $shareQuery
+                ->whereIn('shared_with_type', $tenantTypes)
+                ->where('shared_with_id', $tenantId))
+                ->orWhereHas('teamShares', fn (Builder $shareQuery) => $shareQuery
+                    ->whereNull('shared_with_relation')
+                    ->whereIn('shared_with_type', $tenantTypes)
+                    ->where('shared_with_id', $tenantId));
+
+            foreach (FilamentLeadPipelinePlugin::getShareableTenantRelations() as $relation => $label) {
+                try {
+                    $q->orWhere(function (Builder $relationQuery) use ($relation, $tenant): void {
+                        $relationQuery
+                            ->whereHas('teamShares', fn (Builder $shareQuery) => $shareQuery
+                                ->where('shared_with_relation', $relation))
+                            ->whereHas('team', fn (Builder $teamQuery) => $teamQuery
+                                ->whereHas($relation, fn (Builder $relatedQuery) => $relatedQuery->whereKey($tenant->getKey())));
+                    });
+                } catch (Throwable) {
+                    continue;
+                }
+            }
+        });
+    }
+
     protected static function booted(): void
     {
         static::created(function (LeadBoard $board): void {
@@ -155,6 +248,55 @@ class LeadBoard extends Model
     protected static function newFactory(): LeadBoardFactory
     {
         return LeadBoardFactory::new();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function tenantShareTypes(Model $tenant): array
+    {
+        return array_values(array_unique(array_filter([
+            $tenant->getMorphClass(),
+            $tenant::class,
+            config('lead-pipeline.tenancy.model'),
+        ])));
+    }
+
+    protected function sharedViaTeamShareWith(Model $tenant, ?string $permission = null): bool
+    {
+        $query = $this->teamShares()
+            ->whereNull('shared_with_relation')
+            ->whereIn('shared_with_type', static::tenantShareTypes($tenant))
+            ->where('shared_with_id', $tenant->getKey());
+
+        if (null !== $permission) {
+            $query->whereJsonContains('permissions', $permission);
+        }
+
+        if ($query->exists()) {
+            return true;
+        }
+
+        foreach (FilamentLeadPipelinePlugin::getShareableTenantRelations() as $relation => $label) {
+            try {
+                $hasRelationShare = $this->teamShares()
+                    ->where('shared_with_relation', $relation)
+                    ->when(null !== $permission, fn (Builder $shareQuery) => $shareQuery->whereJsonContains('permissions', $permission))
+                    ->exists();
+
+                if ( ! $hasRelationShare || ! $this->team) {
+                    continue;
+                }
+
+                if ($this->team->{$relation}()->whereKey($tenant->getKey())->exists()) {
+                    return true;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return false;
     }
 
     /** @return array<string, string> */

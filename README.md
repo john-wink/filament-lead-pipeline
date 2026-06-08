@@ -118,6 +118,11 @@ $panel->plugin(
             new PhasePresetData(name: 'Lost', type: LeadPhaseTypeEnum::Lost, display_type: LeadPhaseDisplayTypeEnum::List, color: '#EF4444'),
         ])
         ->assignableUsersQuery(fn ($query) => $query->whereRelation('teams', 'uuid', tenant()->getKey()))
+        ->shareableTenants(fn ($query) => $query->where('is_active', true))
+        ->shareableTenantRelations([
+            'children' => 'Child teams',
+            'partners' => 'Partner teams',
+        ])
 );
 ```
 
@@ -132,6 +137,8 @@ $panel->plugin(
 | `sourceManagement(bool $enabled)` | Toggle source management UI |
 | `funnelBuilder(bool $enabled)` | Toggle funnel builder UI |
 | `assignableUsersQuery(callable $callback)` | Filter which users appear in assignment dropdowns |
+| `shareableTenants(callable $callback)` | Filter which teams can be selected for board sharing |
+| `shareableTenantRelations(array $relations)` | Allow all boards to be shared with teams from named relationships on the owner team |
 
 ---
 

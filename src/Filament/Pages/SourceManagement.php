@@ -46,7 +46,7 @@ class SourceManagement extends Page implements HasTable
                     ->with(['funnel', 'facebookPage.connection'])
                     ->when(
                         filament()->getTenant(),
-                        fn ($q) => $q->where(config('lead-pipeline.tenancy.foreign_key'), filament()->getTenant()->getKey())
+                        fn ($q) => $q->whereHas('board', fn ($boardQuery) => $boardQuery->visibleToTenant(filament()->getTenant()))
                     )
                     ->where(function ($q): void {
                         $user = auth()->user();

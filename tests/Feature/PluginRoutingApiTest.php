@@ -46,6 +46,21 @@ it('exposes shareableTenants closure setter and getter', function (): void {
         ->and($plugin->getShareableTenants())->toBe($closure);
 });
 
+it('exposes shareableTenantRelations fluent setter and getter', function (): void {
+    $plugin = FilamentLeadPipelinePlugin::make();
+
+    $returned = $plugin->shareableTenantRelations([
+        'children' => 'Child teams',
+        'partners',
+    ]);
+
+    expect($returned)->toBe($plugin)
+        ->and($plugin->getConfiguredShareableTenantRelations())->toBe([
+            'children' => 'Child teams',
+            'partners' => 'Partners',
+        ]);
+});
+
 it('exposes statsAggregator setter accepting a contract instance', function (): void {
     $plugin = FilamentLeadPipelinePlugin::make();
 
