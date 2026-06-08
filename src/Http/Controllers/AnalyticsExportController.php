@@ -64,7 +64,7 @@ class AnalyticsExportController
             if (in_array($section, ['all', 'matrix'], true)) {
                 $boards = $boardId
                     ? collect([LeadBoard::find($boardId)])
-                    : LeadBoard::where(config('lead-pipeline.tenancy.foreign_key'), filament()->getTenant()?->getKey())->get();
+                    : LeadBoard::visibleToTenant(filament()->getTenant())->get();
 
                 foreach ($boards as $board) {
                     fputcsv($handle, ['=== ' . __('lead-pipeline::lead-pipeline.analytics.matrix_title') . ": {$board->name} ==="], ';');
@@ -126,7 +126,7 @@ class AnalyticsExportController
             if (in_array($section, ['all', 'berater'], true)) {
                 $beraterBoards = $boardId
                     ? collect([LeadBoard::find($boardId)])
-                    : LeadBoard::where(config('lead-pipeline.tenancy.foreign_key'), filament()->getTenant()?->getKey())->get();
+                    : LeadBoard::visibleToTenant(filament()->getTenant())->get();
 
                 foreach ($beraterBoards as $board) {
                     $phases = $board->phases()->ordered()->get();
@@ -260,13 +260,8 @@ class AnalyticsExportController
         if ($boardId) {
             $board = LeadBoard::find($boardId);
 
-            // Verify board belongs to current tenant
-            if ($board && config('lead-pipeline.tenancy.enabled')) {
-                $tenantFk = config('lead-pipeline.tenancy.foreign_key');
-                $tenantId = filament()->getTenant()?->getKey();
-                if ($board->{$tenantFk} !== $tenantId) {
-                    abort(403);
-                }
+            if ($board && ! $board->isAccessibleByTenant(filament()->getTenant())) {
+                abort(403);
             }
 
             $query->where(Lead::fkColumn('lead_board'), $boardId);
@@ -275,17 +270,16 @@ class AnalyticsExportController
                 $query->visibleTo($user, $board);
             }
         } else {
-            $tenantFk = config('lead-pipeline.tenancy.foreign_key');
             $tenantId = filament()->getTenant()?->getKey();
             if ($tenantId && $user) {
                 // Admins: only boards where user is admin
-                $adminBoardIds = LeadBoard::where($tenantFk, $tenantId)
+                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
                     ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
                     ->pluck(LeadBoard::pkColumn());
 
                 if ($adminBoardIds->isEmpty()) {
                     // Non-admin: only own leads across all team boards
-                    $allBoardIds = LeadBoard::where($tenantFk, $tenantId)->pluck(LeadBoard::pkColumn());
+                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
                     $query->whereIn(Lead::fkColumn('lead_board'), $allBoardIds)
                         ->where('leads.assigned_to', $user->getKey());
                 } else {
@@ -330,9 +324,7 @@ class AnalyticsExportController
                 ->where('type', $type)->pluck(LeadPhase::pkColumn())->toArray();
         }
 
-        $tenantFk = config('lead-pipeline.tenancy.foreign_key');
-        $tenantId = filament()->getTenant()?->getKey();
-        $boardIds = LeadBoard::where($tenantFk, $tenantId)->pluck(LeadBoard::pkColumn());
+        $boardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
 
         return LeadPhase::whereIn(LeadPhase::fkColumn('lead_board'), $boardIds)
             ->where('type', $type)->pluck(LeadPhase::pkColumn())->toArray();

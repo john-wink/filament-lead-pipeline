@@ -9,6 +9,8 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
@@ -18,6 +20,8 @@ use JohnWink\FilamentLeadPipeline\Filament\Pages\SourceManagement;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoardSharedTenant;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoardTeamShare;
 use Throwable;
 
 class LeadBoardResource extends Resource
@@ -72,6 +76,16 @@ class LeadBoardResource extends Resource
         }
 
         return $components;
+    }
+
+    public static function scopeEloquentQueryToTenant(Builder $query, ?Model $tenant): Builder
+    {
+        return $query->visibleToTenant($tenant);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return LeadBoard::query()->visibleToTenant(filament()->getTenant());
     }
 
     public static function form(Form $form): Form
@@ -227,8 +241,130 @@ class LeadBoardResource extends Resource
                             ->columns(2),
                     ]),
 
+                Forms\Components\Section::make(__('lead-pipeline::lead-pipeline.board.sharing'))
+                    ->visible(fn (?LeadBoard $record): bool => null !== $record)
+                    ->schema([
+                        Forms\Components\Select::make('shared_tenant_ids')
+                            ->label(__('lead-pipeline::lead-pipeline.board.shared_boards'))
+                            ->helperText(__('lead-pipeline::lead-pipeline.board.shared_boards_helper'))
+                            ->options(fn (?LeadBoard $record): array => FilamentLeadPipelinePlugin::getShareableTenantOptions($record))
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->dehydrated(false)
+                            ->loadStateFromRelationshipsUsing(fn (Forms\Components\Select $component, LeadBoard $record): Forms\Components\Select => $component->state(
+                                $record->sharedTenants()
+                                    ->whereIn('shared_with_type', static::tenantShareTypes())
+                                    ->pluck('shared_with_id')
+                                    ->all(),
+                            ))
+                            ->saveRelationshipsUsing(fn (Forms\Components\Select $component, LeadBoard $record): bool => static::syncSharedTenants($record, $component->getState())),
+                        Forms\Components\Select::make('shared_all_board_tenant_ids')
+                            ->label(__('lead-pipeline::lead-pipeline.board.shared_all_boards'))
+                            ->helperText(__('lead-pipeline::lead-pipeline.board.shared_all_boards_helper'))
+                            ->options(fn (?LeadBoard $record): array => FilamentLeadPipelinePlugin::getShareableTenantOptions($record))
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->dehydrated(false)
+                            ->loadStateFromRelationshipsUsing(fn (Forms\Components\Select $component, LeadBoard $record): Forms\Components\Select => $component->state(
+                                $record->explicitTeamShares()
+                                    ->whereIn('shared_with_type', static::tenantShareTypes())
+                                    ->pluck('shared_with_id')
+                                    ->all(),
+                            ))
+                            ->saveRelationshipsUsing(fn (Forms\Components\Select $component, LeadBoard $record): bool => static::syncExplicitTeamShares($record, $component->getState())),
+                        Forms\Components\CheckboxList::make('shared_tenant_relation_keys')
+                            ->label(__('lead-pipeline::lead-pipeline.board.shared_relation_boards'))
+                            ->helperText(__('lead-pipeline::lead-pipeline.board.shared_relation_boards_helper'))
+                            ->options(fn (): array => FilamentLeadPipelinePlugin::getShareableTenantRelations())
+                            ->visible(fn (): bool => [] !== FilamentLeadPipelinePlugin::getShareableTenantRelations())
+                            ->dehydrated(false)
+                            ->loadStateFromRelationshipsUsing(fn (Forms\Components\CheckboxList $component, LeadBoard $record): Forms\Components\CheckboxList => $component->state(
+                                $record->relationTeamShares()
+                                    ->pluck('shared_with_relation')
+                                    ->all(),
+                            ))
+                            ->saveRelationshipsUsing(fn (Forms\Components\CheckboxList $component, LeadBoard $record): bool => static::syncRelationTeamShares($record, $component->getState()))
+                            ->columns(2),
+                    ])
+                    ->columns(1),
+
                 ...static::getBoardFormExtensionComponents(),
             ]);
+    }
+
+    /**
+     * @param  array<int|string, string>|null  $tenantIds
+     */
+    public static function syncSharedTenants(LeadBoard $board, ?array $tenantIds): bool
+    {
+        $tenantIds  = static::cleanShareState($tenantIds);
+        $tenantType = static::tenantShareType();
+
+        $board->sharedTenants()
+            ->whereIn('shared_with_type', static::tenantShareTypes())
+            ->delete();
+
+        foreach ($tenantIds as $tenantId) {
+            LeadBoardSharedTenant::query()->create([
+                'lead_board_uuid'  => $board->getKey(),
+                'shared_with_type' => $tenantType,
+                'shared_with_id'   => $tenantId,
+                'permissions'      => null,
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<int|string, string>|null  $tenantIds
+     */
+    public static function syncExplicitTeamShares(LeadBoard $board, ?array $tenantIds): bool
+    {
+        $tenantIds  = static::cleanShareState($tenantIds);
+        $tenantFk   = config('lead-pipeline.tenancy.foreign_key', 'team_uuid');
+        $tenantType = static::tenantShareType();
+
+        $board->explicitTeamShares()
+            ->whereIn('shared_with_type', static::tenantShareTypes())
+            ->delete();
+
+        foreach ($tenantIds as $tenantId) {
+            LeadBoardTeamShare::query()->create([
+                'owner_team_id'        => $board->{$tenantFk},
+                'shared_with_type'     => $tenantType,
+                'shared_with_id'       => $tenantId,
+                'shared_with_relation' => null,
+                'permissions'          => null,
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
+     * @param  array<int|string, string>|null  $relations
+     */
+    public static function syncRelationTeamShares(LeadBoard $board, ?array $relations): bool
+    {
+        $relations = static::cleanShareState($relations);
+        $tenantFk  = config('lead-pipeline.tenancy.foreign_key', 'team_uuid');
+
+        $board->relationTeamShares()->delete();
+
+        foreach ($relations as $relation) {
+            LeadBoardTeamShare::query()->create([
+                'owner_team_id'        => $board->{$tenantFk},
+                'shared_with_type'     => null,
+                'shared_with_id'       => null,
+                'shared_with_relation' => $relation,
+                'permissions'          => null,
+            ]);
+        }
+
+        return true;
     }
 
     public static function table(Table $table): Table
@@ -239,10 +375,12 @@ class LeadBoardResource extends Resource
 
                 $userId = auth()->id();
                 $userFk = config('lead-pipeline.user_foreign_key', 'user_uuid');
+                $tenant = filament()->getTenant();
 
-                $query->where(function ($q) use ($userId, $userFk): void {
+                $query->where(function ($q) use ($userId, $userFk, $tenant): void {
                     $q->whereHas('admins', fn ($aq) => $aq->where('lead_board_admins.' . $userFk, $userId))
-                        ->orWhereHas('leads', fn ($lq) => $lq->where('assigned_to', $userId));
+                        ->orWhereHas('leads', fn ($lq) => $lq->where('assigned_to', $userId))
+                        ->orWhere(fn ($sq) => $sq->sharedWithTenant($tenant));
                 });
             })
             ->columns([
@@ -299,5 +437,39 @@ class LeadBoardResource extends Resource
             'create' => Pages\CreateLeadBoard::route('/create'),
             'edit'   => Pages\EditLeadBoard::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * @param  array<int|string, string>|null  $state
+     * @return array<int, string>
+     */
+    protected static function cleanShareState(?array $state): array
+    {
+        return collect($state ?? [])
+            ->filter(fn (mixed $value): bool => filled($value))
+            ->map(fn (mixed $value): string => (string) $value)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    protected static function tenantShareType(): string
+    {
+        $tenantModel = config('lead-pipeline.tenancy.model');
+
+        return (new $tenantModel())->getMorphClass();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    protected static function tenantShareTypes(): array
+    {
+        $tenantModel = config('lead-pipeline.tenancy.model');
+
+        return array_values(array_unique(array_filter([
+            static::tenantShareType(),
+            $tenantModel,
+        ])));
     }
 }

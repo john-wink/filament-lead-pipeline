@@ -7,11 +7,16 @@ namespace JohnWink\FilamentLeadPipeline;
 use Closure;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use JohnWink\FilamentLeadPipeline\Contracts\StatsAggregatorContract;
 use JohnWink\FilamentLeadPipeline\DTOs\FieldPresetData;
 use JohnWink\FilamentLeadPipeline\DTOs\PhasePresetData;
 use JohnWink\FilamentLeadPipeline\DTOs\SourcePresetData;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use Throwable;
+use TypeError;
 
 class FilamentLeadPipelinePlugin implements Plugin
 {
@@ -37,6 +42,9 @@ class FilamentLeadPipelinePlugin implements Plugin
     protected array $recipientResolvers = [];
 
     protected ?Closure $shareableTenants = null;
+
+    /** @var array<string, string> */
+    protected array $shareableTenantRelations = [];
 
     protected ?StatsAggregatorContract $statsAggregator = null;
 
@@ -65,9 +73,9 @@ class FilamentLeadPipelinePlugin implements Plugin
         }
     }
 
-    public static function getAssignableUsers(): \Illuminate\Support\Collection
+    public static function getAssignableUsers(): Collection
     {
-        /** @var class-string<\Illuminate\Database\Eloquent\Model> $model */
+        /** @var class-string<Model> $model */
         $model = config('lead-pipeline.user_model');
         $query = $model::query();
 
@@ -94,6 +102,60 @@ class FilamentLeadPipelinePlugin implements Plugin
         }
 
         return url($path);
+    }
+
+    /** @return array<string, string> */
+    public static function getShareableTenantRelations(): array
+    {
+        try {
+            return static::get()->getConfiguredShareableTenantRelations();
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /** @return array<string, string> */
+    public static function getShareableTenantOptions(?LeadBoard $board = null): array
+    {
+        /** @var class-string<Model> $model */
+        $model = config('lead-pipeline.tenancy.model');
+
+        if ( ! $model || ! class_exists($model)) {
+            return [];
+        }
+
+        $query = $model::query();
+
+        if ($board) {
+            $tenantFk = config('lead-pipeline.tenancy.foreign_key', 'team_uuid');
+            $query->whereKeyNot($board->{$tenantFk});
+        }
+
+        $modifier = null;
+
+        try {
+            $modifier = static::get()->getShareableTenants();
+        } catch (Throwable) {
+            $modifier = null;
+        }
+
+        if ($modifier) {
+            try {
+                $result = $modifier($query, $board);
+            } catch (TypeError) {
+                $result = $modifier($board);
+            }
+
+            if ($result instanceof Builder) {
+                $query = $result;
+            } elseif ($result instanceof Collection) {
+                return static::mapTenantsToOptions($result);
+            } elseif (is_array($result)) {
+                return static::normalizeTenantOptions($result);
+            }
+        }
+
+        return static::mapTenantsToOptions($query->get());
     }
 
     public function getId(): string
@@ -220,6 +282,26 @@ class FilamentLeadPipelinePlugin implements Plugin
         return $this->shareableTenants;
     }
 
+    /**
+     * @param  array<int|string, string>  $relations
+     */
+    public function shareableTenantRelations(array $relations): static
+    {
+        $this->shareableTenantRelations = collect($relations)
+            ->mapWithKeys(fn (string $label, int|string $relation) => is_int($relation)
+                ? [$label => str($label)->headline()->toString()]
+                : [(string) $relation => $label])
+            ->toArray();
+
+        return $this;
+    }
+
+    /** @return array<string, string> */
+    public function getConfiguredShareableTenantRelations(): array
+    {
+        return $this->shareableTenantRelations;
+    }
+
     public function statsAggregator(?StatsAggregatorContract $aggregator): static
     {
         $this->statsAggregator = $aggregator;
@@ -275,5 +357,42 @@ class FilamentLeadPipelinePlugin implements Plugin
                 $service->registerConverter($name, app($class));
             }
         }
+    }
+
+    protected static function tenantLabel(Model $tenant): string
+    {
+        foreach (['name', 'display_name', 'title', 'slug'] as $attribute) {
+            if (filled($tenant->{$attribute} ?? null)) {
+                return (string) $tenant->{$attribute};
+            }
+        }
+
+        return (string) $tenant->getKey();
+    }
+
+    /** @param Collection<int, Model> $tenants */
+    protected static function mapTenantsToOptions(Collection $tenants): array
+    {
+        return $tenants
+            ->mapWithKeys(fn (Model $tenant) => [(string) $tenant->getKey() => static::tenantLabel($tenant)])
+            ->toArray();
+    }
+
+    /** @param array<mixed> $options */
+    protected static function normalizeTenantOptions(array $options): array
+    {
+        return collect($options)
+            ->mapWithKeys(function (mixed $value, mixed $key): array {
+                if ($value instanceof Model) {
+                    return [(string) $value->getKey() => static::tenantLabel($value)];
+                }
+
+                if (is_int($key)) {
+                    return [(string) $value => (string) $value];
+                }
+
+                return [(string) $key => (string) $value];
+            })
+            ->toArray();
     }
 }

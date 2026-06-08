@@ -11,6 +11,8 @@ use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages\Lis
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoardSharedTenant;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoardTeamShare;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 
@@ -45,6 +47,31 @@ it('displays boards in the table', function (): void {
 
     livewire(ListLeadBoards::class)
         ->assertCanSeeTableRecords($boards);
+});
+
+it('displays shared boards from other tenants in the table', function (): void {
+    $ownerTeam = Team::query()->create(['name' => 'Owner Team', 'slug' => 'owner-team']);
+
+    $sharedBoard = LeadBoard::factory()
+        ->create(['name' => 'Shared Board', 'team_uuid' => $ownerTeam->getKey()]);
+
+    $hiddenBoard = LeadBoard::factory()
+        ->create(['name' => 'Hidden Board', 'team_uuid' => $ownerTeam->getKey()]);
+
+    LeadBoardSharedTenant::query()->create([
+        'lead_board_uuid'  => $sharedBoard->getKey(),
+        'shared_with_type' => $this->team->getMorphClass(),
+        'shared_with_id'   => $this->team->getKey(),
+        'permissions'      => null,
+    ]);
+
+    expect(LeadBoard::query()->visibleToTenant($this->team)->pluck('name')->all())
+        ->toContain('Shared Board')
+        ->not->toContain('Hidden Board');
+
+    livewire(ListLeadBoards::class)
+        ->assertCanSeeTableRecords([$sharedBoard])
+        ->assertCanNotSeeTableRecords([$hiddenBoard]);
 });
 
 it('can search boards by name', function (): void {
@@ -417,6 +444,59 @@ it('can toggle board active and inactive', function (): void {
         ->assertHasNoFormErrors();
 
     expect($board->refresh()->is_active)->toBeTrue();
+});
+
+it('can manage individual board shares from the edit form', function (): void {
+    $board      = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $targetTeam = Team::query()->create(['name' => 'Target Team', 'slug' => 'target-team']);
+
+    livewire(EditLeadBoard::class, ['record' => $board->getKey()])
+        ->fillForm([
+            'shared_tenant_ids' => [$targetTeam->getKey()],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($board->fresh()->isSharedWith($targetTeam))->toBeTrue()
+        ->and(LeadBoardSharedTenant::query()->where('lead_board_uuid', $board->getKey())->count())->toBe(1);
+});
+
+it('can manage all-board team shares from the edit form', function (): void {
+    $board      = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $targetTeam = Team::query()->create(['name' => 'All Boards Target', 'slug' => 'all-boards-target']);
+
+    livewire(EditLeadBoard::class, ['record' => $board->getKey()])
+        ->fillForm([
+            'shared_all_board_tenant_ids' => [$targetTeam->getKey()],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($board->fresh()->isSharedWith($targetTeam))->toBeTrue()
+        ->and(LeadBoardTeamShare::query()
+            ->where('owner_team_id', $this->team->getKey())
+            ->where('shared_with_id', $targetTeam->getKey())
+            ->count())->toBe(1);
+});
+
+it('can manage relation-based all-board shares from the edit form', function (): void {
+    filament()->getCurrentPanel()
+        ->getPlugin('filament-lead-pipeline')
+        ->shareableTenantRelations(['children' => 'Child teams']);
+
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+
+    livewire(EditLeadBoard::class, ['record' => $board->getKey()])
+        ->fillForm([
+            'shared_tenant_relation_keys' => ['children'],
+        ])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect(LeadBoardTeamShare::query()
+        ->where('owner_team_id', $this->team->getKey())
+        ->where('shared_with_relation', 'children')
+        ->count())->toBe(1);
 });
 
 it('preserves existing phases when editing board metadata', function (): void {

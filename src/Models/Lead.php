@@ -135,6 +135,11 @@ class Lead extends Model
             return $query;
         }
 
+        $tenant = function_exists('filament') ? filament()->getTenant() : null;
+        if ($tenant && $board->isSharedWith($tenant)) {
+            return $query;
+        }
+
         return $query->where('assigned_to', $user->getKey());
     }
 

@@ -51,6 +51,10 @@ class KanbanBoard extends Page
 
     public function mount(LeadBoard $board): void
     {
+        if ( ! $board->isAccessibleByTenant(filament()->getTenant())) {
+            abort(403, 'Nicht autorisiert.');
+        }
+
         $this->board   = $board;
         $this->filters = session("lead-pipeline.filters.{$board->getKey()}", []);
 
@@ -208,7 +212,7 @@ class KanbanBoard extends Page
             $teamFk   = config('lead-pipeline.tenancy.foreign_key');
             $tenantId = filament()->getTenant()?->getKey();
 
-            if ($this->board->{$teamFk} !== $tenantId) {
+            if ($this->board->{$teamFk} !== $tenantId && ! $this->board->isSharedWith(filament()->getTenant())) {
                 abort(403, 'Nicht autorisiert.');
             }
         }

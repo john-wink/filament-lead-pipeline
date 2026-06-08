@@ -133,13 +133,8 @@ class LeadAnalyticsModal extends Component
         if ($this->boardId) {
             $board = LeadBoard::find($this->boardId);
 
-            // Verify board belongs to current tenant
-            if ($board && config('lead-pipeline.tenancy.enabled')) {
-                $tenantFk = config('lead-pipeline.tenancy.foreign_key');
-                $tenantId = filament()->getTenant()?->getKey();
-                if ($board->{$tenantFk} !== $tenantId) {
-                    abort(403);
-                }
+            if ($board && ! $board->isAccessibleByTenant(filament()->getTenant())) {
+                abort(403);
             }
 
             $query->where('leads.' . Lead::fkColumn('lead_board'), $this->boardId);
@@ -150,16 +145,15 @@ class LeadAnalyticsModal extends Component
             }
         } else {
             // All boards: only include boards where user is admin
-            $tenantFk = config('lead-pipeline.tenancy.foreign_key');
             $tenantId = filament()->getTenant()?->getKey();
             if ($tenantId && $user) {
-                $adminBoardIds = LeadBoard::where($tenantFk, $tenantId)
+                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
                     ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
                     ->pluck(LeadBoard::pkColumn());
 
                 if ($adminBoardIds->isEmpty()) {
                     // Not admin on any board — show only own leads across all team boards
-                    $allBoardIds = LeadBoard::where($tenantFk, $tenantId)->pluck(LeadBoard::pkColumn());
+                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
                     $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
                         ->where('leads.assigned_to', $user->getKey());
                 } else {
@@ -428,9 +422,7 @@ class LeadAnalyticsModal extends Component
                 ->where('type', $type)->pluck(LeadPhase::pkColumn())->toArray();
         }
 
-        $tenantFk = config('lead-pipeline.tenancy.foreign_key');
-        $tenantId = filament()->getTenant()?->getKey();
-        $boardIds = LeadBoard::where($tenantFk, $tenantId)->pluck(LeadBoard::pkColumn());
+        $boardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
 
         return LeadPhase::whereIn(LeadPhase::fkColumn('lead_board'), $boardIds)
             ->where('type', $type)->pluck(LeadPhase::pkColumn())->toArray();
@@ -443,7 +435,6 @@ class LeadAnalyticsModal extends Component
             return collect([LeadBoard::find($this->boardId)])->filter();
         }
 
-        $tenantFk = config('lead-pipeline.tenancy.foreign_key');
         $tenantId = filament()->getTenant()?->getKey();
         $user     = auth()->user();
 
@@ -452,7 +443,7 @@ class LeadAnalyticsModal extends Component
         }
 
         // Admins: return boards where user is admin
-        $adminBoards = LeadBoard::where($tenantFk, $tenantId)
+        $adminBoards = LeadBoard::visibleToTenant(filament()->getTenant())
             ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
             ->get();
 
@@ -461,7 +452,7 @@ class LeadAnalyticsModal extends Component
         }
 
         // Non-admin: return all team boards (visibility is handled per-query)
-        return LeadBoard::where($tenantFk, $tenantId)->get();
+        return LeadBoard::visibleToTenant(filament()->getTenant())->get();
     }
 
     /** @return array{sql: string, bindings: array<string>} */
