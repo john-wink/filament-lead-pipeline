@@ -48,7 +48,7 @@ class LeadConversionService
     {
         $converter = $this->getConverter($converterName);
 
-        $validationErrors = $converter->validate($lead);
+        $validationErrors = $converter->validate($lead, $additionalData);
 
         if ( ! empty($validationErrors)) {
             throw new RuntimeException(

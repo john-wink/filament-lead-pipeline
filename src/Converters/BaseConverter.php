@@ -10,7 +10,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 abstract class BaseConverter implements LeadConverter
 {
     /** @return array<string> */
-    public function validate(Lead $lead): array
+    public function validate(Lead $lead, array $additionalData = []): array
     {
         $errors = [];
 

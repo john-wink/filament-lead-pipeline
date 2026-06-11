@@ -19,5 +19,5 @@ interface LeadConverter
     public function convert(Lead $lead, array $additionalData = []): Model;
 
     /** @return array<string> */
-    public function validate(Lead $lead): array;
+    public function validate(Lead $lead, array $additionalData = []): array;
 }
