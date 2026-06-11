@@ -8,7 +8,8 @@
         "build:scripts": "node bin/build.js",
         "purge": "filament-purge -i resources/dist/lead-pipeline.css -o resources/dist/lead-pipeline.css -v 3.x",
         "dev": "npm-run-all --parallel dev:*",
-        "build": "npm run build:styles && npm run build:scripts"
+        "build": "npm run build:styles && npm run build:report-styles && npm run build:scripts",
+        "build:report-styles": "npx tailwindcss -c tailwind.reports.config.js -i resources/css/lead-pipeline-reports.css -o resources/dist/lead-pipeline-reports.css --minify"
     },
     "devDependencies": {
         "@awcodes/filament-plugin-purge": "^1.1.1",

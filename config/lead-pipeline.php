@@ -101,7 +101,7 @@ return [
         'redirect_uri'  => env('FACEBOOK_REDIRECT_URI'),
         'verify_token'  => env('FACEBOOK_VERIFY_TOKEN'),
         'graph_version' => 'v25.0',
-        'scopes'        => ['pages_manage_ads', 'pages_manage_metadata', 'leads_retrieval', 'pages_show_list', 'business_management'],
+        'scopes'        => ['pages_manage_ads', 'pages_manage_metadata', 'leads_retrieval', 'pages_show_list', 'business_management', 'ads_read'],
         'refresh'       => [
             'enabled'      => env('LEAD_PIPELINE_FB_REFRESH_ENABLED', true),
             'cadence'      => env('LEAD_PIPELINE_FB_REFRESH_CADENCE', 'hourly'),
@@ -134,5 +134,45 @@ return [
         'icon'  => 'heroicon-o-funnel',
         'sort'  => 10,
         'label' => 'Leads',
+    ],
+    /*
+    |--------------------------------------------------------------------------
+    | Marketing Reports
+    |--------------------------------------------------------------------------
+    */
+    'reports' => [
+        'route_prefix' => 'reports',
+        'middleware'   => ['web'],
+        'media_disk'   => env('LEAD_PIPELINE_REPORTS_DISK', 'public'),
+
+        'branding_resolver' => JohnWink\FilamentLeadPipeline\Services\ConfigReportBrandingResolver::class,
+        'pdf_renderer'      => JohnWink\FilamentLeadPipeline\Services\NullReportPdfRenderer::class,
+
+        'defaults' => [
+            'accent_color' => '#0f766e',
+            'logo_url'     => null,
+            'footer_text'  => null,
+            'contact'      => null,
+            'imprint_url'  => null,
+        ],
+
+        'permissions' => [
+            'view'   => 'view_reports',
+            'create' => 'create_reports',
+            'update' => 'update_reports',
+            'delete' => 'delete_reports',
+            'share'  => 'manage_sharing',
+        ],
+
+        'sync' => [
+            'enabled'            => true,
+            'daily_at'           => '04:00',
+            'hourly_current_day' => true,
+            'backfill_days'      => 28,
+        ],
+
+        'scheduling' => [
+            'enabled' => true,
+        ],
     ],
 ];

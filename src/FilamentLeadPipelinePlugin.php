@@ -338,6 +338,7 @@ class FilamentLeadPipelinePlugin implements Plugin
         $panel
             ->resources([
                 Filament\Resources\LeadBoardResource::class,
+                Filament\Resources\LeadReportResource::class,
             ])
             ->pages([
                 Filament\Pages\KanbanBoard::class,

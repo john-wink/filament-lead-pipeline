@@ -317,6 +317,172 @@ class FacebookGraphService
         return $response->json();
     }
 
+    /**
+     * Die Ads-Methoden nutzen bewusst Http::get(...)->throw() (RequestException-Vertrag
+     * für SyncMetaInsightsJob) und weichen vom client()/classifyError()-Muster ab.
+     *
+     * @return list<array{id: string, account_id: string, name: string}>
+     */
+    public function getAdAccounts(string $accessToken): array
+    {
+        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/me/adaccounts", [
+            'access_token' => $accessToken,
+            'fields'       => 'id,account_id,name',
+            'limit'        => 200,
+        ])->throw();
+
+        return $response->json('data', []);
+    }
+
+    /**
+     * Tages-Insights auf Kampagnen-Ebene (time_increment=1).
+     *
+     * @param  array{since: string, until: string}  $timeRange
+     * @param  list<string>|null  $campaignIds
+     * @return array{data: list<array<string, mixed>>, paging: array<string, mixed>, usage_pct: int}
+     */
+    public function getAdAccountInsights(
+        string $adAccountId,
+        string $accessToken,
+        array $timeRange,
+        ?string $breakdown = null,
+        ?array $campaignIds = null,
+        ?string $after = null,
+    ): array {
+        $params = [
+            'access_token'   => $accessToken,
+            'level'          => 'campaign',
+            'time_increment' => 1,
+            'time_range'     => json_encode($timeRange),
+            'fields'         => 'campaign_id,campaign_name,impressions,reach,spend,clicks,inline_link_clicks,actions',
+            'limit'          => 500,
+        ];
+
+        if (null !== $breakdown) {
+            $params['breakdowns'] = $breakdown;
+        }
+
+        if (null !== $campaignIds && [] !== $campaignIds) {
+            $params['filtering'] = json_encode([[
+                'field'    => 'campaign.id',
+                'operator' => 'IN',
+                'value'    => $campaignIds,
+            ]]);
+        }
+
+        if (null !== $after) {
+            $params['after'] = $after;
+        }
+
+        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/insights", $params)->throw();
+
+        return [
+            'data'      => $response->json('data', []),
+            'paging'    => $response->json('paging', []),
+            'usage_pct' => $this->businessUseCaseUsagePercent($response),
+        ];
+    }
+
+    /**
+     * Deduplizierte Reichweite für einen Gesamtzeitraum (ohne time_increment).
+     * Bei Kampagnen-Filter wird über Kampagnen summiert — dokumentierte Näherung,
+     * kampagnenübergreifende Personen-Dedupe ist via API nicht filterbar.
+     *
+     * @param  array{since: string, until: string}  $timeRange
+     * @param  list<string>|null  $campaignIds
+     */
+    public function getAdAccountReach(
+        string $adAccountId,
+        string $accessToken,
+        array $timeRange,
+        ?array $campaignIds = null,
+    ): int {
+        $params = [
+            'access_token' => $accessToken,
+            'level'        => 'account',
+            'time_range'   => json_encode($timeRange),
+            'fields'       => 'reach',
+        ];
+
+        if (null !== $campaignIds && [] !== $campaignIds) {
+            $params['level']     = 'campaign';
+            $params['filtering'] = json_encode([[
+                'field'    => 'campaign.id',
+                'operator' => 'IN',
+                'value'    => $campaignIds,
+            ]]);
+        }
+
+        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/insights", $params)->throw();
+
+        return (int) collect($response->json('data', []))->sum('reach');
+    }
+
+    /**
+     * @param  list<string>|null  $campaignIds
+     * @return list<array<string, mixed>>
+     */
+    public function getAdsWithCreatives(string $adAccountId, string $accessToken, ?array $campaignIds = null): array
+    {
+        $params = [
+            'access_token' => $accessToken,
+            'fields'       => 'id,name,status,campaign_id,creative{thumbnail_url,image_url,image_hash},insights.date_preset(maximum){impressions,spend,actions}',
+            'limit'        => 100,
+        ];
+
+        if (null !== $campaignIds && [] !== $campaignIds) {
+            $params['filtering'] = json_encode([[
+                'field'    => 'campaign.id',
+                'operator' => 'IN',
+                'value'    => $campaignIds,
+            ]]);
+        }
+
+        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/ads", $params)->throw();
+
+        return $response->json('data', []);
+    }
+
+    /**
+     * Permanente Bild-URLs zu image_hashes (Spec §5: permanent_url bevorzugen).
+     *
+     * @param  list<string>  $hashes
+     * @return array<string, string> hash => permanent_url
+     */
+    public function getAdImagePermanentUrls(string $adAccountId, string $accessToken, array $hashes): array
+    {
+        if ([] === $hashes) {
+            return [];
+        }
+
+        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/adimages", [
+            'access_token' => $accessToken,
+            'hashes'       => json_encode($hashes),
+            'fields'       => 'hash,permanent_url',
+        ])->throw();
+
+        return collect($response->json('data', []))
+            ->mapWithKeys(fn (array $image): array => [(string) ($image['hash'] ?? '') => (string) ($image['permanent_url'] ?? '')])
+            ->filter()
+            ->all();
+    }
+
+    /**
+     * Kampagnenliste eines Kontos (für das Kampagnen-Multi-Select).
+     *
+     * @return array<string, string> campaign_id => name
+     */
+    public function getCampaigns(string $adAccountId, string $accessToken): array
+    {
+        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/campaigns", [
+            'access_token' => $accessToken,
+            'fields'       => 'id,name',
+            'limit'        => 200,
+        ])->throw();
+
+        return collect($response->json('data', []))->pluck('name', 'id')->all();
+    }
+
     private function client(): PendingRequest
     {
         return Http::timeout(10)
@@ -370,5 +536,31 @@ class FacebookGraphService
             '$1=[REDACTED]',
             $body,
         );
+    }
+
+    /**
+     * Maximale Auslastung (%) aus dem x-business-use-case-usage-Header.
+     * Header ist JSON: { "<business-id>": [ { call_count, total_cputime, total_time, ... } ] }.
+     * Maximum über alle Einträge und alle drei Werte; 0 bei fehlendem/unlesbarem Header.
+     */
+    private function businessUseCaseUsagePercent(Response $response): int
+    {
+        $usage = json_decode((string) $response->header('x-business-use-case-usage'), true);
+
+        if ( ! is_array($usage)) {
+            return 0;
+        }
+
+        $max = 0;
+
+        foreach ($usage as $entries) {
+            foreach ((array) $entries as $entry) {
+                foreach (['call_count', 'total_cputime', 'total_time'] as $key) {
+                    $max = max($max, (int) ($entry[$key] ?? 0));
+                }
+            }
+        }
+
+        return $max;
     }
 }
