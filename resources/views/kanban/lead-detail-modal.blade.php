@@ -148,8 +148,9 @@
                         <div class="rounded-xl bg-gray-50 p-3.5 dark:bg-gray-800">
                             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ __('lead-pipeline::lead-pipeline.phase.singular') }}</p>
                             <select wire:change="changePhase($event.target.value)"
+                                wire:loading.attr="disabled" wire:target="changePhase"
                                 class="mt-0.5 w-full rounded border-gray-200 text-sm font-semibold dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-primary-500">
-                                @foreach($lead->board->phases()->ordered()->get() as $phase)
+                                @foreach($this->boardPhases() as $phase)
                                     <option value="{{ $phase->getKey() }}" @selected($lead->phase->getKey() === $phase->getKey())>
                                         {{ $phase->name }}
                                     </option>
@@ -163,6 +164,7 @@
                 <div class="rounded-xl bg-gray-50 p-3.5 dark:bg-gray-800">
                     <p class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{{ __('lead-pipeline::lead-pipeline.field.assigned_to') }}</p>
                     <select wire:change="assignUser($event.target.value)"
+                        wire:loading.attr="disabled" wire:target="assignUser"
                         class="w-full text-sm rounded border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-primary-500">
                         <option value="">{{ __('lead-pipeline::lead-pipeline.field.not_assigned') }}</option>
                         @foreach(\JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin::getAssignableUsers() as $assignableUser)
@@ -389,6 +391,15 @@
                                     </div>
                                 </div>
                             @endforeach
+
+                            @if($this->hasMoreActivities())
+                                <button type="button" wire:click="loadMoreActivities"
+                                    wire:loading.attr="disabled" wire:target="loadMoreActivities"
+                                    class="w-full rounded-lg border border-gray-200 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors">
+                                    <span wire:loading.remove wire:target="loadMoreActivities">{{ __('lead-pipeline::lead-pipeline.actions.load_more') }}</span>
+                                    <span wire:loading wire:target="loadMoreActivities">…</span>
+                                </button>
+                            @endif
                         </div>
                     </div>
                 @endif

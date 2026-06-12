@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Livewire;
 
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
@@ -13,39 +14,87 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 class LeadDetailModal extends Component
 {
-    public ?string $leadId = null;
+    private const int ACTIVITIES_PER_PAGE = 10;
 
-    public ?Lead $lead = null;
+    public ?string $leadId = null;
 
     public bool $isOpen = false;
 
     public string $newNote = '';
 
+    public int $activitiesLimit = self::ACTIVITIES_PER_PAGE;
+
+    /** Request-Cache der Board-Phasen — das Blade fragt sie mehrfach ab. */
+    private ?Collection $boardPhasesCache = null;
+
     #[On('open-lead-detail')]
     public function openModal(string $leadId): void
     {
-        $this->leadId = $leadId;
-        $this->lead   = Lead::with([
+        Lead::query()->whereKey($leadId)->firstOrFail();
+
+        $this->leadId          = $leadId;
+        $this->activitiesLimit = self::ACTIVITIES_PER_PAGE;
+        $this->isOpen          = true;
+        $this->newNote         = '';
+        unset($this->lead);
+    }
+
+    /**
+     * Livewire serialisiert nur die leadId — das Model samt Relationen wird pro
+     * Request GENAU EINMAL geladen (Computed-Cache) statt bei jeder Hydration.
+     */
+    #[Computed]
+    public function lead(): ?Lead
+    {
+        if (null === $this->leadId) {
+            return null;
+        }
+
+        return Lead::with([
             'source',
             'assignedUser',
             'phase',
             'board',
             'fieldValues.definition',
-            'activities' => fn ($q) => $q->latest()->limit(50),
-            'activities.causer',
-        ])->findOrFail($leadId);
-        $this->isOpen  = true;
-        $this->newNote = '';
+            ...$this->activityRelations(),
+        ])->find($this->leadId);
     }
 
     public function closeModal(): void
     {
-        $this->reset(['leadId', 'lead', 'isOpen', 'newNote']);
+        $this->reset(['leadId', 'isOpen', 'newNote', 'activitiesLimit']);
+        unset($this->lead);
+    }
+
+    public function loadMoreActivities(): void
+    {
+        $this->activitiesLimit += self::ACTIVITIES_PER_PAGE;
+        $this->reloadActivities();
+    }
+
+    public function hasMoreActivities(): bool
+    {
+        if (null === $this->lead) {
+            return false;
+        }
+
+        return $this->lead->activities()->count() > $this->lead->activities->count();
+    }
+
+    /** @return Collection<int, LeadPhase> */
+    public function boardPhases(): Collection
+    {
+        if (null === $this->lead) {
+            return collect();
+        }
+
+        return $this->boardPhasesCache ??= $this->lead->board->phases()->ordered()->get();
     }
 
     public function addNote(): void
@@ -64,7 +113,7 @@ class LeadDetailModal extends Component
         ]);
 
         $this->newNote = '';
-        $this->lead?->load(['activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer', 'fieldValues.definition']);
+        $this->reloadActivities();
     }
 
     public function markAsLost(string $reason = ''): void
@@ -90,9 +139,7 @@ class LeadDetailModal extends Component
             'causer_id'   => auth()->id(),
         ]);
 
-        $lostPhase = $this->lead->board->phases()
-            ->where('type', LeadPhaseTypeEnum::Lost)
-            ->first();
+        $lostPhase = $this->boardPhases()->firstWhere('type', LeadPhaseTypeEnum::Lost);
 
         if ($lostPhase) {
             $fromPhase = $this->lead->phase;
@@ -101,7 +148,8 @@ class LeadDetailModal extends Component
             $this->dispatch('phase-updated', phaseId: $lostPhase->getKey());
         }
 
-        $this->lead->refresh()->load(['source', 'assignedUser', 'phase', 'board', 'fieldValues.definition', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer']);
+        $this->lead->load('phase');
+        $this->reloadActivities();
         $this->dispatch('phase-updated', phaseId: $this->lead->phase?->getKey() ?? '');
     }
 
@@ -130,20 +178,22 @@ class LeadDetailModal extends Component
             'causer_id'   => auth()->id(),
         ]);
 
-        $this->lead->load(['assignedUser', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer', 'fieldValues.definition']);
+        $this->lead->load('assignedUser');
+        $this->reloadActivities();
 
         // Auto-move: if lead is in Open phase and gets assigned, move to first InProgress phase
         if (filled($userId) && $this->lead->phase) {
             $currentPhase = $this->lead->phase;
             if (LeadPhaseTypeEnum::Open === $currentPhase->type) {
-                $firstInProgress = $this->lead->board->phases()
+                $firstInProgress = $this->boardPhases()
                     ->where('type', LeadPhaseTypeEnum::InProgress)
-                    ->ordered()
+                    ->sortBy('sort')
                     ->first();
 
                 if ($firstInProgress) {
                     $fromPhase = $this->lead->phase;
                     $this->lead->moveToPhase($firstInProgress);
+                    $this->lead->load('phase');
                     $this->dispatch('phase-updated', phaseId: $fromPhase->getKey());
                     $this->dispatch('phase-updated', phaseId: $firstInProgress->getKey());
                 }
@@ -182,9 +232,9 @@ class LeadDetailModal extends Component
             throw ValidationException::withMessages($validator->errors()->toArray());
         }
 
+        // Selektives Update: update() mutiert das geladene Model — kein Reload des Relation-Graphen nötig
         $this->lead->update([$field => $value]);
-        $this->lead->refresh()->load(['source', 'assignedUser', 'phase', 'board', 'fieldValues.definition', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer']);
-        $this->dispatch('phase-updated', phaseId: $this->lead->phase?->getKey() ?? '');
+        $this->dispatch('phase-updated', phaseId: $this->lead->{Lead::fkColumn('lead_phase')} ?? '');
     }
 
     public function updateCustomField(string $definitionId, mixed $value): void
@@ -219,9 +269,7 @@ class LeadDetailModal extends Component
             'causer_id'   => auth()->id(),
         ]);
 
-        $wonPhase = $this->lead->board->phases()
-            ->where('type', LeadPhaseTypeEnum::Won)
-            ->first();
+        $wonPhase = $this->boardPhases()->firstWhere('type', LeadPhaseTypeEnum::Won);
 
         if ($wonPhase) {
             $fromPhase = $this->lead->phase;
@@ -230,8 +278,8 @@ class LeadDetailModal extends Component
             $this->dispatch('phase-updated', phaseId: $wonPhase->getKey());
         }
 
-        $this->lead->refresh()->load(['source', 'assignedUser', 'phase', 'board', 'fieldValues.definition', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer']);
-        $this->lead->load(['phase', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer', 'fieldValues.definition']);
+        $this->lead->load('phase');
+        $this->reloadActivities();
     }
 
     public function changePhase(string $phaseId): void
@@ -255,13 +303,27 @@ class LeadDetailModal extends Component
         $this->dispatch('phase-updated', phaseId: $fromPhase?->getKey());
         $this->dispatch('phase-updated', phaseId: $newPhase->getKey());
 
-        $this->lead->refresh()->load(['source', 'assignedUser', 'phase', 'board', 'fieldValues.definition', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer']);
-        $this->lead->load(['phase', 'activities' => fn ($q) => $q->latest()->limit(50), 'activities.causer', 'fieldValues.definition']);
+        $this->lead->load('phase');
+        $this->reloadActivities();
     }
 
     public function render(): View
     {
-        return view('lead-pipeline::kanban.lead-detail-modal');
+        return view('lead-pipeline::kanban.lead-detail-modal', ['lead' => $this->lead]);
+    }
+
+    /** @return array<string, mixed> */
+    private function activityRelations(): array
+    {
+        return [
+            'activities' => fn ($q) => $q->latest()->limit($this->activitiesLimit),
+            'activities.causer',
+        ];
+    }
+
+    private function reloadActivities(): void
+    {
+        $this->lead?->load($this->activityRelations());
     }
 
     private function authorizeAccess(): void

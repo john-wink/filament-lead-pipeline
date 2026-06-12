@@ -420,3 +420,9 @@
         align-items: stretch;
     }
 }
+
+/* Optimistic Drag&Drop: Karte bleibt sofort am Ziel, dezent markiert bis zur Server-Bestätigung */
+.lead-card-pending {
+    opacity: 0.65;
+    pointer-events: none;
+}

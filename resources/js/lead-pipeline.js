@@ -60,10 +60,21 @@
                     if (!componentId) return;
 
                     const pageComponent = Livewire.find(componentId);
+                    if (!pageComponent) return;
 
-                    if (pageComponent) {
-                        pageComponent.call('moveLeadToPhase', leadId, toPhaseId, newSort);
-                    }
+                    // Optimistic UI: Sortable hat die Karte bereits am Ziel platziert —
+                    // sie bleibt dort, nur dezent markiert, bis der Server bestätigt.
+                    // Schlägt der Call fehl, wandert die Karte an ihre Ursprungsposition zurück.
+                    evt.item.classList.add('lead-card-pending');
+
+                    const revert = () => {
+                        const reference = evt.from.children[evt.oldIndex] || null;
+                        evt.from.insertBefore(evt.item, reference);
+                    };
+
+                    Promise.resolve(pageComponent.call('moveLeadToPhase', leadId, toPhaseId, newSort))
+                        .catch(() => revert())
+                        .finally(() => evt.item.classList.remove('lead-card-pending'));
                 },
             });
         });

@@ -54,16 +54,7 @@
         </div>
     </div>
 
-    {{-- Search with icon --}}
-    <div class="px-2 py-1.5">
-        <div class="relative">
-            <x-heroicon-o-magnifying-glass class="pointer-events-none -translate-y-1/2 start-2 top-1/2 absolute h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
-            <input type="text"
-                wire:model.live.debounce.300ms="search"
-                placeholder="{{ __('lead-pipeline::lead-pipeline.actions.search') }}"
-                class="w-full text-xs rounded-lg border-gray-200 bg-white ps-6 pr-3 py-1.5 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-colors">
-        </div>
-    </div>
+    {{-- Suche kommt zentral vom Board-Header (search-updated Event) — kein Feld pro Spalte --}}
 
     {{-- Loading skeleton --}}
     @if($loading ?? false)
