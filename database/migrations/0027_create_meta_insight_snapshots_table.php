@@ -9,15 +9,16 @@ use Illuminate\Support\Facades\Schema;
 return new class() extends Migration {
     public function up(): void
     {
+        // Index-Spalten gekürzt: 4 varchar(255) im Unique-Index überschreiten MySQLs 3072-Byte-Limit
         Schema::create('meta_insight_snapshots', function (Blueprint $table): void {
             $table->uuid('uuid')->primary();
             $table->string(config('lead-pipeline.tenancy.foreign_key', 'team_uuid'))->index();
-            $table->string('ad_account_id');
-            $table->string('campaign_id')->nullable();
+            $table->string('ad_account_id', 64);
+            $table->string('campaign_id', 64)->nullable();
             $table->string('campaign_name')->nullable();
             $table->date('date');
-            $table->string('breakdown_type')->default('none');
-            $table->string('breakdown_value')->default('');
+            $table->string('breakdown_type', 16)->default('none');
+            $table->string('breakdown_value', 32)->default('');
             $table->unsignedBigInteger('impressions')->default(0);
             $table->unsignedBigInteger('reach')->default(0);
             $table->decimal('spend', 12, 2)->default(0);

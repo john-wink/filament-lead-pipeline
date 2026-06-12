@@ -42,3 +42,39 @@ it('denies access to reports of foreign teams even with permission', function ()
 
     expect(app(JohnWink\FilamentLeadPipeline\Policies\LeadReportPolicy::class)->view($user, $report))->toBeFalse();
 });
+
+it('skips the permission check in panels that are not listed in permission_panels', function (): void {
+    config()->set('lead-pipeline.reports.permission_panels', ['marketingagency']);
+
+    $user   = App\Models\User::query()->where('email', 'admin@test.com')->firstOrFail();
+    $team   = App\Models\Team::query()->where('slug', 'test')->firstOrFail();
+    $report = LeadReport::factory()->create(['team_uuid' => $team->uuid]);
+
+    $this->actingAs($user);
+    filament()->setCurrentPanel(filament()->getPanel('admin'));
+    Filament\Facades\Filament::setTenant($team);
+
+    // 'admin' steht NICHT in permission_panels → keine Spatie-Prüfung, nur Team-Isolation
+    expect(app(JohnWink\FilamentLeadPipeline\Policies\LeadReportPolicy::class)->view($user, $report))->toBeTrue()
+        ->and(app(JohnWink\FilamentLeadPipeline\Policies\LeadReportPolicy::class)->viewAny($user))->toBeTrue();
+
+    // Team-Isolation bleibt auch ohne Permission-Prüfung bestehen
+    $foreign       = App\Models\Team::factory()->create();
+    $foreignReport = LeadReport::factory()->create(['team_uuid' => $foreign->uuid]);
+    expect(app(JohnWink\FilamentLeadPipeline\Policies\LeadReportPolicy::class)->view($user, $foreignReport))->toBeFalse();
+});
+
+it('enforces permissions in listed panels', function (): void {
+    config()->set('lead-pipeline.reports.permission_panels', ['admin']);
+
+    $user   = App\Models\User::query()->where('email', 'admin@test.com')->firstOrFail();
+    $team   = App\Models\Team::query()->where('slug', 'test')->firstOrFail();
+    $report = LeadReport::factory()->create(['team_uuid' => $team->uuid]);
+
+    $this->actingAs($user);
+    filament()->setCurrentPanel(filament()->getPanel('admin'));
+    Filament\Facades\Filament::setTenant($team);
+
+    // 'admin' IST gelistet → Spatie-Prüfung greift, User ohne view_reports wird abgelehnt
+    expect(app(JohnWink\FilamentLeadPipeline\Policies\LeadReportPolicy::class)->view($user, $report))->toBeFalse();
+});

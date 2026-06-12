@@ -11,9 +11,9 @@ return new class() extends Migration {
     {
         Schema::create('meta_reach_ranges', function (Blueprint $table): void {
             $table->uuid('uuid')->primary();
-            $table->string('ad_account_id');
-            $table->string('campaign_key')->default('');
-            $table->string('preset');
+            $table->string('ad_account_id', 64);
+            $table->string('campaign_key', 64)->default('');
+            $table->string('preset', 32);
             $table->date('date_from');
             $table->date('date_till');
             $table->unsignedBigInteger('reach')->default(0);
