@@ -43,10 +43,19 @@
                 {{-- Right: Stats + Filter + New Lead --}}
                 <div class="flex items-center gap-2 flex-shrink-0">
                     @if($this->activeTab === 'board')
+                        {{-- Zentrale Suche über alle Spalten --}}
+                        <div class="relative" wire:loading.class="opacity-60" wire:target="search">
+                            <x-heroicon-o-magnifying-glass class="pointer-events-none -translate-y-1/2 start-2 top-1/2 absolute h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
+                            <input type="text"
+                                wire:model.live.debounce.400ms="search"
+                                placeholder="{{ __('lead-pipeline::lead-pipeline.actions.search') }}"
+                                class="w-44 text-xs rounded-lg border-gray-200 bg-white ps-7 pr-3 py-1.5 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-colors">
+                        </div>
+                    @endif
+                    @if($this->activeTab === 'board')
                         @php
-                            $kanbanPhases = $this->board->phases()->kanban()->ordered()->get();
-                            $totalLeads = $kanbanPhases->sum(fn ($p) => $p->leads()->count());
-                            $totalValue = $kanbanPhases->sum(fn ($p) => (float) $p->leads()->sum('value'));
+                            $totalLeads = $this->boardStats['leads'];
+                            $totalValue = $this->boardStats['value'];
                         @endphp
                         <div class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 dark:bg-gray-800">
                             <x-heroicon-o-users class="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />

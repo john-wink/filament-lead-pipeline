@@ -3,7 +3,8 @@
     wire:id="{{ $this->getId() }}"
     class="flex flex-col gap-2 h-full overflow-hidden"
     @if(config('lead-pipeline.kanban.auto_refresh_interval', 0) > 0)
-        wire:poll.{{ config('lead-pipeline.kanban.auto_refresh_interval') }}s
+        {{-- .visible: pollt nur, solange das Board im Viewport ist (kein Hintergrund-Morphing) --}}
+        wire:poll.{{ config('lead-pipeline.kanban.auto_refresh_interval') }}s.visible
     @endif
 >
     {{-- Kanban Board --}}

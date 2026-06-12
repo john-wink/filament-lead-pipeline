@@ -26,6 +26,8 @@ class KanbanBoard extends Page
 
     public bool $showFilters = false;
 
+    public string $search = '';
+
     /** @var array<string, mixed> */
     public array $filters = [];
 
@@ -118,6 +120,32 @@ class KanbanBoard extends Page
             ->get() ?? collect();
     }
 
+    /**
+     * Aggregierte Kopfzeilen-Stats in EINER Query statt COUNT/SUM pro Phase (N+1).
+     *
+     * @return array{leads: int, value: float}
+     */
+    #[Computed]
+    public function boardStats(): array
+    {
+        if (null === $this->board) {
+            return ['leads' => 0, 'value' => 0.0];
+        }
+
+        $kanbanPhaseKeys = $this->board->phases()->kanban()->pluck((new LeadPhase())->getKeyName());
+
+        $totals = Lead::query()
+            ->where(Lead::fkColumn('lead_board'), $this->board->getKey())
+            ->whereIn(Lead::fkColumn('lead_phase'), $kanbanPhaseKeys)
+            ->selectRaw('COUNT(*) as total_leads, COALESCE(SUM(value), 0) as total_value')
+            ->first();
+
+        return [
+            'leads' => (int) $totals->total_leads,
+            'value' => (float) $totals->total_value,
+        ];
+    }
+
     public function getListPhases(): Collection
     {
         return $this->board->phases()->list()->ordered()->withCount('leads')->get();
@@ -139,6 +167,12 @@ class KanbanBoard extends Page
         $this->filters = $cleaned;
         session(["lead-pipeline.filters.{$this->board->getKey()}" => $cleaned]);
         $this->dispatch('filters-updated', filters: $cleaned);
+    }
+
+    /** Zentrale Suche über alle Spalten — ersetzt die frühere Suche pro Spalte. */
+    public function updatedSearch(): void
+    {
+        $this->dispatch('search-updated', search: $this->search);
     }
 
     public function clearFilters(): void

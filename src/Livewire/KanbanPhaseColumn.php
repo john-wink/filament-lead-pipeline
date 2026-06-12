@@ -64,6 +64,14 @@ class KanbanPhaseColumn extends Component
         $this->perPage = (int) config('lead-pipeline.kanban.leads_per_page', 20);
     }
 
+    /** Zentrale Board-Suche (eine Eingabe, alle Spalten) statt Suchfeld pro Spalte. */
+    #[On('search-updated')]
+    public function applySearch(string $search): void
+    {
+        $this->search  = $search;
+        $this->perPage = (int) config('lead-pipeline.kanban.leads_per_page', 20);
+    }
+
     public function loadMore(): void
     {
         $this->perPage += (int) config('lead-pipeline.kanban.leads_per_page', 20);
