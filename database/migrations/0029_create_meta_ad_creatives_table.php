@@ -12,9 +12,9 @@ return new class() extends Migration {
         Schema::create('meta_ad_creatives', function (Blueprint $table): void {
             $table->uuid('uuid')->primary();
             $table->string(config('lead-pipeline.tenancy.foreign_key', 'team_uuid'))->index();
-            $table->string('ad_account_id');
-            $table->string('campaign_id')->nullable();
-            $table->string('ad_id')->unique();
+            $table->string('ad_account_id', 64);
+            $table->string('campaign_id', 64)->nullable();
+            $table->string('ad_id', 64)->unique();
             $table->string('name')->nullable();
             $table->string('status')->nullable();
             $table->string('image_path')->nullable();

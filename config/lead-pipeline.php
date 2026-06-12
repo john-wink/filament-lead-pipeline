@@ -156,6 +156,10 @@ return [
             'imprint_url'  => null,
         ],
 
+        // Panel-IDs, in denen die Spatie-Permissions erzwungen werden (null = überall);
+        // in anderen Panels gilt nur die Team-Isolation
+        'permission_panels' => null,
+
         'permissions' => [
             'view'   => 'view_reports',
             'create' => 'create_reports',
