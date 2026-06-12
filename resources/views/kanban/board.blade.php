@@ -2,10 +2,6 @@
     data-kanban-board
     wire:id="{{ $this->getId() }}"
     class="flex flex-col gap-2 h-full overflow-hidden"
-    @if(config('lead-pipeline.kanban.auto_refresh_interval', 0) > 0)
-        {{-- .visible: pollt nur, solange das Board im Viewport ist (kein Hintergrund-Morphing) --}}
-        wire:poll.{{ config('lead-pipeline.kanban.auto_refresh_interval') }}s.visible
-    @endif
 >
     {{-- Kanban Board --}}
     <div class="lead-kanban-board">
@@ -37,6 +33,12 @@
                             class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
                         @error('newLeadPhone') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                     </div>
+                    @if($duplicateLeadName)
+                        <div class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-900/20">
+                            <x-heroicon-o-exclamation-triangle class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                            <p class="text-xs text-amber-800 dark:text-amber-200">{{ __('lead-pipeline::lead-pipeline.lead.duplicate_warning', ['name' => $duplicateLeadName]) }}</p>
+                        </div>
+                    @endif
                     @if($this->isBoardAdmin)
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('lead-pipeline::lead-pipeline.field.assigned_advisor') }}</label>
@@ -55,11 +57,15 @@
                         class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors">
                         {{ __('lead-pipeline::lead-pipeline.actions.cancel') }}
                     </button>
-                    <button wire:click="createLead"
-                        class="px-4 py-2 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                    <button wire:click="createLead({{ $duplicateLeadName ? 'true' : 'false' }})"
+                        @class([
+                            'px-4 py-2 text-sm text-white rounded-lg transition-colors',
+                            'bg-amber-600 hover:bg-amber-700'     => $duplicateLeadName,
+                            'bg-primary-600 hover:bg-primary-700' => ! $duplicateLeadName,
+                        ])
                         wire:loading.attr="disabled"
                         wire:loading.class="opacity-50">
-                        <span wire:loading.remove wire:target="createLead">{{ __('lead-pipeline::lead-pipeline.lead.create_btn') }}</span>
+                        <span wire:loading.remove wire:target="createLead">{{ $duplicateLeadName ? __('lead-pipeline::lead-pipeline.lead.create_anyway') : __('lead-pipeline::lead-pipeline.lead.create_btn') }}</span>
                         <span wire:loading wire:target="createLead">{{ __('lead-pipeline::lead-pipeline.lead.creating') }}</span>
                     </button>
                 </div>

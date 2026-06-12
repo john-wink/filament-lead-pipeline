@@ -45,6 +45,9 @@ class Lead extends Model
         'converted_at',
         'lost_at',
         'lost_reason',
+        'reminder_at',
+        'reminder_note',
+        'reminder_notified_at',
         'assigned_to',
         'raw_data',
         'source_campaign_id',
@@ -103,6 +106,58 @@ class Lead extends Model
     public function activities(): HasMany
     {
         return $this->hasMany(LeadActivity::class, static::fkColumn('lead'));
+    }
+
+    public function hasDueReminder(): bool
+    {
+        return null !== $this->reminder_at && $this->reminder_at->lessThanOrEqualTo(now());
+    }
+
+    /** Erwartet das via withMax('activities as last_activity_at', ...) vorgeladene Attribut — sonst Fallback auf created_at. */
+    public function daysSinceLastActivity(): int
+    {
+        $reference = $this->last_activity_at ?? $this->created_at;
+
+        return (int) \Carbon\Carbon::parse($reference)->diffInDays(now());
+    }
+
+    /** @return 'fresh'|'aging'|'stale' */
+    public function staleness(): string
+    {
+        $days = $this->daysSinceLastActivity();
+
+        return match (true) {
+            $days >= (int) config('lead-pipeline.kanban.stale_critical_days', 30) => 'stale',
+            $days >= (int) config('lead-pipeline.kanban.stale_warning_days', 7)   => 'aging',
+            default                                                               => 'fresh',
+        };
+    }
+
+    /**
+     * Protokolliert einen ausgehenden Kontaktversuch (Anruf/E-Mail). Sales-Vorgabe:
+     * jeder tel:/mailto:-Klick muss als Activity nachvollziehbar sein — wer, wen, wann.
+     */
+    public function logContactAttempt(string $channel): ?LeadActivity
+    {
+        $type = match ($channel) {
+            'phone' => LeadActivityTypeEnum::Call,
+            'email' => LeadActivityTypeEnum::Email,
+            default => null,
+        };
+
+        if (null === $type) {
+            return null;
+        }
+
+        $target = 'phone' === $channel ? $this->phone : $this->email;
+
+        return $this->activities()->create([
+            'type'        => $type->value,
+            'description' => __('lead-pipeline::lead-pipeline.activity.contact_' . $channel, ['target' => (string) $target]),
+            'properties'  => ['channel' => $channel, 'target' => $target],
+            'causer_type' => config('lead-pipeline.user_model'),
+            'causer_id'   => auth()->id(),
+        ]);
     }
 
     public function conversions(): HasMany
@@ -212,12 +267,14 @@ class Lead extends Model
     protected function casts(): array
     {
         return [
-            'status'       => LeadStatusEnum::class,
-            'sort'         => 'integer',
-            'value'        => 'decimal:2',
-            'converted_at' => 'datetime',
-            'lost_at'      => 'datetime',
-            'raw_data'     => 'array',
+            'status'               => LeadStatusEnum::class,
+            'sort'                 => 'integer',
+            'value'                => 'decimal:2',
+            'converted_at'         => 'datetime',
+            'lost_at'              => 'datetime',
+            'reminder_at'          => 'datetime',
+            'reminder_notified_at' => 'datetime',
+            'raw_data'             => 'array',
         ];
     }
 }

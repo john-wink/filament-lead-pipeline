@@ -41,6 +41,8 @@ return [
         'leads_per_page'        => 20,        // Lazy Loading: Leads pro Phase-Ladung
         'card_fields_limit'     => 5,       // Max Custom Fields auf der Karte
         'auto_refresh_interval' => 30,  // Sekunden, 0 = deaktiviert
+        'stale_warning_days'    => 7,     // Alter-Badge wird gelb (Tage ohne Aktivität)
+        'stale_critical_days'   => 30,    // Alter-Badge wird rot (Tage ohne Aktivität)
     ],
 
     /*
@@ -102,7 +104,12 @@ return [
         'verify_token'  => env('FACEBOOK_VERIFY_TOKEN'),
         'graph_version' => 'v25.0',
         'scopes'        => ['pages_manage_ads', 'pages_manage_metadata', 'leads_retrieval', 'pages_show_list', 'business_management', 'ads_read'],
-        'refresh'       => [
+        'alerts'        => [
+            // Panel-Notifications an Connection-Besitzer bei Token-Problemen
+            'enabled' => true,
+        ],
+
+        'refresh' => [
             'enabled'      => env('LEAD_PIPELINE_FB_REFRESH_ENABLED', true),
             'cadence'      => env('LEAD_PIPELINE_FB_REFRESH_CADENCE', 'hourly'),
             'queue'        => env('LEAD_PIPELINE_FB_REFRESH_QUEUE', false),
@@ -112,6 +119,16 @@ return [
             'backoff_max'  => 21600,  // 6 hours
             'health_hours' => 3,      // alert if a connected token is >N h past expiry
         ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Wiedervorlage / Reminders
+    |--------------------------------------------------------------------------
+    | Scheduler benachrichtigt zugewiesene Berater über fällige Wiedervorlagen.
+    */
+    'reminders' => [
+        'enabled' => true,
     ],
 
     /*

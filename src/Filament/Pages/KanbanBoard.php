@@ -43,6 +43,9 @@ class KanbanBoard extends Page
 
     public bool $showCreateModal = false;
 
+    /** Name des Bestandsleads mit gleicher E-Mail/Telefonnummer — steuert die Duplikat-Warnung im Modal. */
+    public ?string $duplicateLeadName = null;
+
     protected static ?string $navigationIcon = 'heroicon-o-view-columns';
 
     protected static string $view = 'lead-pipeline::filament.pages.kanban-board';
@@ -121,6 +124,39 @@ class KanbanBoard extends Page
     }
 
     /**
+     * Verbindungs-/Quellen-Gesundheit für Banner + Ampel: stille Lead-Ausfälle sichtbar machen.
+     *
+     * @return array{error_sources: int, connection_state: string}
+     */
+    #[Computed]
+    public function connectionAlerts(): array
+    {
+        $errorSources = $this->board?->sources()
+            ->where('status', \JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum::Error)
+            ->count() ?? 0;
+
+        $connectionState = 'ok';
+        $connections     = \JohnWink\FilamentLeadPipeline\Models\FacebookConnection::query()
+            ->where(config('lead-pipeline.tenancy.foreign_key', 'team_uuid'), filament()->getTenant()?->getKey())
+            ->get();
+
+        foreach ($connections as $connection) {
+            $state = $connection->healthState();
+
+            if ('critical' === $state) {
+                $connectionState = 'critical';
+                break;
+            }
+
+            if ('warning' === $state) {
+                $connectionState = 'warning';
+            }
+        }
+
+        return ['error_sources' => $errorSources, 'connection_state' => $connectionState];
+    }
+
+    /**
      * Aggregierte Kopfzeilen-Stats in EINER Query statt COUNT/SUM pro Phase (N+1).
      *
      * @return array{leads: int, value: float}
@@ -143,6 +179,57 @@ class KanbanBoard extends Page
         return [
             'leads' => (int) $totals->total_leads,
             'value' => (float) $totals->total_value,
+        ];
+    }
+
+    /**
+     * „Meine Leads heute" — persönliche Tages-KPIs des eingeloggten Beraters
+     * (1 Lead-Aggregat + 1 Distinct-Count auf Kontakt-Activities).
+     *
+     * @return array{new_today: int, contacted_today: int, won_week: int, open_mine: int, due_today: int}
+     */
+    #[Computed]
+    public function myDayStats(): array
+    {
+        $userId = auth()->id();
+
+        if (null === $userId || null === $this->board) {
+            return ['new_today' => 0, 'contacted_today' => 0, 'won_week' => 0, 'open_mine' => 0, 'due_today' => 0];
+        }
+
+        $totals = Lead::query()
+            ->where(Lead::fkColumn('lead_board'), $this->board->getKey())
+            ->where('assigned_to', (string) $userId)
+            ->selectRaw(
+                'SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) as new_today, '
+                . 'SUM(CASE WHEN status = ? AND updated_at >= ? THEN 1 ELSE 0 END) as won_week, '
+                . 'SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as open_mine, '
+                . 'SUM(CASE WHEN status = ? AND reminder_at IS NOT NULL AND reminder_at <= ? THEN 1 ELSE 0 END) as due_today',
+                [
+                    now()->startOfDay(),
+                    LeadStatusEnum::Won->value,
+                    now()->startOfWeek(),
+                    LeadStatusEnum::Active->value,
+                    LeadStatusEnum::Active->value,
+                    now()->endOfDay(),
+                ],
+            )
+            ->first();
+
+        $contactedToday = \JohnWink\FilamentLeadPipeline\Models\LeadActivity::query()
+            ->whereIn('type', [LeadActivityTypeEnum::Call->value, LeadActivityTypeEnum::Email->value])
+            ->where('causer_id', (string) $userId)
+            ->where('created_at', '>=', now()->startOfDay())
+            ->whereHas('lead', fn ($q) => $q->where(Lead::fkColumn('lead_board'), $this->board->getKey()))
+            ->distinct()
+            ->count(\JohnWink\FilamentLeadPipeline\Models\LeadActivity::fkColumn('lead'));
+
+        return [
+            'new_today'       => (int) $totals->new_today,
+            'contacted_today' => $contactedToday,
+            'won_week'        => (int) $totals->won_week,
+            'open_mine'       => (int) $totals->open_mine,
+            'due_today'       => (int) $totals->due_today,
         ];
     }
 
@@ -188,7 +275,7 @@ class KanbanBoard extends Page
     {
         $this->createInPhaseId = $phaseId;
         $this->showCreateModal = true;
-        $this->reset(['newLeadName', 'newLeadEmail', 'newLeadPhone', 'newLeadAssignedUserId']);
+        $this->reset(['newLeadName', 'newLeadEmail', 'newLeadPhone', 'newLeadAssignedUserId', 'duplicateLeadName']);
 
         // Advisors (non-admins) are auto-assigned to leads they create themselves.
         if ( ! $this->isBoardAdmin) {
@@ -196,7 +283,7 @@ class KanbanBoard extends Page
         }
     }
 
-    public function createLead(): void
+    public function createLead(bool $force = false): void
     {
         $this->validate([
             'newLeadName'           => 'required|string|max:255',
@@ -204,6 +291,18 @@ class KanbanBoard extends Page
             'newLeadPhone'          => 'nullable|string|max:50',
             'newLeadAssignedUserId' => 'nullable|string',
         ]);
+
+        if ( ! $force) {
+            $duplicate = $this->board->findDuplicateLead($this->newLeadEmail ?: null, $this->newLeadPhone ?: null);
+
+            if ($duplicate) {
+                $this->duplicateLeadName = $duplicate->name;
+
+                return;
+            }
+        }
+
+        $this->duplicateLeadName = null;
 
         $boardFk = LeadBoard::fkColumn('lead_board');
         $phaseFk = LeadPhase::fkColumn('lead_phase');

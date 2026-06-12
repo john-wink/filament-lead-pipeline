@@ -430,6 +430,14 @@ class LeadBoardResource extends Resource
             ]);
     }
 
+    /** @return array<int, class-string> */
+    public static function getRelations(): array
+    {
+        return [
+            LeadBoardResource\RelationManagers\ReportsRelationManager::class,
+        ];
+    }
+
     public static function getPages(): array
     {
         return [

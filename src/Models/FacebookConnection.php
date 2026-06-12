@@ -75,6 +75,44 @@ class FacebookConnection extends Model
         return null !== $this->token_expires_at && $this->token_expires_at->lessThanOrEqualTo($threshold);
     }
 
+    /** Verdichteter Gesundheitszustand für UI-Ampeln: 'ok' | 'warning' | 'critical'. */
+    public function healthState(): string
+    {
+        $reasons = $this->healthReasons();
+
+        if (in_array('needs_reauth', $reasons, true) || in_array('disabled', $reasons, true)) {
+            return 'critical';
+        }
+
+        return [] === $reasons ? 'ok' : 'warning';
+    }
+
+    /** @return list<string> needs_reauth | disabled | token_expiring | missing_ads_read */
+    public function healthReasons(): array
+    {
+        $reasons = [];
+
+        if (FacebookConnectionStatusEnum::NeedsReauth === $this->status) {
+            $reasons[] = 'needs_reauth';
+        }
+
+        if (FacebookConnectionStatusEnum::Disabled === $this->status) {
+            $reasons[] = 'disabled';
+        }
+
+        $warningDays = (int) config('lead-pipeline.facebook.refresh.warning_days', 7);
+
+        if ($this->isInWarningWindow(now()->addDays($warningDays))) {
+            $reasons[] = 'token_expiring';
+        }
+
+        if ( ! in_array('ads_read', (array) $this->scopes, true)) {
+            $reasons[] = 'missing_ads_read';
+        }
+
+        return $reasons;
+    }
+
     /**
      * Connections the refresher should act on: connected AND either inside the
      * warning window, previously failed transiently, or with unknown expiry.

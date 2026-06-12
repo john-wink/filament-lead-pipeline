@@ -389,13 +389,14 @@ class MetaDriver implements LeadSourceDriver
                             ->send();
                     }
                 }),
+            // Immer sichtbar (Audit: proaktives Reconnect statt erst im Notfall) — Farbe zeigt die Dringlichkeit
             TableAction::make('reconnect')
                 ->label(__('lead-pipeline::lead-pipeline.facebook.reconnect'))
                 ->icon('heroicon-o-arrow-path-rounded-square')
-                ->color('danger')
+                ->color(fn (LeadSource $record): string => $this->connectionUrgencyColor($record))
                 ->url(fn (): string => route('lead-pipeline.facebook.redirect'))
                 ->openUrlInNewTab()
-                ->hidden(fn (LeadSource $record): bool => ! $this->connectionNeedsAttention($record)),
+                ->hidden(fn (LeadSource $record): bool => null === $record->facebookPage?->connection),
         ];
     }
 
@@ -449,6 +450,18 @@ class MetaDriver implements LeadSourceDriver
         }
 
         return (string) $value;
+    }
+
+    private function connectionUrgencyColor(LeadSource $source): string
+    {
+        $connection = $source->facebookPage?->connection;
+
+        return match (true) {
+            null === $connection                                                                                           => 'gray',
+            $connection->needsReauth()                                                                                     => 'danger',
+            $connection->isInWarningWindow(now()->addDays((int) config('lead-pipeline.facebook.refresh.warning_days', 7))) => 'warning',
+            default                                                                                                        => 'gray',
+        };
     }
 
     private function connectionNeedsAttention(LeadSource $source): bool

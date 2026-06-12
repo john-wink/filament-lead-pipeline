@@ -205,10 +205,12 @@ class ReportMetricsService
         }
 
         try {
+            $apiRange = $range->clampForMetaApi();
+
             $reach = app(FacebookGraphService::class)->getAdAccountReach(
                 $source->ad_account_id,
                 $source->connection->access_token,
-                ['since' => $range->from->toDateString(), 'until' => $range->till->toDateString()],
+                ['since' => $apiRange->from->toDateString(), 'until' => $apiRange->till->toDateString()],
                 $source->campaign_ids,
             );
         } catch (RequestException) {

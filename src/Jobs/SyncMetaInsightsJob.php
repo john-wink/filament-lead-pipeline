@@ -172,7 +172,7 @@ class SyncMetaInsightsJob implements ShouldQueue
                 continue;
             }
 
-            $range = ReportDateRange::fromPreset($preset);
+            $range = ReportDateRange::fromPreset($preset)->clampForMetaApi();
 
             $reach = $graph->getAdAccountReach($this->adAccountId, $connection->access_token, [
                 'since' => $range->from->toDateString(),

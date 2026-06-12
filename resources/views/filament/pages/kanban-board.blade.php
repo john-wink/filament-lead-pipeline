@@ -41,7 +41,41 @@
                 </nav>
 
                 {{-- Right: Stats + Filter + New Lead --}}
-                <div class="flex items-center gap-2 flex-shrink-0">
+                <div class="flex items-center gap-2 flex-shrink-0" x-data="{ showConnectionStatus: false }">
+                    {{-- Facebook-Verbindungs-Ampel + Status-Modal --}}
+                    @php $alerts = $this->connectionAlerts; @endphp
+                    <button type="button" @click="showConnectionStatus = true"
+                        class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                        title="{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}">
+                        <span @class([
+                            'inline-block h-2.5 w-2.5 rounded-full',
+                            'bg-red-500'     => 'critical' === $alerts['connection_state'] || $alerts['error_sources'] > 0,
+                            'bg-amber-500'   => 'warning' === $alerts['connection_state'] && 0 === $alerts['error_sources'],
+                            'bg-emerald-500' => 'ok' === $alerts['connection_state'] && 0 === $alerts['error_sources'],
+                        ])></span>
+                        Facebook
+                    </button>
+                    <template x-teleport="body">
+                        <div x-show="showConnectionStatus" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showConnectionStatus = false">
+                            <div class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900">
+                                <div class="mb-4 flex items-center justify-between">
+                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}</h3>
+                                    <button type="button" @click="showConnectionStatus = false" class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                                        <x-heroicon-o-x-mark class="h-5 w-5" />
+                                    </button>
+                                </div>
+                                @livewire('lead-pipeline::facebook-connection-status')
+                            </div>
+                        </div>
+                    </template>
+
+                    @can('viewAny', \JohnWink\FilamentLeadPipeline\Models\LeadReport::class)
+                        <a href="{{ \JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getUrl('edit', ['record' => $this->board]) }}"
+                            class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                            <x-heroicon-o-chart-bar class="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+                            {{ __('lead-pipeline::reports.resource.plural') }}
+                        </a>
+                    @endcan
                     @if($this->activeTab === 'board')
                         {{-- Zentrale Suche über alle Spalten --}}
                         <div class="relative" wire:loading.class="opacity-60" wire:target="search">
@@ -108,6 +142,75 @@
                 </div>
             </div>
         </div>
+
+        {{-- „Mein Tag": persönliche KPIs des Beraters, ohne Modal-Kontextwechsel --}}
+        @if(auth()->check())
+            @php $myDay = $this->myDayStats; @endphp
+            <div class="lead-my-day-strip mb-2 flex flex-wrap items-center gap-2 flex-shrink-0">
+                <span class="text-[11px] font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500">
+                    {{ __('lead-pipeline::lead-pipeline.my_day.title') }}
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs dark:bg-gray-800">
+                    <x-heroicon-o-sparkles class="h-3.5 w-3.5 text-primary-500" />
+                    <span class="font-semibold text-gray-700 dark:text-gray-300">{{ $myDay['new_today'] }}</span>
+                    <span class="text-gray-500 dark:text-gray-400">{{ __('lead-pipeline::lead-pipeline.my_day.new_today') }}</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs dark:bg-gray-800">
+                    <x-heroicon-o-phone class="h-3.5 w-3.5 text-primary-500" />
+                    <span class="font-semibold text-gray-700 dark:text-gray-300">{{ $myDay['contacted_today'] }}</span>
+                    <span class="text-gray-500 dark:text-gray-400">{{ __('lead-pipeline::lead-pipeline.my_day.contacted_today') }}</span>
+                </span>
+                <span @class([
+                    'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs',
+                    'bg-red-50 dark:bg-red-900/20'   => $myDay['due_today'] > 0,
+                    'bg-gray-100 dark:bg-gray-800'   => 0 === $myDay['due_today'],
+                ])>
+                    <x-heroicon-o-bell-alert @class([
+                        'h-3.5 w-3.5',
+                        'text-red-600 dark:text-red-400'     => $myDay['due_today'] > 0,
+                        'text-gray-500 dark:text-gray-400'   => 0 === $myDay['due_today'],
+                    ]) />
+                    <span @class([
+                        'font-semibold',
+                        'text-red-700 dark:text-red-300'     => $myDay['due_today'] > 0,
+                        'text-gray-700 dark:text-gray-300'   => 0 === $myDay['due_today'],
+                    ])>{{ $myDay['due_today'] }}</span>
+                    <span @class([
+                        'text-red-700/70 dark:text-red-300/70' => $myDay['due_today'] > 0,
+                        'text-gray-500 dark:text-gray-400'     => 0 === $myDay['due_today'],
+                    ])>{{ __('lead-pipeline::lead-pipeline.my_day.due_today') }}</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 text-xs dark:bg-emerald-900/20">
+                    <x-heroicon-o-trophy class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span class="font-semibold text-emerald-700 dark:text-emerald-300">{{ $myDay['won_week'] }}</span>
+                    <span class="text-emerald-700/70 dark:text-emerald-300/70">{{ __('lead-pipeline::lead-pipeline.my_day.won_week') }}</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs dark:bg-gray-800">
+                    <x-heroicon-o-inbox-stack class="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+                    <span class="font-semibold text-gray-700 dark:text-gray-300">{{ $myDay['open_mine'] }}</span>
+                    <span class="text-gray-500 dark:text-gray-400">{{ __('lead-pipeline::lead-pipeline.my_day.open_mine') }}</span>
+                </span>
+            </div>
+        @endif
+
+        {{-- Health-Banner: stille Lead-Ausfälle sichtbar machen (Quellen auf Error / Verbindung kritisch) --}}
+        @php $connectionAlerts = $this->connectionAlerts; @endphp
+        @if($connectionAlerts['error_sources'] > 0 || 'critical' === $connectionAlerts['connection_state'])
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-red-300 bg-red-50 px-4 py-2.5 dark:border-red-800 dark:bg-red-900/20 flex-shrink-0">
+                <div class="flex items-center gap-2 text-sm font-medium text-red-800 dark:text-red-200">
+                    <x-heroicon-o-exclamation-triangle class="h-4 w-4 shrink-0" />
+                    @if($connectionAlerts['error_sources'] > 0)
+                        {{ __('lead-pipeline::lead-pipeline.connection_status.banner_sources_error', ['count' => $connectionAlerts['error_sources']]) }}
+                    @else
+                        {{ __('lead-pipeline::lead-pipeline.connection_status.banner_connection_critical') }}
+                    @endif
+                </div>
+                <a href="{{ \JohnWink\FilamentLeadPipeline\Filament\Pages\SourceManagement::getUrl() }}"
+                    class="rounded-lg bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 transition-colors">
+                    {{ __('lead-pipeline::lead-pipeline.connection_status.banner_action') }}
+                </a>
+            </div>
+        @endif
 
         {{-- Filter Bar (page-level, shared between board and list) --}}
         @if($this->showFilters)
@@ -215,6 +318,12 @@
                                 class="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
                             @error('newLeadPhone') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
                         </div>
+                        @if($this->duplicateLeadName)
+                            <div class="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-700 dark:bg-amber-900/20">
+                                <x-heroicon-o-exclamation-triangle class="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                                <p class="text-xs text-amber-800 dark:text-amber-200">{{ __('lead-pipeline::lead-pipeline.lead.duplicate_warning', ['name' => $this->duplicateLeadName]) }}</p>
+                            </div>
+                        @endif
                         @if($this->isBoardAdmin)
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ __('lead-pipeline::lead-pipeline.field.assigned_advisor') }}</label>
@@ -233,11 +342,15 @@
                             class="px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors">
                             {{ __('lead-pipeline::lead-pipeline.actions.cancel') }}
                         </button>
-                        <button wire:click="createLead"
-                            class="px-4 py-2 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+                        <button wire:click="createLead({{ $this->duplicateLeadName ? 'true' : 'false' }})"
+                            @class([
+                                'px-4 py-2 text-sm text-white rounded-lg transition-colors',
+                                'bg-amber-600 hover:bg-amber-700'     => $this->duplicateLeadName,
+                                'bg-primary-600 hover:bg-primary-700' => ! $this->duplicateLeadName,
+                            ])
                             wire:loading.attr="disabled"
                             wire:loading.class="opacity-50">
-                            <span wire:loading.remove wire:target="createLead">{{ __('lead-pipeline::lead-pipeline.lead.create_btn') }}</span>
+                            <span wire:loading.remove wire:target="createLead">{{ $this->duplicateLeadName ? __('lead-pipeline::lead-pipeline.lead.create_anyway') : __('lead-pipeline::lead-pipeline.lead.create_btn') }}</span>
                             <span wire:loading wire:target="createLead">{{ __('lead-pipeline::lead-pipeline.lead.creating') }}</span>
                         </button>
                     </div>
