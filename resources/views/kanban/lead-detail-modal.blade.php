@@ -68,7 +68,7 @@
                             class="cursor-pointer hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                             title="{{ __('lead-pipeline::lead-pipeline.field.click_to_edit') }}">
                             @if($lead->email)
-                                <a href="mailto:{{ $lead->email }}" @click.stop>{{ $lead->email }}</a>
+                                <a href="mailto:{{ $lead->email }}" @click.stop="$wire.logContact('email')">{{ $lead->email }}</a>
                             @else
                                 <span class="italic text-gray-400">{{ __('lead-pipeline::lead-pipeline.field.add_email') }}</span>
                             @endif
@@ -94,7 +94,7 @@
                             class="cursor-pointer hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                             title="{{ __('lead-pipeline::lead-pipeline.field.click_to_edit') }}">
                             @if($lead->phone)
-                                <a href="tel:{{ $lead->phone }}" @click.stop>{{ $lead->phone }}</a>
+                                <a href="tel:{{ $lead->phone }}" @click.stop="$wire.logContact('phone')">{{ $lead->phone }}</a>
                             @else
                                 <span class="italic text-gray-400">{{ __('lead-pipeline::lead-pipeline.field.add_phone') }}</span>
                             @endif
@@ -326,6 +326,93 @@
                             </div>
                         </div>
                     @endif
+                </div>
+
+                <hr class="lead-section-divider" />
+
+                {{-- Wiedervorlage: Rückruf-Termin mit Notiz, damit kein Lead durchs Raster fällt --}}
+                <div x-data="{ showReminderForm: false }">
+                    <h3 class="mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('lead-pipeline::lead-pipeline.reminder.title') }}</h3>
+
+                    @if($lead->reminder_at)
+                        <div @class([
+                            'flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2',
+                            'border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20'         => $lead->hasDueReminder(),
+                            'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20' => ! $lead->hasDueReminder(),
+                        ])>
+                            <div class="flex items-center gap-2 text-xs">
+                                <x-heroicon-o-bell-alert @class([
+                                    'h-4 w-4 shrink-0',
+                                    'text-red-600 dark:text-red-400'     => $lead->hasDueReminder(),
+                                    'text-amber-600 dark:text-amber-400' => ! $lead->hasDueReminder(),
+                                ]) />
+                                <span class="font-medium text-gray-800 dark:text-gray-200">{{ $lead->reminder_at->format('d.m.Y H:i') }}</span>
+                                @if($lead->hasDueReminder())
+                                    <span class="font-semibold text-red-600 dark:text-red-400">{{ __('lead-pipeline::lead-pipeline.reminder.due') }}</span>
+                                @endif
+                                @if($lead->reminder_note)
+                                    <span class="text-gray-600 dark:text-gray-400">{{ $lead->reminder_note }}</span>
+                                @endif
+                            </div>
+                            <button wire:click="clearReminder" wire:loading.attr="disabled"
+                                class="text-xs font-medium text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors">
+                                {{ __('lead-pipeline::lead-pipeline.reminder.clear') }}
+                            </button>
+                        </div>
+                    @endif
+
+                    <div x-show="showReminderForm || @js(null === $lead->reminder_at)" x-cloak="{{ $lead->reminder_at ? 'true' : '' }}" @class(['mt-2 space-y-2' => null !== $lead->reminder_at, 'space-y-2' => null === $lead->reminder_at])>
+                        <div class="flex flex-wrap gap-2">
+                            <input wire:model="reminderAt" type="datetime-local"
+                                min="{{ now()->format('Y-m-d\TH:i') }}"
+                                class="rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500" />
+                            <input wire:model="reminderNote" type="text" maxlength="255"
+                                placeholder="{{ __('lead-pipeline::lead-pipeline.reminder.note_placeholder') }}"
+                                class="flex-1 min-w-[10rem] rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500 placeholder:text-gray-400" />
+                            <button wire:click="setReminder" wire:loading.attr="disabled"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors">
+                                <x-heroicon-o-bell-alert class="h-3.5 w-3.5" />
+                                {{ __('lead-pipeline::lead-pipeline.reminder.save') }}
+                            </button>
+                        </div>
+                        @error('reminderAt') <p class="text-xs text-red-500">{{ $message }}</p> @enderror
+                    </div>
+
+                    @if($lead->reminder_at)
+                        <button x-show="!showReminderForm" @click="showReminderForm = true"
+                            class="mt-2 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 transition-colors">
+                            {{ __('lead-pipeline::lead-pipeline.reminder.change') }}
+                        </button>
+                    @endif
+                </div>
+
+                <hr class="lead-section-divider" />
+
+                {{-- Anruf-Ergebnis: 1 Klick loggt die Standard-Aktivität statt Notiz-Tipparbeit --}}
+                <div wire:loading.class="opacity-50" wire:target="recordCallResult">
+                    <h3 class="mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('lead-pipeline::lead-pipeline.actions.call_result_title') }}</h3>
+                    <div class="flex flex-wrap gap-2">
+                        <button wire:click="recordCallResult('reached')" wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:bg-gray-800 dark:text-emerald-400 dark:hover:bg-emerald-900/20 transition-colors">
+                            <x-heroicon-o-check-circle class="h-4 w-4" />
+                            {{ __('lead-pipeline::lead-pipeline.actions.call_reached') }}
+                        </button>
+                        <button wire:click="recordCallResult('voicemail')" wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                            <x-heroicon-o-speaker-wave class="h-4 w-4" />
+                            {{ __('lead-pipeline::lead-pipeline.actions.call_voicemail') }}
+                        </button>
+                        <button wire:click="recordCallResult('not_reached')" wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                            <x-heroicon-o-phone-x-mark class="h-4 w-4" />
+                            {{ __('lead-pipeline::lead-pipeline.actions.call_not_reached') }}
+                        </button>
+                        <button wire:click="recordCallResult('callback')" wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:bg-gray-800 dark:text-amber-400 dark:hover:bg-amber-900/20 transition-colors">
+                            <x-heroicon-o-clock class="h-4 w-4" />
+                            {{ __('lead-pipeline::lead-pipeline.actions.call_callback') }}
+                        </button>
+                    </div>
                 </div>
 
                 <hr class="lead-section-divider" />

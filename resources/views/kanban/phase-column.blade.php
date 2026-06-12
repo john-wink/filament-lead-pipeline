@@ -1,4 +1,9 @@
-<div class="lead-phase-column" wire:key="phase-col-{{ $phase->getKey() }}" wire:init="init">
+<div class="lead-phase-column" wire:key="phase-col-{{ $phase->getKey() }}" wire:init="init"
+    @if(config('lead-pipeline.kanban.auto_refresh_interval', 0) > 0)
+        {{-- Spalten-Poll (visible): Board-Level-Polling konnte Child-Komponenten nie aktualisieren --}}
+        wire:poll.{{ config('lead-pipeline.kanban.auto_refresh_interval') }}s.visible
+    @endif
+>
     {{-- Header with phase color gradient background --}}
     <div class="lead-phase-header"
         style="border-left: 4px solid {{ $phase->color ?? '#6B7280' }}; background: linear-gradient(135deg, {{ $phase->color ?? '#6B7280' }}08, {{ $phase->color ?? '#6B7280' }}03);">

@@ -44,24 +44,36 @@ function reconnectMetaSource(Team $team, $user, FacebookConnectionStatusEnum $st
     ]);
 }
 
-it('shows the reconnect action when the connection needs reauth', function (): void {
+it('shows the reconnect action in danger color when the connection needs reauth', function (): void {
     $source = reconnectMetaSource($this->team, $this->user, FacebookConnectionStatusEnum::NeedsReauth);
 
     livewire(SourceManagement::class)
-        ->assertTableActionVisible('meta_reconnect', $source);
+        ->assertTableActionVisible('meta_reconnect', $source)
+        ->assertTableActionHasColor('meta_reconnect', 'danger', $source);
 });
 
-it('hides the reconnect action when the connection is healthy', function (): void {
+// UX-Audit Paket 2: Reconnect ist jetzt IMMER sichtbar (proaktiv), die Farbe zeigt die Dringlichkeit
+it('shows the reconnect action in neutral color when the connection is healthy', function (): void {
     $source = reconnectMetaSource($this->team, $this->user, FacebookConnectionStatusEnum::Connected);
 
     livewire(SourceManagement::class)
-        ->assertTableActionHidden('meta_reconnect', $source);
+        ->assertTableActionVisible('meta_reconnect', $source)
+        ->assertTableActionHasColor('meta_reconnect', 'gray', $source);
 });
 
-it('shows the reconnect action when the token is within the warning window', function (): void {
+it('shows the reconnect action in warning color when the token is within the warning window', function (): void {
     $source = reconnectMetaSource($this->team, $this->user, FacebookConnectionStatusEnum::Connected);
     $source->facebookPage->connection->update(['token_expires_at' => now()->addDays(3)]);
 
     livewire(SourceManagement::class)
-        ->assertTableActionVisible('meta_reconnect', $source);
+        ->assertTableActionVisible('meta_reconnect', $source)
+        ->assertTableActionHasColor('meta_reconnect', 'warning', $source);
+});
+
+it('shows the webhook column state for meta sources', function (): void {
+    $source = reconnectMetaSource($this->team, $this->user, FacebookConnectionStatusEnum::Connected);
+    $source->facebookPage->update(['is_webhooks_subscribed' => false]);
+
+    livewire(SourceManagement::class)
+        ->assertTableColumnStateSet('webhooks_active', false, record: $source);
 });

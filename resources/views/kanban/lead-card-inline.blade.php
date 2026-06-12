@@ -6,6 +6,32 @@
     <div class="flex items-start justify-between gap-2 p-3 pb-0 cursor-grab active:cursor-grabbing" data-drag-handle>
         <span class="font-medium text-sm text-gray-900 dark:text-white truncate min-w-0">{{ $lead->name }}</span>
         <div class="flex items-center gap-1.5">
+            @if($lead->reminder_at)
+                <span @class([
+                        'lead-reminder-badge inline-flex items-center gap-0.5 text-[10px] font-medium whitespace-nowrap',
+                        'text-red-600 dark:text-red-400'     => $lead->hasDueReminder(),
+                        'text-amber-600 dark:text-amber-400' => ! $lead->hasDueReminder(),
+                    ])
+                    title="{{ $lead->reminder_at->format('d.m.Y H:i') }}{{ $lead->reminder_note ? ' — ' . $lead->reminder_note : '' }}">
+                    <x-heroicon-m-bell-alert class="w-3 h-3" />
+                    @if($lead->hasDueReminder())
+                        {{ __('lead-pipeline::lead-pipeline.reminder.due') }}
+                    @endif
+                </span>
+            @endif
+            @php $staleness = $lead->staleness(); @endphp
+            <span @class([
+                    'lead-age-badge inline-flex items-center gap-0.5 text-[10px] font-medium whitespace-nowrap',
+                    'text-gray-400 dark:text-gray-500'   => 'fresh' === $staleness,
+                    'text-amber-600 dark:text-amber-400' => 'aging' === $staleness,
+                    'text-red-600 dark:text-red-400'     => 'stale' === $staleness,
+                ])
+                title="{{ __('lead-pipeline::lead-pipeline.card.last_activity_days', ['days' => $lead->daysSinceLastActivity()]) }}">
+                @if('stale' === $staleness)
+                    <x-heroicon-m-exclamation-triangle class="w-3 h-3" />
+                @endif
+                {{ (int) $lead->created_at->diffInDays(now()) }}d
+            </span>
             @if($lead->value)
                 <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                     {{ number_format($lead->value, 0, ',', '.') }} €
@@ -19,10 +45,20 @@
     <div class="px-3 pb-3 pt-2 cursor-pointer" x-on:click="$dispatch('open-lead-detail', { leadId: '{{ $lead->getKey() }}' })">
         <div class="space-y-1 mb-2">
             @if($lead->email)
-                <div class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ $lead->email }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    <a href="mailto:{{ $lead->email }}"
+                        @click.stop="$wire.logContact('{{ $lead->getKey() }}', 'email')"
+                        class="hover:text-primary-600 dark:hover:text-primary-400 hover:underline"
+                        title="{{ __('lead-pipeline::lead-pipeline.actions.contact_email_hint') }}">{{ $lead->email }}</a>
+                </div>
             @endif
             @if($lead->phone)
-                <div class="text-xs text-gray-500 dark:text-gray-400">{{ $lead->phone }}</div>
+                <div class="text-xs text-gray-500 dark:text-gray-400">
+                    <a href="tel:{{ $lead->phone }}"
+                        @click.stop="$wire.logContact('{{ $lead->getKey() }}', 'phone')"
+                        class="hover:text-primary-600 dark:hover:text-primary-400 hover:underline"
+                        title="{{ __('lead-pipeline::lead-pipeline.actions.contact_phone_hint') }}">{{ $lead->phone }}</a>
+                </div>
             @endif
         </div>
 

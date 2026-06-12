@@ -33,6 +33,12 @@ class LeadReportResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
 
+    /** Kein eigenes Nav-Item — Reports sind über das Board (RelationManager) erreichbar. */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return false;
+    }
+
     public static function getModelLabel(): string
     {
         return __('lead-pipeline::reports.resource.singular');

@@ -77,6 +77,16 @@ class KanbanPhaseColumn extends Component
         $this->perPage += (int) config('lead-pipeline.kanban.leads_per_page', 20);
     }
 
+    /** Kontakt-Klick auf der Karte: erst loggen, dann öffnet der Browser tel:/mailto:. */
+    public function logContact(string $leadId, string $channel): void
+    {
+        Lead::query()
+            ->whereKey($leadId)
+            ->where(Lead::fkColumn('lead_board'), $this->phase?->{LeadPhase::fkColumn('lead_board')})
+            ->first()
+            ?->logContactAttempt($channel);
+    }
+
     public function assignUser(string $leadId, string $userId): void
     {
         $lead = Lead::with(['phase', 'board'])->find($leadId);
@@ -144,7 +154,8 @@ class KanbanPhaseColumn extends Component
 
         $query = Lead::query()
             ->where(Lead::fkColumn('lead_phase'), $this->phaseId)
-            ->with(['source', 'assignedUser', 'fieldValues.definition']);
+            ->with(['source', 'assignedUser', 'fieldValues.definition'])
+            ->withMax('activities as last_activity_at', 'created_at');
 
         // Dynamic sort
         $query = match ($this->sortBy) {

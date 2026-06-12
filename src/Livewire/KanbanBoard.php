@@ -35,6 +35,9 @@ class KanbanBoard extends Component
 
     public bool $showCreateModal = false;
 
+    /** Name des Bestandsleads mit gleicher E-Mail/Telefonnummer — steuert die Duplikat-Warnung im Modal. */
+    public ?string $duplicateLeadName = null;
+
     #[Computed]
     public function isBoardAdmin(): bool
     {
@@ -100,7 +103,7 @@ class KanbanBoard extends Component
     {
         $this->createInPhaseId = $phaseId;
         $this->showCreateModal = true;
-        $this->reset(['newLeadName', 'newLeadEmail', 'newLeadPhone', 'newLeadAssignedUserId']);
+        $this->reset(['newLeadName', 'newLeadEmail', 'newLeadPhone', 'newLeadAssignedUserId', 'duplicateLeadName']);
 
         // Advisors (non-admins) are auto-assigned to leads they create themselves.
         if ( ! $this->isBoardAdmin) {
@@ -108,7 +111,7 @@ class KanbanBoard extends Component
         }
     }
 
-    public function createLead(): void
+    public function createLead(bool $force = false): void
     {
         $this->validate([
             'newLeadName'           => 'required|string|max:255',
@@ -116,6 +119,18 @@ class KanbanBoard extends Component
             'newLeadPhone'          => 'nullable|string|max:50',
             'newLeadAssignedUserId' => 'nullable|string',
         ]);
+
+        if ( ! $force) {
+            $duplicate = $this->board->findDuplicateLead($this->newLeadEmail ?: null, $this->newLeadPhone ?: null);
+
+            if ($duplicate) {
+                $this->duplicateLeadName = $duplicate->name;
+
+                return;
+            }
+        }
+
+        $this->duplicateLeadName = null;
 
         $boardFk = LeadBoard::fkColumn('lead_board');
         $phaseFk = LeadPhase::fkColumn('lead_phase');

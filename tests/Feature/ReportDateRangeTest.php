@@ -47,3 +47,19 @@ it('falls back to last30days when custom dates are missing', function (): void {
 
     expect($range->preset)->toBe(ReportDatePresetEnum::Last30Days);
 });
+
+it('clamps meta api ranges to the 37 month insights window', function (): void {
+    $range = ReportDateRange::fromPreset(ReportDatePresetEnum::AllTime);
+
+    $clamped = $range->clampForMetaApi();
+
+    // Meta-Fehler 3018: start darf nicht weiter als 37 Monate zurückliegen — wir klemmen auf 36 Monate (Puffer)
+    expect($clamped->from->toDateString())->toBe(CarbonImmutable::parse('2026-06-10')->subMonthsNoOverflow(36)->toDateString())
+        ->and($clamped->till)->toEqual($range->till);
+});
+
+it('leaves ranges inside the meta window untouched when clamping', function (): void {
+    $range = ReportDateRange::fromPreset(ReportDatePresetEnum::Last30Days);
+
+    expect($range->clampForMetaApi())->toEqual($range);
+});

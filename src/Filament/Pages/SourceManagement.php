@@ -96,9 +96,23 @@ class SourceManagement extends Page implements HasTable
                 Tables\Columns\TextColumn::make('leads_count')
                     ->label(__('lead-pipeline::lead-pipeline.lead.plural'))
                     ->counts('leads'),
+                Tables\Columns\IconColumn::make('webhooks_active')
+                    ->label(__('lead-pipeline::lead-pipeline.facebook.webhooks'))
+                    ->state(fn (LeadSource $record): ?bool => 'meta' === $record->driver
+                        ? (bool) ($record->facebookPage?->is_webhooks_subscribed ?? false)
+                        : null)
+                    ->boolean()
+                    ->trueIcon('heroicon-o-bolt')
+                    ->trueColor('success')
+                    ->falseIcon('heroicon-o-bolt-slash')
+                    ->falseColor('danger')
+                    ->tooltip(fn (LeadSource $record): ?string => 'meta' === $record->driver && true !== $record->facebookPage?->is_webhooks_subscribed
+                        ? __('lead-pipeline::lead-pipeline.facebook.webhooks_inactive_hint')
+                        : null),
                 Tables\Columns\TextColumn::make('last_received_at')
                     ->label(__('lead-pipeline::lead-pipeline.source.last_received'))
-                    ->since(),
+                    ->since()
+                    ->tooltip(fn (LeadSource $record): ?string => $record->last_received_at?->format('d.m.Y H:i')),
             ])
             ->actions([
                 Tables\Actions\ActionGroup::make([

@@ -47,6 +47,22 @@ final readonly class ReportDateRange
         );
     }
 
+    /**
+     * Meta-Insights akzeptieren maximal 37 Monate Rückblick (Fehler #3018) —
+     * für API-Aufrufe wird `from` auf 36 Monate geklemmt (1 Monat Puffer).
+     * Eigene Lead-Daten bleiben davon unberührt.
+     */
+    public function clampForMetaApi(): self
+    {
+        $earliest = CarbonImmutable::now()->startOfDay()->subMonthsNoOverflow(36);
+
+        if ($this->from->gte($earliest)) {
+            return $this;
+        }
+
+        return new self($this->preset, $earliest, $this->till);
+    }
+
     public function days(): int
     {
         return (int) $this->from->diffInDays($this->till) + 1;

@@ -17,16 +17,24 @@ use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Throwable;
 
 class LeadDetailModal extends Component
 {
     private const int ACTIVITIES_PER_PAGE = 10;
+
+    /** @var list<string> */
+    private const array CALL_RESULTS = ['reached', 'voicemail', 'not_reached', 'callback'];
 
     public ?string $leadId = null;
 
     public bool $isOpen = false;
 
     public string $newNote = '';
+
+    public string $reminderAt = '';
+
+    public string $reminderNote = '';
 
     public int $activitiesLimit = self::ACTIVITIES_PER_PAGE;
 
@@ -42,6 +50,9 @@ class LeadDetailModal extends Component
         $this->activitiesLimit = self::ACTIVITIES_PER_PAGE;
         $this->isOpen          = true;
         $this->newNote         = '';
+        $this->reminderAt      = '';
+        $this->reminderNote    = '';
+        $this->resetErrorBag();
         unset($this->lead);
     }
 
@@ -68,8 +79,69 @@ class LeadDetailModal extends Component
 
     public function closeModal(): void
     {
-        $this->reset(['leadId', 'isOpen', 'newNote', 'activitiesLimit']);
+        $this->reset(['leadId', 'isOpen', 'newNote', 'activitiesLimit', 'reminderAt', 'reminderNote']);
         unset($this->lead);
+    }
+
+    /** Wiedervorlage setzen: Termin + optionale Notiz, nachvollziehbar als FollowUp-Activity. */
+    public function setReminder(): void
+    {
+        if ( ! $this->lead) {
+            return;
+        }
+
+        $this->authorizeAccess();
+
+        $this->validate(
+            ['reminderAt' => 'required|date|after:now'],
+            [],
+            ['reminderAt' => __('lead-pipeline::lead-pipeline.reminder.label')],
+        );
+
+        $reminderAt = \Carbon\Carbon::parse($this->reminderAt);
+
+        $this->lead->update([
+            'reminder_at'          => $reminderAt,
+            'reminder_note'        => $this->reminderNote ?: null,
+            'reminder_notified_at' => null,
+        ]);
+
+        $this->lead->activities()->create([
+            'type'        => LeadActivityTypeEnum::FollowUp->value,
+            'description' => __('lead-pipeline::lead-pipeline.reminder.activity_set', ['date' => $reminderAt->format('d.m.Y H:i')])
+                . ($this->reminderNote ? ' — ' . $this->reminderNote : ''),
+            'properties'  => ['reminder_at' => $reminderAt->toDateTimeString(), 'note' => $this->reminderNote ?: null],
+            'causer_type' => config('lead-pipeline.user_model'),
+            'causer_id'   => auth()->id(),
+        ]);
+
+        $this->reminderAt   = '';
+        $this->reminderNote = '';
+        $this->reloadActivities();
+    }
+
+    public function clearReminder(): void
+    {
+        if ( ! $this->lead || null === $this->lead->reminder_at) {
+            return;
+        }
+
+        $this->authorizeAccess();
+
+        $this->lead->update([
+            'reminder_at'          => null,
+            'reminder_note'        => null,
+            'reminder_notified_at' => null,
+        ]);
+
+        $this->lead->activities()->create([
+            'type'        => LeadActivityTypeEnum::FollowUp->value,
+            'description' => __('lead-pipeline::lead-pipeline.reminder.activity_cleared'),
+            'causer_type' => config('lead-pipeline.user_model'),
+            'causer_id'   => auth()->id(),
+        ]);
+
+        $this->reloadActivities();
     }
 
     public function loadMoreActivities(): void
@@ -114,6 +186,39 @@ class LeadDetailModal extends Component
 
         $this->newNote = '';
         $this->reloadActivities();
+    }
+
+    /** Quick-Menu nach dem Telefonat: ein Klick statt Notiz tippen. */
+    public function recordCallResult(string $result): void
+    {
+        if ( ! $this->lead || ! in_array($result, self::CALL_RESULTS, true)) {
+            return;
+        }
+
+        $this->authorizeAccess();
+
+        $this->lead->activities()->create([
+            'type'        => LeadActivityTypeEnum::Call->value,
+            'description' => __('lead-pipeline::lead-pipeline.activity.call_result_' . $result),
+            'properties'  => ['call_result' => $result],
+            'causer_type' => config('lead-pipeline.user_model'),
+            'causer_id'   => auth()->id(),
+        ]);
+
+        $this->reloadActivities();
+    }
+
+    public function logContact(string $channel): void
+    {
+        if ( ! $this->lead) {
+            return;
+        }
+
+        $this->authorizeAccess();
+
+        if (null !== $this->lead->logContactAttempt($channel)) {
+            $this->reloadActivities();
+        }
     }
 
     public function markAsLost(string $reason = ''): void
@@ -278,6 +383,8 @@ class LeadDetailModal extends Component
             $this->dispatch('phase-updated', phaseId: $wonPhase->getKey());
         }
 
+        $this->attemptAutoConversion();
+
         $this->lead->load('phase');
         $this->reloadActivities();
     }
@@ -310,6 +417,41 @@ class LeadDetailModal extends Component
     public function render(): View
     {
         return view('lead-pipeline::kanban.lead-detail-modal', ['lead' => $this->lead]);
+    }
+
+    /**
+     * Config-gated (conversion.auto_convert_on_won): Nach „Gewonnen" automatisch
+     * konvertieren — nur bei genau EINEM registrierten Converter, damit keine
+     * implizite Converter-Wahl getroffen wird. Fehlschläge landen transparent
+     * als Activity am Lead statt still zu versanden.
+     */
+    private function attemptAutoConversion(): void
+    {
+        if ( ! config('lead-pipeline.conversion.auto_convert_on_won', false)) {
+            return;
+        }
+
+        if ($this->lead->conversions()->exists()) {
+            return;
+        }
+
+        $service    = app(\JohnWink\FilamentLeadPipeline\Services\LeadConversionService::class);
+        $converters = $service->getAvailableConverters();
+
+        if (1 !== count($converters)) {
+            return;
+        }
+
+        try {
+            $service->convert($this->lead, (string) array_key_first($converters));
+        } catch (Throwable $exception) {
+            $this->lead->activities()->create([
+                'type'        => LeadActivityTypeEnum::Updated->value,
+                'description' => __('lead-pipeline::lead-pipeline.conversion.auto_failed', ['reason' => $exception->getMessage()]),
+                'causer_type' => config('lead-pipeline.user_model'),
+                'causer_id'   => auth()->id(),
+            ]);
+        }
     }
 
     /** @return array<string, mixed> */

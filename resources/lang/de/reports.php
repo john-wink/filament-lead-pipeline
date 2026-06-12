@@ -71,9 +71,10 @@ return [
         'download_pdf'      => 'PDF erzeugen',
     ],
     'resource' => [
-        'singular' => 'Report',
-        'plural'   => 'Reports',
-        'tabs'     => [
+        'singular'      => 'Report',
+        'create_report' => 'Report erstellen',
+        'plural'        => 'Reports',
+        'tabs'          => [
             'content'    => 'Inhalt',
             'branding'   => 'Branding',
             'sharing'    => 'Teilen',

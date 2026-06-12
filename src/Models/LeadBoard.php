@@ -44,6 +44,11 @@ class LeadBoard extends Model
         return $this->hasMany(LeadPhase::class, static::fkColumn('lead_board'));
     }
 
+    public function reports(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(LeadReport::class, 'lead_report_boards', 'board_uuid', 'report_uuid');
+    }
+
     public function fieldDefinitions(): HasMany
     {
         return $this->hasMany(LeadFieldDefinition::class, static::fkColumn('lead_board'));
@@ -52,6 +57,25 @@ class LeadBoard extends Model
     public function leads(): HasMany
     {
         return $this->hasMany(Lead::class, static::fkColumn('lead_board'));
+    }
+
+    /** Duplikat-Check bei manueller Anlage: gleiche E-Mail oder Telefonnummer auf diesem Board. */
+    public function findDuplicateLead(?string $email, ?string $phone): ?Lead
+    {
+        if (blank($email) && blank($phone)) {
+            return null;
+        }
+
+        return $this->leads()
+            ->where(function (Builder $query) use ($email, $phone): void {
+                if (filled($email)) {
+                    $query->orWhere('email', $email);
+                }
+                if (filled($phone)) {
+                    $query->orWhere('phone', $phone);
+                }
+            })
+            ->first();
     }
 
     public function sources(): HasMany

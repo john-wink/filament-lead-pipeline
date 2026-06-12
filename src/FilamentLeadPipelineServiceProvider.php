@@ -35,6 +35,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                 RefreshFacebookTokensCommand::class,
                 Commands\SyncMetaReportsCommand::class,
                 Commands\SendScheduledReportsCommand::class,
+                Commands\SendLeadRemindersCommand::class,
             ])
             ->hasInstallCommand(function (InstallCommand $command): void {
                 $command
@@ -110,6 +111,21 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
             });
         }
 
+        if (config('lead-pipeline.reminders.enabled', true)) {
+            $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+                $schedule->command(Commands\SendLeadRemindersCommand::class)
+                    ->everyFifteenMinutes()->withoutOverlapping()->onOneServer();
+            });
+        }
+
+        foreach ([
+            Events\FacebookTokenExpiringSoon::class,
+            Events\FacebookTokenRefreshFailed::class,
+            Events\FacebookConnectionNeedsReauth::class,
+        ] as $alertEvent) {
+            \Illuminate\Support\Facades\Event::listen($alertEvent, Listeners\SendFacebookConnectionAlerts::class);
+        }
+
         $this->loadMigrationsFrom(__DIR__ . '/../database/migrations');
         $this->registerLivewireComponents();
 
@@ -125,6 +141,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
     protected function registerLivewireComponents(): void
     {
         Livewire::component('lead-pipeline::public-report-page', \JohnWink\FilamentLeadPipeline\Livewire\PublicReportPage::class);
+        Livewire::component('lead-pipeline::facebook-connection-status', \JohnWink\FilamentLeadPipeline\Livewire\FacebookConnectionStatus::class);
         Livewire::component('lead-pipeline::kanban-board', \JohnWink\FilamentLeadPipeline\Livewire\KanbanBoard::class);
         Livewire::component('lead-pipeline::kanban-phase-column', \JohnWink\FilamentLeadPipeline\Livewire\KanbanPhaseColumn::class);
         Livewire::component('lead-pipeline::lead-card', \JohnWink\FilamentLeadPipeline\Livewire\LeadCard::class);
