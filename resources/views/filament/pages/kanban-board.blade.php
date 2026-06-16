@@ -88,18 +88,16 @@
                         ])></span>
                         <x-heroicon-o-share class="h-3.5 w-3.5" />
                     </button>
-                    @if($this->activeTab === 'board')
-                        <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700"></span>
-                        <button
-                            type="button"
-                            x-on:click="$dispatch('open-create-modal')"
-                            class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-2.5 py-1.5 text-white shadow-sm hover:bg-primary-700 transition-colors"
-                            aria-label="{{ __('lead-pipeline::lead-pipeline.lead.add') }}"
-                            title="{{ __('lead-pipeline::lead-pipeline.lead.add') }}"
-                        >
-                            <x-heroicon-o-plus class="h-3.5 w-3.5" />
-                        </button>
-                    @endif
+                    <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700"></span>
+                    <button
+                        type="button"
+                        x-on:click="$dispatch('open-create-modal')"
+                        class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-2.5 py-1.5 text-white shadow-sm hover:bg-primary-700 transition-colors"
+                        aria-label="{{ __('lead-pipeline::lead-pipeline.lead.add') }}"
+                        title="{{ __('lead-pipeline::lead-pipeline.lead.add') }}"
+                    >
+                        <x-heroicon-o-plus class="h-3.5 w-3.5" />
+                    </button>
                 </div>
             </div>
 
