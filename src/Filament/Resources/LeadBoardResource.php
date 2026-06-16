@@ -22,6 +22,7 @@ use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoardSharedTenant;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoardTeamShare;
+use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
 use Throwable;
 
 class LeadBoardResource extends Resource
@@ -171,26 +172,21 @@ class LeadBoardResource extends Resource
                                 Forms\Components\Select::make('conversion_target')
                                     ->label(__('lead-pipeline::lead-pipeline.phase.conversion_target'))
                                     ->visible(fn (Forms\Get $get): bool => (bool) $get('auto_convert'))
-                                    ->options(function (): array {
-                                        $plugin = filament()->getCurrentPanel()?->getPlugin('filament-lead-pipeline');
-
-                                        if ( ! $plugin instanceof FilamentLeadPipelinePlugin) {
-                                            return [];
-                                        }
-
-                                        return collect($plugin->getConverters())
-                                            ->mapWithKeys(fn (string $class, string $key) => [
-                                                $key => app($class)->getDisplayName(),
-                                            ])
-                                            ->toArray();
-                                    })
+                                    ->required(fn (Forms\Get $get): bool => (bool) $get('auto_convert'))
+                                    ->helperText(__('lead-pipeline::lead-pipeline.board_edit.converter_help'))
+                                    ->options(fn (): array => static::registeredConverterOptions())
+                                    ->rules([
+                                        fn (): string => 'in:' . implode(',', array_map(
+                                            static fn ($key): string => (string) $key,
+                                            array_keys(static::registeredConverterOptions()),
+                                        )),
+                                    ])
                                     ->placeholder(__('lead-pipeline::lead-pipeline.phase.converter_select')),
                             ])
                             ->orderColumn('sort')
-                            ->reorderable(fn (?LeadBoard $record): bool => ! $record?->hasLeads())
-                            ->addable(fn (?LeadBoard $record): bool => ! $record?->hasLeads())
-                            ->deletable(fn (?LeadBoard $record): bool => ! $record?->hasLeads())
-                            ->disabled(fn (?LeadBoard $record): bool => (bool) $record?->hasLeads())
+                            ->reorderable()
+                            ->addable()
+                            ->deletable()
                             ->collapsible()
                             ->defaultItems(0)
                             ->columns(2),
@@ -219,12 +215,14 @@ class LeadBoardResource extends Resource
                                     ->label(__('lead-pipeline::lead-pipeline.field.key'))
                                     ->required()
                                     ->alphaDash()
-                                    ->maxLength(255),
+                                    ->maxLength(255)
+                                    ->disabled(fn (?LeadFieldDefinition $record): bool => (bool) $record?->values()->exists()),
                                 Forms\Components\Select::make('type')
                                     ->label(__('lead-pipeline::lead-pipeline.field.type'))
                                     ->options(LeadFieldTypeEnum::class)
                                     ->required()
-                                    ->reactive(),
+                                    ->reactive()
+                                    ->disabled(fn (?LeadFieldDefinition $record): bool => (bool) $record?->values()->exists()),
                                 Forms\Components\KeyValue::make('options')
                                     ->label(__('lead-pipeline::lead-pipeline.field.options'))
                                     ->visible(fn (Forms\Get $get): bool => in_array($get('type'), ['select', 'multi_select'])),
@@ -232,10 +230,9 @@ class LeadBoardResource extends Resource
                                     ->label(__('lead-pipeline::lead-pipeline.field.show_in_card')),
                             ])
                             ->orderColumn('sort')
-                            ->reorderable(fn (?LeadBoard $record): bool => ! $record?->hasLeads())
-                            ->addable(fn (?LeadBoard $record): bool => ! $record?->hasLeads())
-                            ->deletable(fn (?LeadBoard $record): bool => ! $record?->hasLeads())
-                            ->disabled(fn (?LeadBoard $record): bool => (bool) $record?->hasLeads())
+                            ->reorderable()
+                            ->addable()
+                            ->deletable()
                             ->collapsible()
                             ->defaultItems(0)
                             ->columns(2),
@@ -430,7 +427,6 @@ class LeadBoardResource extends Resource
             ]);
     }
 
-    /** @return array<int, class-string> */
     public static function getRelations(): array
     {
         return [
@@ -445,6 +441,23 @@ class LeadBoardResource extends Resource
             'create' => Pages\CreateLeadBoard::route('/create'),
             'edit'   => Pages\EditLeadBoard::route('/{record}/edit'),
         ];
+    }
+
+    /** @return array<int, class-string> */
+    /** @return array<string, string> Registrierte Converter des aktuellen Panels (Key => Anzeigename). */
+    protected static function registeredConverterOptions(): array
+    {
+        $plugin = filament()->getCurrentPanel()?->getPlugin('filament-lead-pipeline');
+
+        if ( ! $plugin instanceof FilamentLeadPipelinePlugin) {
+            return [];
+        }
+
+        return collect($plugin->getConverters())
+            ->mapWithKeys(fn (string $class, string $key): array => [
+                (string) $key => app($class)->getDisplayName(),
+            ])
+            ->toArray();
     }
 
     /**

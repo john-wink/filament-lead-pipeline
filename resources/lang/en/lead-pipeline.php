@@ -23,7 +23,7 @@ return [
         'auto_move_phase'               => 'Move to phase on assignment',
         'auto_move_none'                => 'Do not move automatically',
         'auto_move_help'                => 'When a lead is assigned, automatically move it to this phase.',
-        'has_leads_hint'                => 'This board already has leads. Phases and fields can no longer be edited.',
+        'has_leads_hint'                => 'This board already has leads. You can add and rename fields and phases; the key and type of existing fields with values are locked, and deleting populated elements is disabled.',
         'created_at'                    => 'Created at',
         'sharing'                       => 'Sharing',
         'shared_boards'                 => 'Share this board',
@@ -222,6 +222,15 @@ return [
     ],
     'conversion' => [
         'auto_failed' => 'Automatic conversion failed: :reason',
+    ],
+
+    'board_edit' => [
+        'field_locked'               => 'Key and type cannot be changed while the field has values or is a system field.',
+        'field_delete_blocked'       => 'The field cannot be deleted while it has values or is a system field.',
+        'duplicate_terminal'         => 'Only one Won and one Lost phase is allowed per board.',
+        'phase_delete_has_leads'     => 'The phase cannot be deleted while leads are assigned to it.',
+        'phase_delete_last_terminal' => 'The last Won or Lost phase cannot be deleted.',
+        'converter_help'             => 'When auto-conversion is on, a target converter is required; it only fires in terminal phases (Won/Lost).',
     ],
 
     'transfer' => [

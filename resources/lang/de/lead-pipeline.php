@@ -23,7 +23,7 @@ return [
         'auto_move_phase'               => 'Bei Zuweisung in Phase verschieben',
         'auto_move_none'                => 'Nicht automatisch verschieben',
         'auto_move_help'                => 'Wenn ein Lead zugewiesen wird, automatisch in diese Phase verschieben.',
-        'has_leads_hint'                => 'Dieses Board hat bereits Leads. Phasen und Felder können nicht mehr bearbeitet werden.',
+        'has_leads_hint'                => 'Dieses Board hat bereits Leads. Felder und Phasen kannst du ergänzen und umbenennen; Schlüssel und Typ bestehender Felder mit Werten sind gesperrt, und das Löschen befüllter Elemente ist deaktiviert.',
         'created_at'                    => 'Erstellt am',
         'sharing'                       => 'Freigaben',
         'shared_boards'                 => 'Dieses Board freigeben',
@@ -222,6 +222,15 @@ return [
     ],
     'conversion' => [
         'auto_failed' => 'Automatische Konvertierung nicht möglich: :reason',
+    ],
+
+    'board_edit' => [
+        'field_locked'               => 'Schlüssel und Typ können nicht geändert werden, solange das Feld Werte hat oder ein Systemfeld ist.',
+        'field_delete_blocked'       => 'Das Feld kann nicht gelöscht werden, solange es Werte hat oder ein Systemfeld ist.',
+        'duplicate_terminal'         => 'Pro Board ist nur eine Gewonnen- und eine Verloren-Phase erlaubt.',
+        'phase_delete_has_leads'     => 'Die Phase kann nicht gelöscht werden, solange ihr Leads zugeordnet sind.',
+        'phase_delete_last_terminal' => 'Die letzte Gewonnen- bzw. Verloren-Phase kann nicht gelöscht werden.',
+        'converter_help'             => 'Bei aktiver Auto-Konvertierung ist ein Ziel-Converter Pflicht; er greift nur in terminalen Phasen (Gewonnen/Verloren).',
     ],
 
     'transfer' => [

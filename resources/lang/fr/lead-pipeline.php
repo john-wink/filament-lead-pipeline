@@ -23,7 +23,7 @@ return [
         'auto_move_phase'               => 'Déplacer vers la phase lors de l\'attribution',
         'auto_move_none'                => 'Ne pas déplacer automatiquement',
         'auto_move_help'                => 'Lorsqu\'un lead est attribué, le déplacer automatiquement vers cette phase.',
-        'has_leads_hint'                => 'Ce tableau contient déjà des leads. Les phases et les champs ne peuvent plus être modifiés.',
+        'has_leads_hint'                => 'Ce tableau contient déjà des leads. Vous pouvez ajouter et renommer des champs et des phases ; la clé et le type des champs existants avec des valeurs sont verrouillés, et la suppression des éléments remplis est désactivée.',
         'created_at'                    => 'Créé le',
         'sharing'                       => 'Partages',
         'shared_boards'                 => 'Partager ce tableau',
@@ -220,6 +220,15 @@ return [
     ],
     'conversion' => [
         'auto_failed' => 'Conversion automatique impossible : :reason',
+    ],
+
+    'board_edit' => [
+        'field_locked'               => 'La clé et le type ne peuvent pas être modifiés tant que le champ a des valeurs ou est un champ système.',
+        'field_delete_blocked'       => 'Le champ ne peut pas être supprimé tant qu’il a des valeurs ou est un champ système.',
+        'duplicate_terminal'         => 'Une seule phase Gagné et une seule phase Perdu sont autorisées par tableau.',
+        'phase_delete_has_leads'     => 'La phase ne peut pas être supprimée tant que des leads y sont associés.',
+        'phase_delete_last_terminal' => 'La dernière phase Gagné ou Perdu ne peut pas être supprimée.',
+        'converter_help'             => 'Lorsque la conversion automatique est activée, un convertisseur cible est obligatoire ; il ne s’applique qu’aux phases terminales (Gagné/Perdu).',
     ],
 
     'transfer' => [
