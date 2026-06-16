@@ -62,6 +62,7 @@ return [
         'create_anyway'     => 'Trotzdem erstellen',
         'creating'          => 'Erstelle...',
         'new_lead'          => 'Neuer Lead',
+        'add'               => 'Neu anlegen',
         'drag_here'         => 'Leads hierher ziehen',
         'no_data'           => 'Keine Daten',
         'created_at'        => 'Erstellt am :date',

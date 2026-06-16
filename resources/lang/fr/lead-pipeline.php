@@ -62,6 +62,7 @@ return [
         'create_anyway'     => 'Créer quand même',
         'creating'          => 'Création...',
         'new_lead'          => 'Nouveau lead',
+        'add'               => 'Ajouter',
         'drag_here'         => 'Déposer des leads ici',
         'no_data'           => 'Aucune donnée',
         'created_at'        => 'Créé le :date',

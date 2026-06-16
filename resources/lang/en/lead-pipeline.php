@@ -62,6 +62,7 @@ return [
         'create_anyway'     => 'Create anyway',
         'creating'          => 'Creating...',
         'new_lead'          => 'New Lead',
+        'add'               => 'Add new',
         'drag_here'         => 'Drag leads here',
         'no_data'           => 'No data',
         'created_at'        => 'Created at :date',

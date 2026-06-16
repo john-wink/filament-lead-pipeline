@@ -10,10 +10,11 @@
         @endif
     >
         {{-- Tab Navigation + Toolbar in one row --}}
-        <div class="border-b border-gray-200 dark:border-gray-700 mb-2 flex-shrink-0">
-            <div class="flex items-center justify-between gap-4">
-                {{-- Left: Tabs --}}
-                <nav class="flex gap-4 min-w-0" aria-label="Tabs">
+        <div x-data="{ showConnectionStatus: false }" class="border-b border-gray-200 dark:border-gray-700 mb-2 flex-shrink-0">
+            {{-- Zeile 1: Navigation (Tabs) + Aktionen --}}
+            <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                {{-- Tabs --}}
+                <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 min-w-0" aria-label="Tabs">
                     <button
                         wire:click="setActiveTab('board')"
                         @class([
@@ -40,70 +41,8 @@
                     @endforeach
                 </nav>
 
-                {{-- Right: Stats + Filter + New Lead --}}
-                <div class="flex items-center gap-2 flex-shrink-0" x-data="{ showConnectionStatus: false }">
-                    {{-- Facebook-Verbindungs-Ampel + Status-Modal --}}
-                    @php $alerts = $this->connectionAlerts; @endphp
-                    <button type="button" @click="showConnectionStatus = true"
-                        class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
-                        title="{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}">
-                        <span @class([
-                            'inline-block h-2.5 w-2.5 rounded-full',
-                            'bg-red-500'     => 'critical' === $alerts['connection_state'] || $alerts['error_sources'] > 0,
-                            'bg-amber-500'   => 'warning' === $alerts['connection_state'] && 0 === $alerts['error_sources'],
-                            'bg-emerald-500' => 'ok' === $alerts['connection_state'] && 0 === $alerts['error_sources'],
-                        ])></span>
-                        Facebook
-                    </button>
-                    <template x-teleport="body">
-                        <div x-show="showConnectionStatus" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showConnectionStatus = false">
-                            <div class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900">
-                                <div class="mb-4 flex items-center justify-between">
-                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}</h3>
-                                    <button type="button" @click="showConnectionStatus = false" class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
-                                        <x-heroicon-o-x-mark class="h-5 w-5" />
-                                    </button>
-                                </div>
-                                @livewire('lead-pipeline::facebook-connection-status')
-                            </div>
-                        </div>
-                    </template>
-
-                    @can('viewAny', \JohnWink\FilamentLeadPipeline\Models\LeadReport::class)
-                        <a href="{{ \JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getUrl('edit', ['record' => $this->board]) }}"
-                            class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
-                            <x-heroicon-o-chart-bar class="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
-                            {{ __('lead-pipeline::reports.resource.plural') }}
-                        </a>
-                    @endcan
-                    @if($this->activeTab === 'board')
-                        {{-- Zentrale Suche über alle Spalten --}}
-                        <div class="relative" wire:loading.class="opacity-60" wire:target="search">
-                            <x-heroicon-o-magnifying-glass class="pointer-events-none -translate-y-1/2 start-2 top-1/2 absolute h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
-                            <input type="text"
-                                wire:model.live.debounce.400ms="search"
-                                placeholder="{{ __('lead-pipeline::lead-pipeline.actions.search') }}"
-                                class="w-44 text-xs rounded-lg border-gray-200 bg-white ps-7 pr-3 py-1.5 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-colors">
-                        </div>
-                    @endif
-                    @if($this->activeTab === 'board')
-                        @php
-                            $totalLeads = $this->boardStats['leads'];
-                            $totalValue = $this->boardStats['value'];
-                        @endphp
-                        <div class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 dark:bg-gray-800">
-                            <x-heroicon-o-users class="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
-                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ number_format($totalLeads) }}</span>
-                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('lead-pipeline::lead-pipeline.lead.plural') }}</span>
-                        </div>
-                        <div class="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 dark:bg-emerald-900/20">
-                            <x-heroicon-o-currency-euro class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                            <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
-                                {{ number_format($totalValue, 0, ',', '.') }} &euro;
-                            </span>
-                        </div>
-                        <span class="mx-1 h-5 w-px bg-gray-200 dark:bg-gray-700"></span>
-                    @endif
+                {{-- Aktionen: sekundär (Ghost) + Trenner + primärer CTA --}}
+                <div class="flex flex-wrap items-center gap-2">
                     <button
                         type="button"
                         wire:click="toggleFilters"
@@ -129,18 +68,87 @@
                         <x-heroicon-o-chart-bar class="h-3.5 w-3.5" />
                         {{ __('lead-pipeline::lead-pipeline.analytics.title') }}
                     </button>
+                    @can('viewAny', \JohnWink\FilamentLeadPipeline\Models\LeadReport::class)
+                        <a href="{{ \JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getUrl('edit', ['record' => $this->board]) }}"
+                            class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
+                            <x-heroicon-o-document-chart-bar class="h-3.5 w-3.5" />
+                            {{ __('lead-pipeline::reports.resource.plural') }}
+                        </a>
+                    @endcan
+                    {{-- Facebook-Verbindungs-Ampel (icon-only) --}}
+                    @php $alerts = $this->connectionAlerts; @endphp
+                    <button type="button" @click="showConnectionStatus = true"
+                        class="relative inline-flex items-center justify-center rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-gray-600 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors"
+                        aria-label="Facebook" title="{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}">
+                        <x-heroicon-o-share class="h-3.5 w-3.5" />
+                        <span @class([
+                            'absolute -top-0.5 -right-0.5 inline-block h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-gray-800',
+                            'bg-red-500'     => 'critical' === $alerts['connection_state'] || $alerts['error_sources'] > 0,
+                            'bg-amber-500'   => 'warning' === $alerts['connection_state'] && 0 === $alerts['error_sources'],
+                            'bg-emerald-500' => 'ok' === $alerts['connection_state'] && 0 === $alerts['error_sources'],
+                        ])></span>
+                    </button>
                     @if($this->activeTab === 'board')
+                        <span class="mx-0.5 h-5 w-px bg-gray-200 dark:bg-gray-700"></span>
                         <button
                             type="button"
                             x-on:click="$dispatch('open-create-modal')"
-                            class="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1 text-xs font-medium text-white shadow-sm hover:bg-primary-700 transition-colors"
+                            class="inline-flex items-center justify-center rounded-lg bg-primary-600 px-2.5 py-1.5 text-white shadow-sm hover:bg-primary-700 transition-colors"
+                            aria-label="{{ __('lead-pipeline::lead-pipeline.lead.add') }}"
+                            title="{{ __('lead-pipeline::lead-pipeline.lead.add') }}"
                         >
-                            <x-heroicon-o-plus class="h-3.5 w-3.5" />
-                            {{ __('lead-pipeline::lead-pipeline.lead.new_lead') }}
+                            <x-heroicon-o-plus class="h-4 w-4" />
                         </button>
                     @endif
                 </div>
             </div>
+
+            {{-- Zeile 2: Suche + Kennzahlen (nur Board-Ansicht) --}}
+            @if($this->activeTab === 'board')
+                @php
+                    $totalLeads = $this->boardStats['leads'];
+                    $totalValue = $this->boardStats['value'];
+                @endphp
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-gray-100 dark:border-gray-800 pt-2">
+                    {{-- Zentrale Suche über alle Spalten --}}
+                    <div class="relative" wire:loading.class="opacity-60" wire:target="search">
+                        <x-heroicon-o-magnifying-glass class="pointer-events-none -translate-y-1/2 start-2 top-1/2 absolute h-3.5 w-3.5 text-gray-400 dark:text-gray-500" />
+                        <input type="text"
+                            wire:model.live.debounce.400ms="search"
+                            placeholder="{{ __('lead-pipeline::lead-pipeline.actions.search') }}"
+                            class="w-56 max-w-full text-xs rounded-lg border-gray-200 bg-white ps-7 pr-3 py-1.5 dark:border-gray-700 dark:bg-gray-800/50 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500 placeholder:text-gray-400 dark:placeholder:text-gray-500 transition-colors">
+                    </div>
+                    {{-- Kennzahlen --}}
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="flex items-center gap-1.5 rounded-lg bg-gray-100 px-2.5 py-1 dark:bg-gray-800">
+                            <x-heroicon-o-users class="h-3.5 w-3.5 text-gray-500 dark:text-gray-400" />
+                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ number_format($totalLeads) }}</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">{{ __('lead-pipeline::lead-pipeline.lead.plural') }}</span>
+                        </div>
+                        <div class="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1 dark:bg-emerald-900/20">
+                            <x-heroicon-o-currency-euro class="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                                {{ number_format($totalValue, 0, ',', '.') }} &euro;
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
+            {{-- Facebook Status-Modal --}}
+            <template x-teleport="body">
+                <div x-show="showConnectionStatus" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showConnectionStatus = false">
+                    <div class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900">
+                        <div class="mb-4 flex items-center justify-between">
+                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}</h3>
+                            <button type="button" @click="showConnectionStatus = false" class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                                <x-heroicon-o-x-mark class="h-5 w-5" />
+                            </button>
+                        </div>
+                        @livewire('lead-pipeline::facebook-connection-status')
+                    </div>
+                </div>
+            </template>
         </div>
 
         {{-- „Mein Tag": persönliche KPIs des Beraters, ohne Modal-Kontextwechsel --}}
