@@ -69,7 +69,7 @@
                         {{ __('lead-pipeline::lead-pipeline.analytics.title') }}
                     </button>
                     @can('viewAny', \JohnWink\FilamentLeadPipeline\Models\LeadReport::class)
-                        <a href="{{ \JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getUrl('edit', ['record' => $this->board]) }}"
+                        <a href="{{ \JohnWink\FilamentLeadPipeline\Filament\Resources\LeadReportResource::getUrl('index') }}"
                             class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
                             <x-heroicon-o-document-chart-bar class="h-3.5 w-3.5" />
                             {{ __('lead-pipeline::reports.resource.plural') }}
