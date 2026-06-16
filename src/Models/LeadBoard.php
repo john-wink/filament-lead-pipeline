@@ -156,6 +156,15 @@ class LeadBoard extends Model
             || $this->isSharedWith($tenant);
     }
 
+    public function transferEnabled(): bool
+    {
+        if ( ! config('lead-pipeline.transfer.enabled', true)) {
+            return false;
+        }
+
+        return (bool) ($this->settings['transfer_enabled'] ?? false);
+    }
+
     public function scopeVisibleToTenant(Builder $query, ?Model $tenant): Builder
     {
         if (null === $tenant || ! config('lead-pipeline.tenancy.enabled')) {

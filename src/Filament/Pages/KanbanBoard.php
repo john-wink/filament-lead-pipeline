@@ -9,6 +9,7 @@ use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
@@ -386,6 +387,15 @@ class KanbanBoard extends Page
             $this->dispatch('phase-updated', phaseId: $oldPhase->getKey());
         }
         $this->dispatch('phase-updated', phaseId: $newPhase->getKey());
+
+        if (
+            LeadPhaseTypeEnum::Won === $newPhase->type
+            && $this->board->transferEnabled()
+            && ($this->board->settings['prompt_on_won'] ?? false)
+            && ! $lead->isTransferred()
+        ) {
+            $this->dispatch('open-lead-detail', leadId: $lead->getKey());
+        }
     }
 
     /**

@@ -11,9 +11,12 @@ use Illuminate\Validation\ValidationException;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
+use JohnWink\FilamentLeadPipeline\Exceptions\LeadAlreadyTransferredException;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use JohnWink\FilamentLeadPipeline\Services\LeadTransferService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -37,6 +40,16 @@ class LeadDetailModal extends Component
     public string $reminderNote = '';
 
     public int $activitiesLimit = self::ACTIVITIES_PER_PAGE;
+
+    public ?string $transferTargetBoardId = null;
+
+    public ?string $transferTargetPhaseId = null;
+
+    public ?string $transferAssigneeId = null;
+
+    public string $transferNote = '';
+
+    public bool $showTransferForm = false;
 
     /** Request-Cache der Board-Phasen — das Blade fragt sie mehrfach ab. */
     private ?Collection $boardPhasesCache = null;
@@ -387,6 +400,14 @@ class LeadDetailModal extends Component
 
         $this->lead->load('phase');
         $this->reloadActivities();
+
+        if (
+            $this->lead->board?->transferEnabled()
+            && ($this->lead->board->settings['prompt_on_won'] ?? false)
+            && ! $this->lead->isTransferred()
+        ) {
+            $this->openTransferForm();
+        }
     }
 
     public function changePhase(string $phaseId): void
@@ -412,6 +433,101 @@ class LeadDetailModal extends Component
 
         $this->lead->load('phase');
         $this->reloadActivities();
+    }
+
+    public function openTransferForm(): void
+    {
+        $this->showTransferForm      = true;
+        $this->transferNote          = '';
+        $this->transferTargetBoardId = null;
+        $this->transferTargetPhaseId = null;
+        $this->transferAssigneeId    = null;
+        $this->resetErrorBag();
+    }
+
+    /** @return Collection<int, LeadBoard> */
+    public function transferableBoards(): Collection
+    {
+        if ( ! $this->lead) {
+            return collect();
+        }
+
+        $tenant = function_exists('filament') ? filament()->getTenant() : null;
+
+        $query = LeadBoard::query()
+            ->visibleToTenant($tenant)
+            ->where('is_active', true)
+            ->whereKeyNot($this->lead->{Lead::fkColumn('lead_board')});
+
+        $filterClass = config('lead-pipeline.transfer.board_filter');
+        if ($filterClass) {
+            $query = app($filterClass)->apply($query, $tenant);
+        }
+
+        return $query->orderBy('name')->get();
+    }
+
+    public function transferToBoard(): void
+    {
+        if ( ! $this->lead) {
+            return;
+        }
+
+        $this->authorizeAccess();
+
+        $this->validate([
+            'transferTargetBoardId' => 'required|string',
+            'transferNote'          => 'required|string|min:3',
+        ]);
+
+        $target = $this->transferableBoards()->firstWhere(LeadBoard::pkColumn(), $this->transferTargetBoardId);
+
+        if ( ! $target) {
+            $this->addError('transferTargetBoardId', __('lead-pipeline::lead-pipeline.transfer.board_label'));
+
+            return;
+        }
+
+        $phase = $this->transferTargetPhaseId ? LeadPhase::find($this->transferTargetPhaseId) : null;
+
+        try {
+            app(LeadTransferService::class)->transfer(
+                $this->lead,
+                $target,
+                $phase,
+                $this->transferAssigneeId,
+                $this->transferNote,
+            );
+        } catch (LeadAlreadyTransferredException) {
+            \Filament\Notifications\Notification::make()
+                ->title(__('lead-pipeline::lead-pipeline.transfer.already_transferred'))
+                ->warning()
+                ->send();
+
+            return;
+        }
+
+        $this->showTransferForm = false;
+        $this->reloadActivities();
+        $this->dispatch('phase-updated', phaseId: $this->lead->phase?->getKey());
+
+        \Filament\Notifications\Notification::make()
+            ->title(__('lead-pipeline::lead-pipeline.transfer.success', ['board' => $target->name]))
+            ->success()
+            ->send();
+    }
+
+    public function originLead(): ?Lead
+    {
+        return $this->lead?->originLead()?->load($this->activityRelations());
+    }
+
+    /** @return Collection<int, Lead> */
+    public function forwardLeads(): Collection
+    {
+        return $this->lead
+            ? $this->lead->transferredLeads()->with('board', 'phase')->get()
+            : collect();
     }
 
     public function render(): View

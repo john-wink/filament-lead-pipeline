@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use JohnWink\FilamentLeadPipeline\Concerns\HasConfigurablePrimaryKey;
 use JohnWink\FilamentLeadPipeline\Database\Factories\LeadFactory;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 
 class Lead extends Model
@@ -168,6 +169,31 @@ class Lead extends Model
     public function latestConversion(): HasOne
     {
         return $this->hasOne(LeadConversion::class, static::fkColumn('lead'))->latestOfMany();
+    }
+
+    public function originLead(): ?self
+    {
+        if (blank($this->external_id)) {
+            return null;
+        }
+
+        $source = $this->source;
+        if ( ! $source || LeadSourceTypeEnum::InternalTransfer->value !== $source->driver) {
+            return null;
+        }
+
+        return static::withTrashed()->find($this->external_id);
+    }
+
+    public function transferredLeads(): HasMany
+    {
+        return $this->hasMany(static::class, 'external_id', $this->getKeyName())
+            ->whereHas('source', fn (Builder $q): Builder => $q->where('driver', LeadSourceTypeEnum::InternalTransfer->value));
+    }
+
+    public function isTransferred(): bool
+    {
+        return null !== $this->originLead();
     }
 
     public function scopeOrdered(Builder $query): Builder

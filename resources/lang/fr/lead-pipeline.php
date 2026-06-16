@@ -221,6 +221,21 @@ return [
         'auto_failed' => 'Conversion automatique impossible : :reason',
     ],
 
+    'transfer' => [
+        'source_name'         => 'Transfert depuis %s',
+        'title'               => 'Transférer vers un autre tableau',
+        'board_label'         => 'Tableau cible',
+        'phase_label'         => 'Phase cible',
+        'assignee_label'      => 'Collaborateur onboarding',
+        'note_label'          => 'À quoi faut-il faire attention ?',
+        'submit'              => 'Transférer',
+        'cancel'              => 'Annuler',
+        'success'             => 'Lead transféré vers :board',
+        'already_transferred' => 'Ce lead a déjà été transféré vers ce tableau.',
+        'origin_heading'      => 'Transféré depuis %s',
+        'forward_heading'     => 'Transféré vers %s',
+    ],
+
     'reminder' => [
         'title'              => 'Relance',
         'label'              => 'Date de relance',
@@ -322,6 +337,9 @@ return [
         'follow_up'               => 'Relance',
         'contact_email'           => 'E-mail lancé : :target',
         'converted_with'          => 'Lead converti avec "%s" vers %s #%s',
+        'transferred'             => 'Transféré',
+        'transferred_from'        => 'Transféré depuis %s',
+        'transferred_to'          => 'Transféré vers %s',
     ],
     'status' => [
         'active'    => 'Actif',
@@ -489,7 +507,8 @@ return [
         'label'      => 'Tri',
     ],
     'source_type' => [
-        'manual' => 'Manuel',
+        'manual'            => 'Manuel',
+        'internal_transfer' => 'Transfert',
     ],
     'phase_display_type' => [
         'list' => 'Liste',

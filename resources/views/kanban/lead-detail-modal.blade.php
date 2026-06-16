@@ -328,6 +328,46 @@
                     @endif
                 </div>
 
+                @if($lead->board?->transferEnabled() && ! $lead->isTransferred())
+                    <div class="flex gap-2">
+                        <button wire:click="openTransferForm"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 py-2 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:bg-gray-800 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors">
+                            <x-heroicon-o-arrow-right-circle class="h-4 w-4" />
+                            {{ __('lead-pipeline::lead-pipeline.transfer.title') }}
+                        </button>
+                    </div>
+
+                    @if($showTransferForm)
+                        <div class="mt-3 w-full space-y-2 rounded-lg border border-blue-200 bg-blue-50/50 p-3 dark:border-blue-800 dark:bg-blue-900/10">
+                            <select wire:model="transferTargetBoardId"
+                                class="w-full rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200">
+                                <option value="">— {{ __('lead-pipeline::lead-pipeline.transfer.board_label') }} —</option>
+                                @foreach($this->transferableBoards() as $tBoard)
+                                    <option value="{{ $tBoard->getKey() }}">{{ $tBoard->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('transferTargetBoardId') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
+
+                            <textarea wire:model="transferNote" rows="2"
+                                placeholder="{{ __('lead-pipeline::lead-pipeline.transfer.note_label') }}"
+                                class="w-full rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"></textarea>
+                            @error('transferNote') <p class="text-xs text-red-600">{{ $message }}</p> @enderror
+
+                            <div class="flex gap-2">
+                                <button wire:click="transferToBoard"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors">
+                                    <x-heroicon-o-arrow-right-circle class="h-4 w-4" />
+                                    {{ __('lead-pipeline::lead-pipeline.transfer.submit') }}
+                                </button>
+                                <button wire:click="$set('showTransferForm', false)"
+                                    class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                                    {{ __('lead-pipeline::lead-pipeline.transfer.cancel') }}
+                                </button>
+                            </div>
+                        </div>
+                    @endif
+                @endif
+
                 <hr class="lead-section-divider" />
 
                 {{-- Wiedervorlage: Rückruf-Termin mit Notiz, damit kein Lead durchs Raster fällt --}}
@@ -439,6 +479,40 @@
                     </div>
                 </div>
 
+                {{-- Herkunft / Übergabe (read-through) --}}
+                @php($origin = $this->originLead())
+                @if($origin)
+                    <hr class="lead-section-divider" />
+                    <div class="rounded-lg border border-blue-200 bg-blue-50/40 p-3 dark:border-blue-800 dark:bg-blue-900/10">
+                        <h3 class="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-300">
+                            {{ sprintf(__('lead-pipeline::lead-pipeline.transfer.origin_heading'), $origin->board?->name ?? '—') }}
+                        </h3>
+                        <div class="max-h-60 space-y-2 overflow-y-auto pr-1">
+                            @foreach($origin->activities as $activity)
+                                <div class="text-xs text-gray-600 dark:text-gray-400">
+                                    <span class="font-medium text-gray-800 dark:text-gray-200">{{ $activity->type->getLabel() }}</span>
+                                    · {{ $activity->created_at->diffForHumans() }}
+                                    <p class="text-gray-500 dark:text-gray-500">{{ $activity->description }}</p>
+                                </div>
+                            @endforeach
+                        </div>
+                    </div>
+                @endif
+
+                {{-- Vorwärts-Verknüpfung: wohin wurde dieser Lead übergeben --}}
+                @php($forwards = $this->forwardLeads())
+                @if($forwards->isNotEmpty())
+                    <hr class="lead-section-divider" />
+                    <div class="rounded-lg border border-gray-200 p-3 dark:border-gray-700">
+                        @foreach($forwards as $fwd)
+                            <p class="text-xs text-gray-600 dark:text-gray-400">
+                                {{ sprintf(__('lead-pipeline::lead-pipeline.transfer.forward_heading'), $fwd->board?->name ?? '—') }}
+                                — {{ $fwd->phase?->name }}
+                            </p>
+                        @endforeach
+                    </div>
+                @endif
+
                 {{-- Activity Timeline --}}
                 @if($lead->activities && $lead->activities->isNotEmpty())
                     <hr class="lead-section-divider" />
@@ -459,6 +533,7 @@
                                             'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Call,
                                             'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Email,
                                             'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Assignment,
+                                            'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Transferred,
                                         ])>
                                             <x-dynamic-component :component="$activity->type->getIcon()" class="h-3.5 w-3.5" />
                                         </div>

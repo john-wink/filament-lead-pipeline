@@ -10,42 +10,46 @@ use Filament\Support\Contracts\HasLabel;
 
 enum LeadSourceTypeEnum: string implements HasColor, HasIcon, HasLabel
 {
-    case Zapier = 'zapier';
-    case Meta   = 'meta';
-    case Api    = 'api';
-    case Funnel = 'funnel';
-    case Manual = 'manual';
+    case Zapier           = 'zapier';
+    case Meta             = 'meta';
+    case Api              = 'api';
+    case Funnel           = 'funnel';
+    case Manual           = 'manual';
+    case InternalTransfer = 'internal_transfer';
 
     public function getLabel(): string
     {
         return match ($this) {
-            self::Zapier => 'Zapier',
-            self::Meta   => 'Facebook / Meta',
-            self::Api    => 'API',
-            self::Funnel => 'Funnel',
-            self::Manual => __('lead-pipeline::lead-pipeline.source_type.manual'),
+            self::Zapier           => 'Zapier',
+            self::Meta             => 'Facebook / Meta',
+            self::Api              => 'API',
+            self::Funnel           => 'Funnel',
+            self::Manual           => __('lead-pipeline::lead-pipeline.source_type.manual'),
+            self::InternalTransfer => __('lead-pipeline::lead-pipeline.source_type.internal_transfer'),
         };
     }
 
     public function getColor(): string
     {
         return match ($this) {
-            self::Zapier => 'warning',
-            self::Meta   => 'info',
-            self::Api    => 'gray',
-            self::Funnel => 'success',
-            self::Manual => 'primary',
+            self::Zapier           => 'warning',
+            self::Meta             => 'info',
+            self::Api              => 'gray',
+            self::Funnel           => 'success',
+            self::Manual           => 'primary',
+            self::InternalTransfer => 'info',
         };
     }
 
     public function getIcon(): string
     {
         return match ($this) {
-            self::Zapier => 'heroicon-o-bolt',
-            self::Meta   => 'heroicon-o-share',
-            self::Api    => 'heroicon-o-code-bracket',
-            self::Funnel => 'heroicon-o-funnel',
-            self::Manual => 'heroicon-o-pencil-square',
+            self::Zapier           => 'heroicon-o-bolt',
+            self::Meta             => 'heroicon-o-share',
+            self::Api              => 'heroicon-o-code-bracket',
+            self::Funnel           => 'heroicon-o-funnel',
+            self::Manual           => 'heroicon-o-pencil-square',
+            self::InternalTransfer => 'heroicon-o-arrow-right-circle',
         };
     }
 

@@ -223,6 +223,21 @@ return [
         'auto_failed' => 'Automatic conversion failed: :reason',
     ],
 
+    'transfer' => [
+        'source_name'         => 'Transfer from %s',
+        'title'               => 'Transfer to board',
+        'board_label'         => 'Target board',
+        'phase_label'         => 'Target phase',
+        'assignee_label'      => 'Onboarding agent',
+        'note_label'          => 'What should be watched out for?',
+        'submit'              => 'Transfer',
+        'cancel'              => 'Cancel',
+        'success'             => 'Lead transferred to :board',
+        'already_transferred' => 'This lead was already transferred to this board.',
+        'origin_heading'      => 'Transferred from %s',
+        'forward_heading'     => 'Transferred to %s',
+    ],
+
     'reminder' => [
         'title'              => 'Follow-up',
         'label'              => 'Follow-up date',
@@ -324,6 +339,9 @@ return [
         'follow_up'               => 'Follow-up',
         'contact_email'           => 'Email started: :target',
         'converted_with'          => 'Lead converted with "%s" to %s #%s',
+        'transferred'             => 'Transferred',
+        'transferred_from'        => 'Transferred from %s',
+        'transferred_to'          => 'Transferred to %s',
     ],
     'status' => [
         'active'    => 'Active',
@@ -496,7 +514,8 @@ return [
         'label'      => 'Sort',
     ],
     'source_type' => [
-        'manual' => 'Manual',
+        'manual'            => 'Manual',
+        'internal_transfer' => 'Transfer',
     ],
     'phase_display_type' => [
         'list' => 'List',

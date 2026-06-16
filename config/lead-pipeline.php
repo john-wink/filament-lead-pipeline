@@ -143,6 +143,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Lead Transfer (Board-zu-Board-Übergabe)
+    |--------------------------------------------------------------------------
+    | enabled: globaler Kill-Switch. Pro Board wird die Übergabe über
+    | board.settings['transfer_enabled'] aktiviert (Default aus).
+    | board_filter: optionaler Klassen-Resolver (TransferTargetBoardFilter),
+    | um die Ziel-Board-Auswahl projektspezifisch einzuschränken.
+    */
+    'transfer' => [
+        'enabled'      => true,
+        'board_filter' => null,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Navigation
     |--------------------------------------------------------------------------
     */

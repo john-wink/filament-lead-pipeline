@@ -223,6 +223,21 @@ return [
         'auto_failed' => 'Automatische Konvertierung nicht möglich: :reason',
     ],
 
+    'transfer' => [
+        'source_name'         => 'Übergabe aus %s',
+        'title'               => 'An anderes Board übergeben',
+        'board_label'         => 'Zielboard',
+        'phase_label'         => 'Zielphase',
+        'assignee_label'      => 'Onboarding-Mitarbeiter',
+        'note_label'          => 'Worauf muss man achten?',
+        'submit'              => 'Übergeben',
+        'cancel'              => 'Abbrechen',
+        'success'             => 'Lead übergeben an :board',
+        'already_transferred' => 'Dieser Lead wurde bereits an dieses Board übergeben.',
+        'origin_heading'      => 'Übergeben aus %s',
+        'forward_heading'     => 'Übergeben an %s',
+    ],
+
     'reminder' => [
         'title'              => 'Wiedervorlage',
         'label'              => 'Wiedervorlage-Termin',
@@ -324,6 +339,9 @@ return [
         'follow_up'               => 'Wiedervorlage',
         'contact_email'           => 'E-Mail gestartet: :target',
         'converted_with'          => 'Lead konvertiert mit "%s" zu %s #%s',
+        'transferred'             => 'Übergeben',
+        'transferred_from'        => 'Übergeben aus %s',
+        'transferred_to'          => 'Übergeben an %s',
     ],
     'status' => [
         'active'    => 'Aktiv',
@@ -502,7 +520,8 @@ return [
         'label'      => 'Sortierung',
     ],
     'source_type' => [
-        'manual' => 'Manuell',
+        'manual'            => 'Manuell',
+        'internal_transfer' => 'Übergabe',
     ],
     'phase_display_type' => [
         'list' => 'Liste',

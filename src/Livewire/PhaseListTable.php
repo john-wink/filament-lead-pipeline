@@ -17,6 +17,7 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -252,6 +253,52 @@ class PhaseListTable extends Component implements HasForms, HasTable
                         \Filament\Notifications\Notification::make()
                             ->title(__('lead-pipeline::lead-pipeline.lead.moved'))
                             ->body(count($records) . ' Leads → ' . $targetPhase->name)
+                            ->success()
+                            ->send();
+                    })
+                    ->deselectRecordsAfterCompletion(),
+                Tables\Actions\BulkAction::make('bulk_transfer')
+                    ->label(__('lead-pipeline::lead-pipeline.transfer.title'))
+                    ->icon('heroicon-o-arrow-right-circle')
+                    ->visible(fn (): bool => LeadPhase::find($this->phaseId)?->board?->transferEnabled() ?? false)
+                    ->form([
+                        Forms\Components\Select::make('target_board_id')
+                            ->label(__('lead-pipeline::lead-pipeline.transfer.board_label'))
+                            ->options(function (): array {
+                                $phase   = LeadPhase::find($this->phaseId);
+                                $boardId = $phase?->{LeadPhase::fkColumn('lead_board')};
+
+                                return LeadBoard::query()
+                                    ->visibleToTenant(filament()->getTenant())
+                                    ->where('is_active', true)
+                                    ->when($boardId, fn ($q) => $q->whereKeyNot($boardId))
+                                    ->orderBy('name')
+                                    ->pluck('name', LeadBoard::pkColumn())
+                                    ->all();
+                            })
+                            ->searchable()
+                            ->required(),
+                        Forms\Components\Textarea::make('note')
+                            ->label(__('lead-pipeline::lead-pipeline.transfer.note_label'))
+                            ->required(),
+                    ])
+                    ->action(function (\Illuminate\Database\Eloquent\Collection $records, array $data): void {
+                        $target  = LeadBoard::find($data['target_board_id']);
+                        $service = app(\JohnWink\FilamentLeadPipeline\Services\LeadTransferService::class);
+                        $done    = 0;
+
+                        foreach ($records as $record) {
+                            try {
+                                $service->transfer($record, $target, null, null, $data['note']);
+                                $done++;
+                            } catch (\JohnWink\FilamentLeadPipeline\Exceptions\LeadAlreadyTransferredException) {
+                                // bereits übergeben — überspringen
+                            }
+                        }
+
+                        \Filament\Notifications\Notification::make()
+                            ->title(__('lead-pipeline::lead-pipeline.transfer.success', ['board' => $target->name]))
+                            ->body($done . ' / ' . count($records))
                             ->success()
                             ->send();
                     })
