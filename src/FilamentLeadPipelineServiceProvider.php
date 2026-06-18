@@ -36,6 +36,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                 Commands\SyncMetaReportsCommand::class,
                 Commands\SendScheduledReportsCommand::class,
                 Commands\SendLeadRemindersCommand::class,
+                Commands\PruneWebhookLogsCommand::class,
             ])
             ->hasInstallCommand(function (InstallCommand $command): void {
                 $command
@@ -79,6 +80,22 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
     public function boot(): void
     {
         parent::boot();
+
+        if ( ! config()->has('logging.channels.lead-webhooks')) {
+            config(['logging.channels.lead-webhooks' => [
+                'driver' => 'daily',
+                'path'   => storage_path('logs/lead-webhooks.log'),
+                'level'  => 'debug',
+                'days'   => (int) config('lead-pipeline.webhooks.logging.retention_days', 30),
+            ]]);
+        }
+
+        if (config('lead-pipeline.webhooks.logging.enabled', true)) {
+            $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+                $schedule->command(Commands\PruneWebhookLogsCommand::class)
+                    ->dailyAt('04:30')->withoutOverlapping()->onOneServer();
+            });
+        }
 
         if (config('lead-pipeline.facebook.refresh.enabled', true)) {
             $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
