@@ -24,6 +24,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\LeadSourceManager;
+use JohnWink\FilamentLeadPipeline\Services\WebhookLogger;
 use RuntimeException;
 
 class WebhookController
@@ -32,6 +33,7 @@ class WebhookController
 
     public function __construct(
         public LeadSourceManager $manager,
+        public WebhookLogger $logger,
     ) {}
 
     public function handle(Request $request, string $sourceId): JsonResponse
@@ -42,6 +44,8 @@ class WebhookController
             ->first();
 
         if ( ! $source) {
+            $this->logger->recordIncoming(null, $request, $sourceId, 'source_inactive', 404);
+
             return response()->json(['error' => 'Source not found or inactive.'], 404);
         }
 
@@ -53,6 +57,8 @@ class WebhookController
             $signatureValue = '' !== $signature && null !== $signature ? $signature : ($bearerToken ?? '');
 
             if ( ! $driver->verifySignature($request->getContent(), $signatureValue, $source)) {
+                $this->logger->recordIncoming($source, $request, $sourceId, 'rejected_signature', 403);
+
                 return response()->json(['error' => 'Invalid signature.'], 403);
             }
 
@@ -86,6 +92,8 @@ class WebhookController
             }
 
             if ( ! $targetPhase) {
+                $this->logger->recordIncoming($source, $request, $sourceId, 'no_phase', 422);
+
                 return response()->json(['error' => 'No suitable phase found on board.'], 422);
             }
 
@@ -133,12 +141,16 @@ class WebhookController
 
             LeadCreated::dispatch($lead);
 
+            $this->logger->recordIncoming($source, $request, $sourceId, 'created', 201, null, $lead);
+
             return response()->json(['id' => $lead->getKey()], 201);
         } catch (Exception $e) {
             $source->update([
                 'status'        => LeadSourceStatusEnum::Error,
                 'error_message' => $e->getMessage(),
             ]);
+
+            $this->logger->recordIncoming($source, $request, $sourceId, 'processing_error', 500, $e->getMessage());
 
             return response()->json(['error' => 'Internal server error.'], 500);
         }
