@@ -79,6 +79,13 @@ return [
         'prefix'     => 'api/lead-pipeline/webhooks',
         'middleware' => ['api'],
         'rate_limit' => 60,
+
+        'logging' => [
+            'enabled'        => env('LEAD_PIPELINE_WEBHOOK_LOG', true),
+            'channel'        => 'lead-webhooks',
+            'store_payload'  => true,
+            'retention_days' => 30,
+        ],
     ],
 
     /*

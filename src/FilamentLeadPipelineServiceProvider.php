@@ -51,6 +51,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
         $this->app->singleton(Services\LeadSourceManager::class);
         $this->app->singleton(Services\LeadConversionService::class);
         $this->app->singleton(Services\FacebookGraphService::class);
+        $this->app->singleton(Services\WebhookLogger::class);
 
         $this->app->bind(
             Contracts\ResolvesReportBranding::class,
