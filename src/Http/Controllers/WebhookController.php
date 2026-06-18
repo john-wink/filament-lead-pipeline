@@ -163,6 +163,8 @@ class WebhookController
             ->first();
 
         if ( ! $source) {
+            $this->logger->recordVerify(null, null, false, "source_not_found:{$sourceId}");
+
             return response('Source not found.', 404);
         }
 
@@ -172,8 +174,12 @@ class WebhookController
         $expectedToken = $source->config['verify_token'] ?? '';
 
         if ('' === $hubVerifyToken || $hubVerifyToken !== $expectedToken) {
+            $this->logger->recordVerify($source, null, false, 'per-source: token mismatch');
+
             return response('Invalid verify token.', 403);
         }
+
+        $this->logger->recordVerify($source, null, true, 'per-source');
 
         return response((string) $hubChallenge, 200);
     }
@@ -185,6 +191,8 @@ class WebhookController
         $expected  = 'sha256=' . hash_hmac('sha256', $request->getContent(), $appSecret);
 
         if ( ! hash_equals($expected, $signature)) {
+            $this->logger->recordIncoming(null, $request, 'meta-central', 'rejected_signature', 403);
+
             return response()->json(['error' => 'Invalid signature.'], 403);
         }
 
@@ -202,6 +210,8 @@ class WebhookController
             $fbPage = FacebookPage::query()->where('page_id', $pageId)->first();
 
             if ( ! $fbPage) {
+                $this->logger->recordIncoming(null, $request, 'meta-central', 'skipped', 200, "page_not_found:{$pageId}");
+
                 continue;
             }
 
@@ -224,6 +234,8 @@ class WebhookController
                     ->filter(fn ($source) => in_array($formId, $source->facebook_form_ids ?? [], true));
 
                 if ($sources->isEmpty()) {
+                    $this->logger->recordIncoming(null, $request, 'meta-central', 'skipped', 200, "form_not_mapped:{$formId}");
+
                     continue;
                 }
 
@@ -236,6 +248,8 @@ class WebhookController
                     if ($connection) {
                         $this->markConnectionNeedsReauth($connection, $e->getMessage());
                     }
+
+                    $this->logger->recordIncoming(null, $request, 'meta-central', 'skipped', 200, 'token_invalid: ' . $e->getMessage());
 
                     // ACK (200 at the end) so Facebook stops retrying — prevents the 36h
                     // retry cascade + webhook subscription disablement. Missed leads are
@@ -260,11 +274,22 @@ class WebhookController
                         if ($lead->wasRecentlyCreated) {
                             $leadsCreated[] = $lead->getKey();
                         }
+                        $this->logger->recordIncoming(
+                            $source,
+                            $request,
+                            'meta-central',
+                            $lead->wasRecentlyCreated ? 'created' : 'skipped',
+                            200,
+                            $lead->wasRecentlyCreated ? null : 'duplicate_external_id',
+                            $lead,
+                        );
                     } catch (Exception $e) {
                         $source->update([
                             'status'        => LeadSourceStatusEnum::Error,
                             'error_message' => $e->getMessage(),
                         ]);
+
+                        $this->logger->recordIncoming($source, $request, 'meta-central', 'processing_error', 500, $e->getMessage());
                     }
                 }
             }
@@ -280,8 +305,12 @@ class WebhookController
         $hubChallenge = $request->query('hub_challenge', '');
 
         if ('' === $hubToken || $hubToken !== $verifyToken) {
+            $this->logger->recordVerify(null, null, false, 'central: token mismatch');
+
             return response('Invalid verify token.', 403);
         }
+
+        $this->logger->recordVerify(null, null, true, 'central');
 
         return response((string) $hubChallenge, 200);
     }
