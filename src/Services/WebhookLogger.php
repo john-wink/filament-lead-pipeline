@@ -52,7 +52,7 @@ class WebhookLogger
     }
 
     /**
-     * @param  array<string, mixed>       $request
+     * @param  array<string, mixed>  $request
      * @param  array<string, mixed>|null  $response
      */
     public function recordRegistration(string $pageId, array $request, ?array $response, bool $success, ?string $message = null): void
@@ -114,7 +114,7 @@ class WebhookLogger
                 $attributes['request']  = null;
                 $attributes['response'] = null;
             } else {
-                $attributes['request']  = isset($attributes['request']) && is_array($attributes['request'])
+                $attributes['request'] = isset($attributes['request']) && is_array($attributes['request'])
                     ? $this->redact($attributes['request'])
                     : null;
                 $attributes['response'] = isset($attributes['response']) && is_array($attributes['response'])

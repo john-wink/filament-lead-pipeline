@@ -56,10 +56,10 @@ class WebhookLogs extends Page implements HasTable
                     ->label(__('lead-pipeline::lead-pipeline.webhook_log.outcome'))
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'created', 'subscribed', 'verified', 'ok' => 'success',
-                        'skipped'                                  => 'gray',
+                        'created', 'subscribed', 'verified', 'ok'                                                                             => 'success',
+                        'skipped'                                                                                                             => 'gray',
                         'rejected_signature', 'subscribe_failed', 'verify_failed', 'source_inactive', 'no_phase', 'processing_error', 'error' => 'danger',
-                        default                                    => 'warning',
+                        default                                                                                                               => 'warning',
                     }),
                 Tables\Columns\TextColumn::make('http_status')
                     ->label(__('lead-pipeline::lead-pipeline.webhook_log.http_status'))

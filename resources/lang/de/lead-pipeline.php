@@ -581,4 +581,21 @@ return [
             'missing_ads_read' => 'ads_read fehlt (Reports)',
         ],
     ],
+
+    'webhook_log' => [
+        'title'       => 'Webhook-Protokoll',
+        'received_at' => 'Zeitpunkt',
+        'event_type'  => 'Ereignis',
+        'outcome'     => 'Ergebnis',
+        'http_status' => 'HTTP',
+        'page_id'     => 'Page-ID',
+        'message'     => 'Meldung',
+        'details'     => 'Details',
+        'type'        => [
+            'incoming'     => 'Eingehend',
+            'registration' => 'Registrierung',
+            'verify'       => 'Verify',
+            'status_check' => 'Status-Check',
+        ],
+    ],
 ];

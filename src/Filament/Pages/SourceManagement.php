@@ -36,18 +36,6 @@ class SourceManagement extends Page implements HasTable
         return __('lead-pipeline::lead-pipeline.source.management');
     }
 
-    /** @return array<\Filament\Actions\Action> */
-    protected function getHeaderActions(): array
-    {
-        return [
-            \Filament\Actions\Action::make('webhook_logs')
-                ->label(__('lead-pipeline::lead-pipeline.webhook_log.title'))
-                ->icon('heroicon-o-document-magnifying-glass')
-                ->color('gray')
-                ->url(WebhookLogs::getUrl()),
-        ];
-    }
-
     public function table(Table $table): Table
     {
         return $table
@@ -285,6 +273,18 @@ class SourceManagement extends Page implements HasTable
         }
 
         return $design;
+    }
+
+    /** @return array<\Filament\Actions\Action> */
+    protected function getHeaderActions(): array
+    {
+        return [
+            \Filament\Actions\Action::make('webhook_logs')
+                ->label(__('lead-pipeline::lead-pipeline.webhook_log.title'))
+                ->icon('heroicon-o-document-magnifying-glass')
+                ->color('gray')
+                ->url(WebhookLogs::getUrl()),
+        ];
     }
 
     /**

@@ -568,4 +568,21 @@ return [
             'missing_ads_read' => 'ads_read missing (reports)',
         ],
     ],
+
+    'webhook_log' => [
+        'title'       => 'Journal des webhooks',
+        'received_at' => 'Horodatage',
+        'event_type'  => 'Événement',
+        'outcome'     => 'Résultat',
+        'http_status' => 'HTTP',
+        'page_id'     => 'ID de page',
+        'message'     => 'Message',
+        'details'     => 'Détails',
+        'type'        => [
+            'incoming'     => 'Entrant',
+            'registration' => 'Enregistrement',
+            'verify'       => 'Vérification',
+            'status_check' => 'Vérification du statut',
+        ],
+    ],
 ];
