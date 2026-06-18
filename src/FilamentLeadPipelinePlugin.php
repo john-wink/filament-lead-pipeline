@@ -343,6 +343,7 @@ class FilamentLeadPipelinePlugin implements Plugin
             ->pages([
                 Filament\Pages\KanbanBoard::class,
                 Filament\Pages\SourceManagement::class,
+                Filament\Pages\WebhookLogs::class,
             ])
             ->widgets([
                 Filament\Widgets\LeadStatsWidget::class,
