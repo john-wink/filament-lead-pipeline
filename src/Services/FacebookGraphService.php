@@ -167,8 +167,23 @@ class FacebookGraphService
         ]);
 
         if ($response->failed()) {
+            app(WebhookLogger::class)->recordRegistration(
+                $pageId,
+                ['subscribed_fields' => 'leadgen'],
+                (array) $response->json(),
+                false,
+                $response->json('error.message') ?? $response->body(),
+            );
+
             throw $this->classifyError($response, 'Failed to subscribe to leadgen');
         }
+
+        app(WebhookLogger::class)->recordRegistration(
+            $pageId,
+            ['subscribed_fields' => 'leadgen'],
+            (array) $response->json(),
+            true,
+        );
 
         return $response->json('success', false);
     }
@@ -188,8 +203,17 @@ class FacebookGraphService
         ]);
 
         if ($response->failed()) {
+            app(WebhookLogger::class)->recordStatusCheck(
+                $pageId,
+                (array) $response->json(),
+                false,
+                $response->json('error.message') ?? $response->body(),
+            );
+
             throw $this->classifyError($response, 'Failed to fetch subscribed apps');
         }
+
+        app(WebhookLogger::class)->recordStatusCheck($pageId, (array) $response->json(), true);
 
         return $response->json('data', []);
     }
