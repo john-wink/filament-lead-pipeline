@@ -102,10 +102,15 @@ it('does not log contacts for leads of another board', function (): void {
     expect($foreignLead->activities()->where('type', LeadActivityTypeEnum::Call->value)->count())->toBe(0);
 });
 
-it('wires the card contact links to the logging action', function (): void {
+it('renders the card phone/email as plain text without contact links', function (): void {
+    // The card shows phone/email as plain text so a click anywhere opens the detail
+    // modal instead of the mail/phone client. The logged tel:/mailto: contact actions
+    // live in the detail modal (asserted above), not on the card.
     Livewire::test(KanbanPhaseColumn::class, ['phaseId' => $this->phase->getKey()])
         ->call('init')
-        ->assertSeeHtml('tel:+49 170 1234567')
-        ->assertSeeHtml('mailto:maria@example.de')
-        ->assertSeeHtml('logContact');
+        ->assertSee('+49 170 1234567')
+        ->assertSee('maria@example.de')
+        ->assertDontSeeHtml('mailto:maria@example.de')
+        ->assertDontSeeHtml('tel:+49 170 1234567')
+        ->assertDontSeeHtml('logContact');
 });
