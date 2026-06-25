@@ -144,7 +144,7 @@
                                 <x-heroicon-o-x-mark class="h-5 w-5" />
                             </button>
                         </div>
-                        @livewire('lead-pipeline::facebook-connection-status')
+                        @livewire('lead-pipeline::facebook-connection-status', [], key('fb-connection-status'))
                     </div>
                 </div>
             </template>
@@ -300,8 +300,8 @@
             </div>
         @endif
 
-        @livewire('lead-pipeline::lead-detail-modal')
-        @livewire('lead-pipeline::lead-analytics-modal')
+        @livewire('lead-pipeline::lead-detail-modal', [], key('lead-detail-modal'))
+        @livewire('lead-pipeline::lead-analytics-modal', [], key('lead-analytics-modal'))
 
         @if($this->showCreateModal)
             <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" wire:click.self="$set('showCreateModal', false)">
