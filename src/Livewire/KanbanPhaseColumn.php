@@ -11,11 +11,18 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
-use Livewire\Attributes\Isolate;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
-#[Isolate]
+/*
+ * NOT #[Isolate]: an isolated child component does not hydrate when it is rendered
+ * for the first time during a parent update (e.g. switching from a list tab to the
+ * board tab, or arriving via wire:navigate). The browser then throws "Snapshot
+ * missing on Livewire component" and the column is stuck on its loading skeleton.
+ * The non-isolated sibling PhaseListTable works in exactly this scenario; keeping
+ * this column non-isolated makes it behave the same. (Re-adding #[Isolate] requires
+ * a fix for dynamic isolated-child hydration first.)
+ */
 class KanbanPhaseColumn extends Component
 {
     public string $phaseId = '';

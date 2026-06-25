@@ -27,3 +27,13 @@ test('the kanban tab-content branches carry distinct wire:keys', function (): vo
         ->toContain('wire:key="kanban-tab-content-board"')
         ->toContain('wire:key="kanban-tab-content-list-');
 });
+
+test('the kanban phase column is not isolated so it hydrates when rendered during a parent update', function (): void {
+    // An isolated child does not hydrate when first rendered during a parent update
+    // (switching from a list tab to the board tab) -> "Snapshot missing" + stuck
+    // loading skeletons. The non-isolated PhaseListTable works in that exact scenario.
+    $attributes = (new ReflectionClass(JohnWink\FilamentLeadPipeline\Livewire\KanbanPhaseColumn::class))
+        ->getAttributes(Livewire\Attributes\Isolate::class);
+
+    expect($attributes)->toBeEmpty();
+});
