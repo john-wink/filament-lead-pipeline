@@ -67,6 +67,7 @@ class LeadObserver
      * Meldet bei terminalem Phasenwechsel das Ergebnis eines Meta-Leads
      * (Treiber „meta" + vorhandene leadgen-ID = external_id) an die Conversions API.
      * Config-gated; nur die drei terminalen Typen mit Event-Mapping werden gemeldet.
+     * Dataset-ID und Token löst der Job pro Lead auf (Multi-Tenant).
      */
     private function reportOutcomeToMeta(Lead $lead, LeadPhase $newPhase): void
     {
@@ -93,7 +94,6 @@ class LeadObserver
 
         ReportLeadOutcomeToMeta::dispatch(
             (string) $lead->getKey(),
-            (string) $lead->external_id,
             (string) $eventName,
         );
     }

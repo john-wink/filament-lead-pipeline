@@ -135,13 +135,18 @@ return [
     | CRM→Conversions-API-Feedback-Schleife: meldet Lead-Ergebnisse (gewonnen /
     | verloren / nicht qualifiziert) zurück an Meta, damit die Lead-Qualität
     | optimiert wird. Config-gated und queued — leer/disabled = No-Op.
+    |
+    | Multi-Tenant: Es gibt KEINE globale dataset_id / kein globales Token. Beide
+    | werden PRO LEAD aufgelöst — die dataset_id aus dem Promoted-Object des Adsets
+    | der Anzeige (über source_ad_id), das Token aus der Quell-FacebookConnection des
+    | Leads. So liefert jede Marketing-Firma auf derselben Installation an ihr eigenes
+    | Dataset mit ihrem eigenen Token.
     */
     'meta' => [
         'conversions' => [
             'enabled'       => env('LEAD_PIPELINE_META_CONVERSIONS_ENABLED', false),
-            'dataset_id'    => env('LEAD_PIPELINE_META_DATASET_ID'),
-            'access_token'  => env('LEAD_PIPELINE_META_CONVERSIONS_TOKEN'),
             'graph_version' => env('LEAD_PIPELINE_META_GRAPH_VERSION', 'v21.0'),
+            'cache_ttl'     => (int) env('LEAD_PIPELINE_META_DATASET_CACHE_TTL', 86400),
             'event_map'     => [
                 'won'          => 'closed_won',
                 'lost'         => 'closed_lost',
