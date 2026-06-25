@@ -134,20 +134,27 @@
                 </div>
             @endif
 
-            {{-- Facebook Status-Modal --}}
-            <template x-teleport="body">
-                <div x-show="showConnectionStatus" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showConnectionStatus = false">
-                    <div class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900">
-                        <div class="mb-4 flex items-center justify-between">
-                            <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}</h3>
-                            <button type="button" @click="showConnectionStatus = false" class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
-                                <x-heroicon-o-x-mark class="h-5 w-5" />
-                            </button>
-                        </div>
-                        @livewire('lead-pipeline::facebook-connection-status', [], key('fb-connection-status'))
+            {{--
+                Facebook Status-Modal — bewusst NICHT in einen Alpine-Teleport gewrappt.
+                Eine Livewire-Komponente in einem solchen Teleport wird nach <body> verschoben
+                (außerhalb des Morph-Baums der Seite); beim Parent-Re-Render (Tab-Wechsel Liste
+                -> Board / wire:navigate) kann Livewire den teleportierten Kind-Platzhalter nicht
+                mehr auflösen und wirft "Snapshot missing on Livewire component" — was die
+                Hydration der danach folgenden Phasenspalten abbricht (Skelette bleiben für immer
+                stehen). Inline gerendert ist die Komponente reconcilebar (wie lead-detail-modal /
+                lead-analytics-modal). position:fixed überlagert weiterhin den Viewport.
+            --}}
+            <div x-show="showConnectionStatus" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/50" @click.self="showConnectionStatus = false">
+                <div class="mx-4 w-full max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-gray-900">
+                    <div class="mb-4 flex items-center justify-between">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{{ __('lead-pipeline::lead-pipeline.connection_status.title') }}</h3>
+                        <button type="button" @click="showConnectionStatus = false" class="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+                            <x-heroicon-o-x-mark class="h-5 w-5" />
+                        </button>
                     </div>
+                    @livewire('lead-pipeline::facebook-connection-status', [], key('fb-connection-status'))
                 </div>
-            </template>
+            </div>
         </div>
 
         {{-- „Mein Tag": persönliche KPIs des Beraters, ohne Modal-Kontextwechsel --}}

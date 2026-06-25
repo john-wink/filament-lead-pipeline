@@ -28,6 +28,16 @@ test('the kanban tab-content branches carry distinct wire:keys', function (): vo
         ->toContain('wire:key="kanban-tab-content-list-');
 });
 
+test('the kanban page view renders no Livewire component inside an Alpine x-teleport', function (): void {
+    $blade = file_get_contents(dirname(__DIR__, 2) . '/resources/views/filament/pages/kanban-board.blade.php');
+
+    // A Livewire component inside x-teleport is moved out of the page's morph tree;
+    // on a parent re-render Livewire cannot reconcile the teleported child and throws
+    // "Snapshot missing on Livewire component", aborting hydration of the phase columns.
+    // The page view must not use x-teleport.
+    expect($blade)->not->toContain('x-teleport');
+});
+
 test('the kanban phase column is not isolated so it hydrates when rendered during a parent update', function (): void {
     // An isolated child does not hydrate when first rendered during a parent update
     // (switching from a list tab to the board tab) -> "Snapshot missing" + stuck
