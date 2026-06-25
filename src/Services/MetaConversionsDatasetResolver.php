@@ -26,6 +26,8 @@ class MetaConversionsDatasetResolver
 
     private string $graphUrl = 'https://graph.facebook.com';
 
+    public function __construct(private readonly MetaApiErrorInterpreter $interpreter) {}
+
     public function resolve(Lead $lead): ?string
     {
         $adId = (string) ($lead->source_ad_id ?? '');
@@ -85,10 +87,18 @@ class MetaConversionsDatasetResolver
                 ]);
 
             if ($response->failed()) {
+                $verdict = $this->interpreter->interpret($response->json('error'));
+
                 Log::warning('Meta dataset resolution failed', [
-                    'lead_id'     => (string) $lead->getKey(),
-                    'ad_id'       => $adId,
-                    'http_status' => $response->status(),
+                    'lead_id'            => (string) $lead->getKey(),
+                    'ad_id'              => $adId,
+                    'http_status'        => $response->status(),
+                    'category'           => $verdict['category'],
+                    'missing_permission' => $verdict['missing_permission'],
+                    'required_action'    => $verdict['required_action'],
+                    'meta_code'          => $verdict['code'],
+                    'meta_message'       => $verdict['message'],
+                    'fbtrace_id'         => $verdict['fbtrace_id'],
                 ]);
 
                 return null;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Models\Team;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Jobs\ReportLeadOutcomeToMeta;
@@ -163,7 +164,10 @@ it('posts the Conversions API event to the per-lead resolved dataset and token',
     ]);
 
     (new ReportLeadOutcomeToMeta((string) $lead->getKey(), 'closed_won'))
-        ->handle(app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class));
+        ->handle(
+            app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class),
+            app(JohnWink\FilamentLeadPipeline\Services\MetaApiErrorInterpreter::class),
+        );
 
     Http::assertSent(function ($request): bool {
         $body = $request->data();
@@ -190,9 +194,77 @@ it('does not POST an event for an organic lead without a source ad id', function
     ]);
 
     (new ReportLeadOutcomeToMeta((string) $lead->getKey(), 'closed_won'))
-        ->handle(app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class));
+        ->handle(
+            app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class),
+            app(JohnWink\FilamentLeadPipeline\Services\MetaApiErrorInterpreter::class),
+        );
 
     Http::assertNothingSent();
+});
+
+it('logs the exact missing permission when Meta rejects the POST', function (): void {
+    Http::fake([
+        'graph.facebook.com/*/ad-42*'            => Http::response(['adset' => ['promoted_object' => ['pixel_id' => 'DATASET123']]], 200),
+        'graph.facebook.com/*/DATASET123/events' => Http::response([
+            'error' => [
+                'code'       => 200,
+                'type'       => 'OAuthException',
+                'message'    => '(#200) Requires ads_management permission to manage the object',
+                'fbtrace_id' => 'Trace42',
+            ],
+        ], 400),
+    ]);
+
+    Log::spy();
+
+    $source = metaSourceWithToken($this->board, 'conn-token');
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board')  => $this->board->getKey(),
+        Lead::fkColumn('lead_phase')  => $this->openPhase->getKey(),
+        Lead::fkColumn('lead_source') => $source->getKey(),
+        'external_id'                 => 'fb-leadgen-987',
+        'source_ad_id'                => 'ad-42',
+    ]);
+
+    (new ReportLeadOutcomeToMeta((string) $lead->getKey(), 'closed_won'))
+        ->handle(
+            app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class),
+            app(JohnWink\FilamentLeadPipeline\Services\MetaApiErrorInterpreter::class),
+        );
+
+    Log::shouldHaveReceived('warning')->withArgs(function (string $message, array $context): bool {
+        return 'Meta conversion-lead feedback rejected' === $message
+            && 'missing_permission' === ($context['category'] ?? null)
+            && 'ads_management' === ($context['missing_permission'] ?? null)
+            && str_contains((string) ($context['required_action'] ?? ''), 'ads_management');
+    });
+});
+
+it('retries (throws) on a transient Meta error so it is sent again', function (): void {
+    Http::fake([
+        'graph.facebook.com/*/ad-42*'            => Http::response(['adset' => ['promoted_object' => ['pixel_id' => 'DATASET123']]], 200),
+        'graph.facebook.com/*/DATASET123/events' => Http::response([
+            'error' => ['code' => 4, 'message' => 'Application request limit reached'],
+        ], 400),
+    ]);
+
+    $source = metaSourceWithToken($this->board, 'conn-token');
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board')  => $this->board->getKey(),
+        Lead::fkColumn('lead_phase')  => $this->openPhase->getKey(),
+        Lead::fkColumn('lead_source') => $source->getKey(),
+        'external_id'                 => 'fb-leadgen-987',
+        'source_ad_id'                => 'ad-42',
+    ]);
+
+    $job = new ReportLeadOutcomeToMeta((string) $lead->getKey(), 'closed_won');
+
+    expect(fn (): mixed => $job->handle(
+        app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class),
+        app(JohnWink\FilamentLeadPipeline\Services\MetaApiErrorInterpreter::class),
+    ))->toThrow(RuntimeException::class);
 });
 
 it('no-ops the job when the feature is disabled', function (): void {
@@ -211,7 +283,10 @@ it('no-ops the job when the feature is disabled', function (): void {
     ]);
 
     (new ReportLeadOutcomeToMeta((string) $lead->getKey(), 'closed_won'))
-        ->handle(app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class));
+        ->handle(
+            app(JohnWink\FilamentLeadPipeline\Services\MetaConversionsDatasetResolver::class),
+            app(JohnWink\FilamentLeadPipeline\Services\MetaApiErrorInterpreter::class),
+        );
 
     Http::assertNothingSent();
 });
