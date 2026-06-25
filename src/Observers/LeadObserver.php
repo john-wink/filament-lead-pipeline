@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Observers;
 
 use Illuminate\Support\Facades\Log;
+use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadAssigned;
 use JohnWink\FilamentLeadPipeline\Events\LeadMoved;
 use JohnWink\FilamentLeadPipeline\Events\LeadStatusChanged;
+use JohnWink\FilamentLeadPipeline\Jobs\ReportLeadOutcomeToMeta;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Services\LeadConversionService;
@@ -55,6 +57,45 @@ class LeadObserver
                 }
             }
         }
+
+        if ($newPhase->type->isTerminal()) {
+            $this->reportOutcomeToMeta($lead, $newPhase);
+        }
+    }
+
+    /**
+     * Meldet bei terminalem Phasenwechsel das Ergebnis eines Meta-Leads
+     * (Treiber „meta" + vorhandene leadgen-ID = external_id) an die Conversions API.
+     * Config-gated; nur die drei terminalen Typen mit Event-Mapping werden gemeldet.
+     */
+    private function reportOutcomeToMeta(Lead $lead, LeadPhase $newPhase): void
+    {
+        if ( ! config('lead-pipeline.meta.conversions.enabled')) {
+            return;
+        }
+
+        if (blank($lead->external_id)) {
+            return;
+        }
+
+        $source = $lead->source;
+
+        if ( ! $source || LeadSourceTypeEnum::Meta->value !== $source->driver) {
+            return;
+        }
+
+        $eventMap  = (array) config('lead-pipeline.meta.conversions.event_map', []);
+        $eventName = $eventMap[$newPhase->type->value] ?? null;
+
+        if (blank($eventName)) {
+            return;
+        }
+
+        ReportLeadOutcomeToMeta::dispatch(
+            (string) $lead->getKey(),
+            (string) $lead->external_id,
+            (string) $eventName,
+        );
     }
 
     private function handleStatusChanged(Lead $lead): void

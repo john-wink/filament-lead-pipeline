@@ -16,9 +16,16 @@ it('flags Won and Lost phases as terminal', function (): void {
         ->and(LeadPhaseTypeEnum::InProgress->isTerminal())->toBeFalse();
 });
 
+it('flags the Disqualified phase as terminal with a list display default', function (): void {
+    expect(LeadPhaseTypeEnum::Disqualified->isTerminal())->toBeTrue()
+        ->and(LeadPhaseTypeEnum::Disqualified->defaultDisplayType())->toBe(LeadPhaseDisplayTypeEnum::List)
+        ->and(LeadPhaseTypeEnum::Disqualified->getColor())->toBe('warning');
+});
+
 it('maps terminal phase types to the list display as default', function (): void {
     expect(LeadPhaseTypeEnum::Won->defaultDisplayType())->toBe(LeadPhaseDisplayTypeEnum::List)
         ->and(LeadPhaseTypeEnum::Lost->defaultDisplayType())->toBe(LeadPhaseDisplayTypeEnum::List)
+        ->and(LeadPhaseTypeEnum::Disqualified->defaultDisplayType())->toBe(LeadPhaseDisplayTypeEnum::List)
         ->and(LeadPhaseTypeEnum::Open->defaultDisplayType())->toBe(LeadPhaseDisplayTypeEnum::Kanban)
         ->and(LeadPhaseTypeEnum::InProgress->defaultDisplayType())->toBe(LeadPhaseDisplayTypeEnum::Kanban);
 });

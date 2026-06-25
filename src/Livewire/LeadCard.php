@@ -68,6 +68,8 @@ class LeadCard extends Component
                 'lost_at'     => now(),
                 'lost_reason' => $reason,
             ]);
+        } elseif (LeadPhaseTypeEnum::Disqualified === $targetPhase->type) {
+            $this->lead->update(['status' => LeadStatusEnum::Disqualified]);
         }
 
         $this->dispatch('phase-updated', phaseId: $fromPhase?->getKey());

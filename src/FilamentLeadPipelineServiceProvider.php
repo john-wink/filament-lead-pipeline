@@ -148,6 +148,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
         $this->registerLivewireComponents();
 
         Models\Lead::observe(Observers\LeadObserver::class);
+        Models\LeadBoard::observe(Observers\LeadBoardObserver::class);
         Models\LeadFieldDefinition::observe(Observers\LeadFieldDefinitionObserver::class);
         Models\LeadPhase::observe(Observers\LeadPhaseObserver::class);
 

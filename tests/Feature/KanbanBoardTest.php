@@ -51,7 +51,10 @@ it('shows all phases in correct order', function (): void {
 
     $component = Livewire::test(KanbanBoard::class, ['board' => $board]);
 
-    $phases = $board->phases()->ordered()->get();
+    // Exclude the mandatory auto-created "Nicht qualifiziert" phase from the ordering check.
+    $phases = $board->phases()->ordered()
+        ->where('type', '!=', JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum::Disqualified->value)
+        ->get();
     expect($phases->pluck('name')->toArray())->toBe(['Erste', 'Zweite', 'Dritte']);
 
     $component->assertOk();

@@ -54,7 +54,8 @@ it('allows adding a phase to a board that already has leads', function (): void 
         ->call('save')
         ->assertHasNoFormErrors();
 
-    expect($board->refresh()->phases)->toHaveCount(2);
+    // existing + new phase, plus the mandatory auto-created "Nicht qualifiziert" terminal phase
+    expect($board->refresh()->phases)->toHaveCount(3);
 });
 
 it('allows adding a custom field to a board that already has leads', function (): void {

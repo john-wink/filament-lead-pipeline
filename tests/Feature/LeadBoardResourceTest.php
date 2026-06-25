@@ -107,7 +107,7 @@ it('shows board counts for phases leads and sources', function (): void {
 
     livewire(ListLeadBoards::class)
         ->assertCanSeeTableRecords([$board])
-        ->assertTableColumnStateSet('phases_count', 1, $board->getKey())
+        ->assertTableColumnStateSet('phases_count', 2, $board->getKey())
         ->assertTableColumnStateSet('leads_count', 2, $board->getKey())
         ->assertTableColumnStateSet('sources_count', 1, $board->getKey());
 });
@@ -225,7 +225,8 @@ it('pre-fills default phases from plugin config', function (): void {
 
     $board = LeadBoard::query()->where('name', 'Board mit Standardphasen')->first();
 
-    expect($board->phases)->toHaveCount(count($defaultPhases));
+    // default phases from the form + the mandatory auto-created "Nicht qualifiziert" terminal phase
+    expect($board->phases)->toHaveCount(count($defaultPhases) + 1);
 });
 
 it('pre-fills default fields from plugin config', function (): void {
@@ -282,8 +283,9 @@ it('can create a board with custom phases via repeater', function (): void {
 
     $board = LeadBoard::query()->where('name', 'Board mit Custom Phasen')->first();
 
-    // Custom phases were provided, so default phases should not be created
-    expect($board->phases)->toHaveCount(2)
+    // Custom phases were provided (default phases not created), plus the mandatory
+    // auto-created "Nicht qualifiziert" terminal phase
+    expect($board->phases)->toHaveCount(3)
         ->and($board->phases->pluck('name')->toArray())->toContain('Erste Phase', 'Zweite Phase');
 });
 
@@ -393,7 +395,8 @@ it('can add new phases via repeater on edit', function (): void {
 
     $board->refresh();
 
-    expect($board->phases)->toHaveCount(2);
+    // existing + new phase from the form, plus the mandatory "Nicht qualifiziert" terminal phase
+    expect($board->phases)->toHaveCount(3);
 });
 
 it('can add custom field definitions on edit', function (): void {
@@ -518,7 +521,8 @@ it('preserves existing phases when editing board metadata', function (): void {
     $board->refresh();
 
     expect($board->name)->toBe('Umbenanntes Board')
-        ->and($board->phases)->toHaveCount(3);
+        // 3 factory phases + the mandatory auto-created "Nicht qualifiziert" terminal phase
+        ->and($board->phases)->toHaveCount(4);
 });
 
 it('can delete a phase from repeater on edit', function (): void {
@@ -533,6 +537,11 @@ it('can delete a phase from repeater on edit', function (): void {
         ->for($board, 'board')
         ->create(['name' => 'Phase B', 'sort' => 1]);
 
+    // The mandatory "Nicht qualifiziert" terminal phase is auto-created by the observer.
+    // It must be kept in the submitted form data, otherwise removing the last terminal
+    // phase is blocked by the LeadPhaseObserver guard.
+    $disqualifiedPhase = $board->phases()->where('type', LeadPhaseTypeEnum::Disqualified->value)->firstOrFail();
+
     livewire(EditLeadBoard::class, ['record' => $board->getKey()])
         ->set('data.phases', [
             "record-{$phaseA->getKey()}" => [
@@ -542,14 +551,21 @@ it('can delete a phase from repeater on edit', function (): void {
                 'display_type' => $phaseA->display_type?->value ?? 'kanban',
                 'auto_convert' => false,
             ],
+            "record-{$disqualifiedPhase->getKey()}" => [
+                'name'         => $disqualifiedPhase->name,
+                'color'        => $disqualifiedPhase->color,
+                'type'         => LeadPhaseTypeEnum::Disqualified->value,
+                'display_type' => 'list',
+                'auto_convert' => false,
+            ],
         ])
         ->call('save')
         ->assertHasNoFormErrors();
 
     $board->refresh();
 
-    expect($board->phases)->toHaveCount(1)
-        ->and($board->phases->first()->name)->toBe('Phase A');
+    expect($board->phases)->toHaveCount(2)
+        ->and($board->phases->pluck('name')->toArray())->toContain('Phase A');
 });
 
 // ==========================================

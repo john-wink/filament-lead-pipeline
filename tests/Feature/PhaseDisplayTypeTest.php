@@ -40,6 +40,7 @@ it('filters phases by display type', function (): void {
         'sort'         => 1,
     ]);
 
+    // The board also carries the mandatory auto-created "Nicht qualifiziert" list phase.
     expect($board->phases()->kanban()->count())->toBe(1);
-    expect($board->phases()->list()->count())->toBe(1);
+    expect($board->phases()->list()->where('type', '!=', LeadPhaseTypeEnum::Disqualified->value)->count())->toBe(1);
 });

@@ -130,6 +130,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Meta Conversion-Leads Feedback
+    |--------------------------------------------------------------------------
+    | CRM→Conversions-API-Feedback-Schleife: meldet Lead-Ergebnisse (gewonnen /
+    | verloren / nicht qualifiziert) zurück an Meta, damit die Lead-Qualität
+    | optimiert wird. Config-gated und queued — leer/disabled = No-Op.
+    */
+    'meta' => [
+        'conversions' => [
+            'enabled'       => env('LEAD_PIPELINE_META_CONVERSIONS_ENABLED', false),
+            'dataset_id'    => env('LEAD_PIPELINE_META_DATASET_ID'),
+            'access_token'  => env('LEAD_PIPELINE_META_CONVERSIONS_TOKEN'),
+            'graph_version' => env('LEAD_PIPELINE_META_GRAPH_VERSION', 'v21.0'),
+            'event_map'     => [
+                'won'          => 'closed_won',
+                'lost'         => 'closed_lost',
+                'disqualified' => 'disqualified',
+            ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Wiedervorlage / Reminders
     |--------------------------------------------------------------------------
     | Scheduler benachrichtigt zugewiesene Berater über fällige Wiedervorlagen.

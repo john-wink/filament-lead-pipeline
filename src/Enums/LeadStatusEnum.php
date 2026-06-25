@@ -10,38 +10,42 @@ use Filament\Support\Contracts\HasLabel;
 
 enum LeadStatusEnum: string implements HasColor, HasIcon, HasLabel
 {
-    case Active    = 'active';
-    case Won       = 'won';
-    case Lost      = 'lost';
-    case Converted = 'converted';
+    case Active       = 'active';
+    case Won          = 'won';
+    case Lost         = 'lost';
+    case Disqualified = 'disqualified';
+    case Converted    = 'converted';
 
     public function getLabel(): string
     {
         return match ($this) {
-            self::Active    => __('lead-pipeline::lead-pipeline.status.active'),
-            self::Won       => __('lead-pipeline::lead-pipeline.status.won'),
-            self::Lost      => __('lead-pipeline::lead-pipeline.status.lost'),
-            self::Converted => __('lead-pipeline::lead-pipeline.status.converted'),
+            self::Active       => __('lead-pipeline::lead-pipeline.status.active'),
+            self::Won          => __('lead-pipeline::lead-pipeline.status.won'),
+            self::Lost         => __('lead-pipeline::lead-pipeline.status.lost'),
+            self::Disqualified => __('lead-pipeline::lead-pipeline.status.disqualified'),
+            self::Converted    => __('lead-pipeline::lead-pipeline.status.converted'),
         };
     }
 
     public function getColor(): string
     {
         return match ($this) {
-            self::Active    => 'primary',
-            self::Won       => 'success',
-            self::Lost      => 'danger',
-            self::Converted => 'info',
+            self::Active       => 'primary',
+            self::Won          => 'success',
+            self::Lost         => 'danger',
+            self::Disqualified => 'warning',
+            self::Converted    => 'info',
         };
     }
 
     public function getIcon(): string
     {
         return match ($this) {
-            self::Active    => 'heroicon-o-arrow-path',
-            self::Won       => 'heroicon-o-check-circle',
-            self::Lost      => 'heroicon-o-x-circle',
-            self::Converted => 'heroicon-o-arrow-right-circle',
+            self::Active       => 'heroicon-o-arrow-path',
+            self::Won          => 'heroicon-o-check-circle',
+            self::Lost         => 'heroicon-o-x-circle',
+            self::Disqualified => 'heroicon-o-no-symbol',
+            self::Converted    => 'heroicon-o-arrow-right-circle',
         };
     }
 }

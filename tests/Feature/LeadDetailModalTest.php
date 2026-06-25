@@ -338,6 +338,56 @@ it('dispatches phase-updated after marking as lost', function (): void {
         ->assertDispatched('phase-updated', phaseId: $phase->getKey());
 });
 
+// === MARK AS DISQUALIFIED ===
+
+it('moves the lead to the disqualified phase and sets status Disqualified', function (): void {
+    $board = LeadBoard::factory()->create();
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
+
+    // Die verpflichtende disqualified-Phase wurde vom Observer angelegt.
+    $disqualifiedPhase = $board->phases()
+        ->where('type', JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum::Disqualified->value)
+        ->firstOrFail();
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board') => $board->getKey(),
+        Lead::fkColumn('lead_phase') => $phase->getKey(),
+        'status'                     => LeadStatusEnum::Active,
+    ]);
+
+    Livewire::test(LeadDetailModal::class)
+        ->dispatch('open-lead-detail', leadId: $lead->getKey())
+        ->call('markAsDisqualified', 'Budget zu gering')
+        ->assertOk();
+
+    $lead->refresh();
+
+    expect($lead->status)->toBe(LeadStatusEnum::Disqualified)
+        ->and($lead->{Lead::fkColumn('lead_phase')})->toBe($disqualifiedPhase->getKey())
+        ->and($lead->lost_at)->toBeNull()
+        ->and($lead->lost_reason)->toBeNull();
+});
+
+it('logs the disqualification reason as an Updated activity', function (): void {
+    $board = LeadBoard::factory()->create();
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board') => $board->getKey(),
+        Lead::fkColumn('lead_phase') => $phase->getKey(),
+        'status'                     => LeadStatusEnum::Active,
+    ]);
+
+    Livewire::test(LeadDetailModal::class)
+        ->dispatch('open-lead-detail', leadId: $lead->getKey())
+        ->call('markAsDisqualified', 'Budget zu gering');
+
+    $activity = $lead->activities()->latest('id')->first();
+
+    expect($activity->type)->toBe(LeadActivityTypeEnum::Updated)
+        ->and($activity->description)->toContain('Budget zu gering');
+});
+
 // === CLOSE ===
 
 it('can close the modal', function (): void {

@@ -271,6 +271,41 @@ class LeadDetailModal extends Component
         $this->dispatch('phase-updated', phaseId: $this->lead->phase?->getKey() ?? '');
     }
 
+    public function markAsDisqualified(string $reason = ''): void
+    {
+        if ( ! $this->lead) {
+            return;
+        }
+
+        $this->authorizeAccess();
+
+        $this->lead->update([
+            'status' => LeadStatusEnum::Disqualified,
+        ]);
+
+        $this->lead->activities()->create([
+            'type'        => LeadActivityTypeEnum::Updated->value,
+            'description' => '' !== $reason
+                ? __('lead-pipeline::lead-pipeline.actions.disqualified_with_reason', ['reason' => $reason])
+                : __('lead-pipeline::lead-pipeline.actions.disqualified_no_reason'),
+            'causer_type' => config('lead-pipeline.user_model'),
+            'causer_id'   => auth()->id(),
+        ]);
+
+        $disqualifiedPhase = $this->boardPhases()->firstWhere('type', LeadPhaseTypeEnum::Disqualified);
+
+        if ($disqualifiedPhase) {
+            $fromPhase = $this->lead->phase;
+            $this->lead->moveToPhase($disqualifiedPhase);
+            $this->dispatch('phase-updated', phaseId: $fromPhase?->getKey());
+            $this->dispatch('phase-updated', phaseId: $disqualifiedPhase->getKey());
+        }
+
+        $this->lead->load('phase');
+        $this->reloadActivities();
+        $this->dispatch('phase-updated', phaseId: $this->lead->phase?->getKey() ?? '');
+    }
+
     public function assignUser(string $userId): void
     {
         if ( ! $this->lead) {

@@ -157,7 +157,7 @@ class LeadBoardResource extends Resource
                                     ->default(LeadPhaseTypeEnum::InProgress->value)
                                     ->live()
                                     ->afterStateUpdated(function (Forms\Set $set, ?string $state) {
-                                        if ($state && in_array($state, ['won', 'lost'])) {
+                                        if ($state && in_array($state, ['won', 'lost', 'disqualified'])) {
                                             $set('display_type', 'list');
                                         }
                                     }),

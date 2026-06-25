@@ -27,7 +27,8 @@ it('can create a board', function (): void {
 it('creates default phases with board', function (): void {
     $board = LeadBoard::factory()->withDefaultPhases()->create();
 
-    expect($board->phases)->toHaveCount(6);
+    // 6 default phases + the mandatory auto-created "Nicht qualifiziert" terminal phase
+    expect($board->phases)->toHaveCount(7);
 });
 
 it('creates system fields with board', function (): void {
@@ -41,7 +42,7 @@ it('phases are ordered by sort', function (): void {
     LeadPhase::factory()->for($board, 'board')->create(['name' => 'Second', 'sort' => 2]);
     LeadPhase::factory()->for($board, 'board')->create(['name' => 'First', 'sort' => 1]);
 
-    $phases = $board->phases()->ordered()->get();
+    $phases = $board->phases()->ordered()->where('type', '!=', LeadPhaseTypeEnum::Disqualified->value)->get();
 
     expect($phases->first()->name)->toBe('First')
         ->and($phases->last()->name)->toBe('Second');
@@ -274,7 +275,7 @@ it('LeadPhaseTypeEnum identifies terminal phases', function (): void {
 });
 
 it('LeadStatusEnum has all expected cases', function (): void {
-    expect(LeadStatusEnum::cases())->toHaveCount(4);
+    expect(LeadStatusEnum::cases())->toHaveCount(5);
 });
 
 // === Relationship Tests ===

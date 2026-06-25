@@ -5,7 +5,7 @@
 
         {{-- Slide-over panel --}}
         <div class="fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto bg-white shadow-2xl dark:bg-gray-900"
-            x-data="{ showLostReason: false, lostReason: '' }"
+            x-data="{ showLostReason: false, lostReason: '', showDisqualifiedReason: false, disqualifiedReason: '' }"
             x-transition:enter="transform transition ease-in-out duration-300"
             x-transition:enter-start="translate-x-full"
             x-transition:enter-end="translate-x-0"
@@ -320,6 +320,37 @@
                                 </button>
                                 <button
                                     @click="showLostReason = false; lostReason = '';"
+                                    class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
+                                    {{ __('lead-pipeline::lead-pipeline.actions.cancel') }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            x-show="!showDisqualifiedReason"
+                            @click="showDisqualifiedReason = true"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-amber-600 hover:bg-amber-50 dark:border-amber-700 dark:bg-gray-800 dark:text-amber-400 dark:hover:bg-amber-900/20 transition-colors">
+                            <x-heroicon-o-no-symbol class="h-4 w-4" />
+                            {{ __('lead-pipeline::lead-pipeline.actions.mark_disqualified') }}
+                        </button>
+
+                        {{-- Disqualified reason form --}}
+                        <div x-show="showDisqualifiedReason" x-cloak x-transition class="w-full space-y-2">
+                            <label class="text-xs font-medium text-gray-700 dark:text-gray-300">{{ __('lead-pipeline::lead-pipeline.actions.reason_optional') }}</label>
+                            <textarea
+                                x-model="disqualifiedReason"
+                                rows="2"
+                                placeholder="{{ __('lead-pipeline::lead-pipeline.actions.disqualified_reason_placeholder') }}"
+                                class="w-full rounded-lg border-gray-300 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 focus:border-amber-500 focus:ring-amber-500 placeholder:text-gray-400"></textarea>
+                            <div class="flex gap-2">
+                                <button
+                                    @click="$wire.markAsDisqualified(disqualifiedReason); showDisqualifiedReason = false; disqualifiedReason = '';"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700 transition-colors">
+                                    <x-heroicon-o-no-symbol class="h-3.5 w-3.5" />
+                                    {{ __('lead-pipeline::lead-pipeline.actions.confirm') }}
+                                </button>
+                                <button
+                                    @click="showDisqualifiedReason = false; disqualifiedReason = '';"
                                     class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors">
                                     {{ __('lead-pipeline::lead-pipeline.actions.cancel') }}
                                 </button>
