@@ -285,6 +285,7 @@
                 $filterKey = md5(json_encode($this->filters));
             @endphp
             <div
+                wire:key="kanban-tab-content-board"
                 data-kanban-board
                 data-kanban-component-id="{{ $this->getId() }}"
                 class="flex-1 overflow-hidden min-h-0 lead-kanban-board"
@@ -294,7 +295,7 @@
                 @endforeach
             </div>
         @else
-            <div class="flex-1 min-h-0">
+            <div wire:key="kanban-tab-content-list-{{ $this->activeTab }}" class="flex-1 min-h-0">
                 @livewire('lead-pipeline::phase-list-table', ['phaseId' => $this->activeTab], key('list-' . $this->activeTab))
             </div>
         @endif
