@@ -116,7 +116,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                     ->withoutOverlapping()->onOneServer();
 
                 if (config('lead-pipeline.reports.sync.hourly_current_day', true)) {
-                    $schedule->command(Commands\SyncMetaReportsCommand::class, ['--days' => 1, '--skip-creatives' => true])
+                    $schedule->command(Commands\SyncMetaReportsCommand::class, ['--days' => 1, '--skip-creatives'])
                         ->hourly()->withoutOverlapping()->onOneServer();
                 }
             });
