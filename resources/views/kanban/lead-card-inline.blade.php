@@ -44,20 +44,20 @@
     {{-- Zone 2: Klickbarer Content --}}
     <div class="px-3 pb-3 pt-2 cursor-pointer" x-on:click="$dispatch('open-lead-detail', { leadId: '{{ $lead->getKey() }}' })">
         <div class="space-y-1 mb-2">
+            {{--
+                Telefon/E-Mail bewusst als reiner Text (kein Kontakt-Link). Sonst fängt der
+                Link-Klick (@click.stop) das Öffnen des Detail-Modals ab und man landet im
+                Mail-/Telefon-Programm. Die klickbaren, geloggten Kontakt-Aktionen gibt es im
+                Detail-Modal. Klick irgendwo auf die Karte -> Modal.
+            --}}
             @if($lead->email)
                 <div class="text-xs text-gray-500 dark:text-gray-400 truncate">
-                    <a href="mailto:{{ $lead->email }}"
-                        @click.stop="$wire.logContact('{{ $lead->getKey() }}', 'email')"
-                        class="hover:text-primary-600 dark:hover:text-primary-400 hover:underline"
-                        title="{{ __('lead-pipeline::lead-pipeline.actions.contact_email_hint') }}">{{ $lead->email }}</a>
+                    <span>{{ $lead->email }}</span>
                 </div>
             @endif
             @if($lead->phone)
                 <div class="text-xs text-gray-500 dark:text-gray-400">
-                    <a href="tel:{{ $lead->phone }}"
-                        @click.stop="$wire.logContact('{{ $lead->getKey() }}', 'phone')"
-                        class="hover:text-primary-600 dark:hover:text-primary-400 hover:underline"
-                        title="{{ __('lead-pipeline::lead-pipeline.actions.contact_phone_hint') }}">{{ $lead->phone }}</a>
+                    <span>{{ $lead->phone }}</span>
                 </div>
             @endif
         </div>
