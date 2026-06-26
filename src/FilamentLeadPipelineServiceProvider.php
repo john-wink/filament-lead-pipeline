@@ -32,6 +32,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                 GenerateDemoDataCommand::class,
                 Commands\ConnectFacebookCommand::class,
                 Commands\FacebookWebhookStatusCommand::class,
+                Commands\FacebookSetupWebhookCommand::class,
                 RefreshFacebookTokensCommand::class,
                 Commands\SyncMetaReportsCommand::class,
                 Commands\SendScheduledReportsCommand::class,

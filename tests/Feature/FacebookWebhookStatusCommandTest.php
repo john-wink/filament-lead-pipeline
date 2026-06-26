@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookForm;
@@ -166,4 +167,81 @@ it('filters by team slug', function (): void {
         ->expectsOutputToContain('My Page')
         ->doesntExpectOutputToContain('Other Team Page')
         ->assertSuccessful();
+});
+
+it('warns prominently when the app-level webhook subscription is missing', function (): void {
+    config([
+        'lead-pipeline.facebook.client_id'     => 'app-123',
+        'lead-pipeline.facebook.client_secret' => 'secret-xyz',
+    ]);
+
+    $connection = makeConnection($this->team, $this->user);
+    makePage($connection, 'page-ok', 'Bochum Wohnung');
+
+    Http::fake([
+        'graph.facebook.com/*/app-123/subscriptions*'   => Http::response(['data' => []]),
+        'graph.facebook.com/*/page-ok/subscribed_apps*' => Http::response([
+            'data' => [['id' => 'app-123', 'subscribed_fields' => ['leadgen']]],
+        ]),
+    ]);
+
+    $exitCode = Artisan::call('lead-pipeline:facebook-webhook-status');
+    $output   = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('App-Level')
+        ->and($output)->toContain('FEHLT')
+        ->and($output)->toContain('lead-pipeline:facebook-setup-webhook');
+});
+
+it('confirms the app-level webhook subscription when present', function (): void {
+    config([
+        'lead-pipeline.facebook.client_id'     => 'app-123',
+        'lead-pipeline.facebook.client_secret' => 'secret-xyz',
+    ]);
+
+    $connection = makeConnection($this->team, $this->user);
+    makePage($connection, 'page-ok', 'Horb Haus');
+
+    Http::fake([
+        'graph.facebook.com/*/app-123/subscriptions*' => Http::response(['data' => [
+            ['object' => 'page', 'active' => true, 'fields' => [['name' => 'leadgen', 'version' => 'v25.0']]],
+        ]]),
+        'graph.facebook.com/*/page-ok/subscribed_apps*' => Http::response([
+            'data' => [['id' => 'app-123', 'subscribed_fields' => ['leadgen']]],
+        ]),
+    ]);
+
+    $exitCode = Artisan::call('lead-pipeline:facebook-webhook-status');
+    $output   = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('App-Level')
+        ->and($output)->not->toContain('FEHLT');
+});
+
+it('treats a page subscribed only by a foreign app as NICHT ABONNIERT', function (): void {
+    config([
+        'lead-pipeline.facebook.client_id'     => 'app-123',
+        'lead-pipeline.facebook.client_secret' => 'secret-xyz',
+    ]);
+
+    $connection = makeConnection($this->team, $this->user);
+    makePage($connection, 'page-foreign', 'Fremd-App Page');
+
+    Http::fake([
+        'graph.facebook.com/*/app-123/subscriptions*' => Http::response(['data' => [
+            ['object' => 'page', 'active' => true, 'fields' => [['name' => 'leadgen', 'version' => 'v25.0']]],
+        ]]),
+        'graph.facebook.com/*/page-foreign/subscribed_apps*' => Http::response([
+            'data' => [['id' => 'some-other-app', 'subscribed_fields' => ['leadgen']]],
+        ]),
+    ]);
+
+    $exitCode = Artisan::call('lead-pipeline:facebook-webhook-status');
+    $output   = Artisan::output();
+
+    expect($exitCode)->toBe(0)
+        ->and($output)->toContain('Fremd-App Page')
+        ->and($output)->toContain('NICHT ABONNIERT');
 });

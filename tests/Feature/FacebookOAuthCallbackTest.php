@@ -137,3 +137,66 @@ it('rejects an untrusted opener origin and falls back to app.url', function (): 
         ->assertOk()
         ->assertSee('var targetOrigin = "https://finance-estate.test"', false);
 });
+
+it('subscribes the app to leadgen at the app level after connect when it is missing', function (): void {
+    config()->set('lead-pipeline.facebook.verify_token', 'verify-secret');
+    config()->set('lead-pipeline.public_url', 'https://funnel.finance-estate.test');
+    config()->set('lead-pipeline.webhooks.prefix', 'api/lead-pipeline/webhooks');
+
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*'           => Http::response(['access_token' => 'll', 'token_type' => 'bearer', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'                  => Http::response(['data' => []]),
+        'graph.facebook.com/*/me*'                           => Http::response(['id' => 'fb-app-sub-1', 'name' => 'App Sub User']),
+        'graph.facebook.com/*/test-client-id/subscriptions*' => function ($request) {
+            if ('POST' === $request->method()) {
+                return Http::response(['success' => true]);
+            }
+
+            return Http::response(['data' => []]);
+        },
+    ]);
+
+    $nonce = 'app-sub-nonce-1';
+    $state = base64_encode(json_encode(['nonce' => $nonce, 'team' => $this->team->uuid]));
+
+    $this->withSession(['facebook_oauth_nonce' => $nonce])
+        ->get(route('lead-pipeline.facebook.callback', ['code' => 'auth-code', 'state' => $state]))
+        ->assertOk();
+
+    Http::assertSent(fn ($request) => 'POST' === $request->method()
+        && str_contains($request->url(), '/test-client-id/subscriptions')
+        && 'page' === $request['object']
+        && 'leadgen' === $request['fields']
+        && 'https://funnel.finance-estate.test/api/lead-pipeline/webhooks/meta' === $request['callback_url']
+        && 'verify-secret' === $request['verify_token']);
+});
+
+it('does not re-subscribe at the app level when it is already active', function (): void {
+    config()->set('lead-pipeline.facebook.verify_token', 'verify-secret');
+    config()->set('lead-pipeline.public_url', 'https://funnel.finance-estate.test');
+
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*'           => Http::response(['access_token' => 'll', 'token_type' => 'bearer', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'                  => Http::response(['data' => []]),
+        'graph.facebook.com/*/me*'                           => Http::response(['id' => 'fb-app-sub-2', 'name' => 'Already Active']),
+        'graph.facebook.com/*/test-client-id/subscriptions*' => function ($request) {
+            if ('POST' === $request->method()) {
+                return Http::response(['success' => true]);
+            }
+
+            return Http::response(['data' => [
+                ['object' => 'page', 'active' => true, 'fields' => [['name' => 'leadgen', 'version' => 'v25.0']]],
+            ]]);
+        },
+    ]);
+
+    $nonce = 'app-sub-nonce-2';
+    $state = base64_encode(json_encode(['nonce' => $nonce, 'team' => $this->team->uuid]));
+
+    $this->withSession(['facebook_oauth_nonce' => $nonce])
+        ->get(route('lead-pipeline.facebook.callback', ['code' => 'auth-code', 'state' => $state]))
+        ->assertOk();
+
+    Http::assertNotSent(fn ($request) => 'POST' === $request->method()
+        && str_contains($request->url(), '/test-client-id/subscriptions'));
+});

@@ -225,9 +225,89 @@ class FacebookGraphService
      */
     public function isPageSubscribedToLeadgen(string $pageId, string $pageAccessToken): bool
     {
+        $appId = (string) config('lead-pipeline.facebook.client_id');
+
         foreach ($this->getPageSubscribedApps($pageId, $pageAccessToken) as $app) {
+            if ('' !== $appId && ($app['id'] ?? null) !== $appId) {
+                continue;
+            }
+
             if (in_array('leadgen', $app['subscribed_fields'] ?? [], true)) {
                 return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * App-level webhook subscriptions (`GET /{app-id}/subscriptions`), read with an app access token.
+     *
+     * @return array<int, array{object?: string, callback_url?: string, active?: bool, fields?: array<int, array{name?: string, version?: string}>}>
+     *
+     * @throws ConnectionException
+     * @throws FacebookGraphException
+     */
+    public function getAppSubscriptions(): array
+    {
+        $appId = (string) config('lead-pipeline.facebook.client_id');
+
+        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$appId}/subscriptions", [
+            'access_token' => $this->appAccessToken(),
+        ]);
+
+        if ($response->failed()) {
+            throw $this->classifyError($response, 'Failed to fetch app subscriptions');
+        }
+
+        return $response->json('data', []);
+    }
+
+    /**
+     * Subscribe the app to the page `leadgen` field at the app level
+     * (`POST /{app-id}/subscriptions`). This is the App-Dashboard webhook config:
+     * it tells Meta WHICH callback URL receives leadgen events. Without it Meta
+     * never delivers a webhook, regardless of the page-level `subscribed_apps`.
+     *
+     * @throws ConnectionException
+     * @throws FacebookGraphException
+     */
+    public function subscribeAppToLeadgen(string $callbackUrl, string $verifyToken): bool
+    {
+        $appId = (string) config('lead-pipeline.facebook.client_id');
+
+        $response = $this->client()->post("{$this->graphUrl}/{$this->graphVersion}/{$appId}/subscriptions", [
+            'object'         => 'page',
+            'callback_url'   => $callbackUrl,
+            'fields'         => 'leadgen',
+            'verify_token'   => $verifyToken,
+            'include_values' => 'true',
+            'access_token'   => $this->appAccessToken(),
+        ]);
+
+        if ($response->failed()) {
+            throw $this->classifyError($response, 'Failed to subscribe app to leadgen');
+        }
+
+        return $response->json('success', false);
+    }
+
+    /**
+     * Convenience: is the app subscribed to an active `page`/`leadgen` Webhook at the app level?
+     *
+     * @throws ConnectionException
+     */
+    public function isAppSubscribedToLeadgen(): bool
+    {
+        foreach ($this->getAppSubscriptions() as $subscription) {
+            if ('page' !== ($subscription['object'] ?? null) || true !== ($subscription['active'] ?? false)) {
+                continue;
+            }
+
+            foreach ($subscription['fields'] ?? [] as $field) {
+                if ('leadgen' === ($field['name'] ?? null)) {
+                    return true;
+                }
             }
         }
 
@@ -505,6 +585,14 @@ class FacebookGraphService
         ])->throw();
 
         return collect($response->json('data', []))->pluck('name', 'id')->all();
+    }
+
+    /**
+     * App access token (`{app-id}|{app-secret}`) for app-level subscription management.
+     */
+    private function appAccessToken(): string
+    {
+        return config('lead-pipeline.facebook.client_id') . '|' . config('lead-pipeline.facebook.client_secret');
     }
 
     private function client(): PendingRequest

@@ -10,6 +10,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionReconnected;
+use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
@@ -113,6 +114,8 @@ class FacebookOAuthController
             }
         }
 
+        $this->ensureAppLevelLeadgenSubscription();
+
         $targetOrigin = json_encode(
             $this->resolveTrustedOrigin($stateData['origin'] ?? null),
             JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_SLASHES,
@@ -151,6 +154,38 @@ class FacebookOAuthController
             </body>
             </html>
         HTML);
+    }
+
+    /**
+     * Ensure the global app-level leadgen Webhook subscription exists (idempotent self-heal).
+     * The page-level `subscribed_apps` alone is not enough: without the app-level subscription
+     * (callback URL registered at `/{app-id}/subscriptions`) Meta delivers no webhooks at all.
+     * Best-effort — never breaks the connect flow.
+     */
+    private function ensureAppLevelLeadgenSubscription(): void
+    {
+        $verifyToken = config('lead-pipeline.facebook.verify_token');
+
+        if ( ! config('lead-pipeline.facebook.client_id')
+            || ! config('lead-pipeline.facebook.client_secret')
+            || ! $verifyToken) {
+            return;
+        }
+
+        try {
+            if ($this->facebook->isAppSubscribedToLeadgen()) {
+                return;
+            }
+
+            $prefix      = config('lead-pipeline.webhooks.prefix', 'api/lead-pipeline/webhooks');
+            $callbackUrl = FilamentLeadPipelinePlugin::publicUrl(mb_rtrim((string) $prefix, '/') . '/meta');
+
+            $this->facebook->subscribeAppToLeadgen($callbackUrl, (string) $verifyToken);
+        } catch (Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('App-level leadgen webhook subscription failed', [
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

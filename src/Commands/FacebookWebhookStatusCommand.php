@@ -33,6 +33,8 @@ class FacebookWebhookStatusCommand extends Command
             return self::SUCCESS;
         }
 
+        $this->renderAppLevelStatus($facebook);
+
         $totalCount   = 0;
         $okCount      = 0;
         $brokenCount  = 0;
@@ -88,6 +90,36 @@ class FacebookWebhookStatusCommand extends Command
         ));
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The app-level subscription (`/{app-id}/subscriptions`) is global per Meta app and tells
+     * Meta WHERE to deliver leadgen events. Without it, no page-level "OK" matters — Meta sends nothing.
+     */
+    private function renderAppLevelStatus(FacebookGraphService $facebook): void
+    {
+        if ( ! config('lead-pipeline.facebook.client_id')) {
+            return;
+        }
+
+        try {
+            $active = $facebook->isAppSubscribedToLeadgen();
+        } catch (Exception $e) {
+            $this->line('App-Level-Webhook (Meta App): <fg=yellow>PRÜFUNG FEHLGESCHLAGEN</> — ' . $this->truncate($e->getMessage(), 160));
+            $this->newLine();
+
+            return;
+        }
+
+        if ($active) {
+            $this->line('App-Level-Webhook (Meta App): <fg=green>✓ aktiv</>');
+        } else {
+            $this->line('App-Level-Webhook (Meta App): <fg=red>✗ FEHLT</>');
+            $this->line('  Meta sendet KEINE Echtzeit-Leads, solange das fehlt — auch wenn Pages unten „OK" zeigen.');
+            $this->line('  Behebung: php artisan lead-pipeline:facebook-setup-webhook');
+        }
+
+        $this->newLine();
     }
 
     private function renderPageBlock(string $teamName, string $connUser, FacebookPage $page, string $status): void
