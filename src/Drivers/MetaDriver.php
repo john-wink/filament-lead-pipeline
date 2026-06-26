@@ -29,6 +29,43 @@ use Throwable;
 
 class MetaDriver implements LeadSourceDriver
 {
+    /**
+     * Special `board_field_key` values that map a Facebook field directly onto a
+     * core lead field. Lets users assign fields Meta didn't auto-detect (e.g. a
+     * custom "Geschäftliche E-Mail" field of type CUSTOM) to name/email/phone.
+     *
+     * @var array<string, string>
+     */
+    public const CORE_FIELD_MAP = [
+        '__core_name__'  => 'name',
+        '__core_email__' => 'email',
+        '__core_phone__' => 'phone',
+    ];
+
+    /**
+     * Resolves explicit core-field overrides (name/email/phone) from a source's
+     * `custom_field_mapping` against the extracted Facebook field data.
+     *
+     * @param  array<int, array<string, mixed>>  $customMapping
+     * @param  array<string, mixed>  $fieldData
+     * @return array<string, string> e.g. ['email' => 'biz@example.com']
+     */
+    public static function resolveCoreFieldOverrides(array $customMapping, array $fieldData): array
+    {
+        $overrides = [];
+
+        foreach ($customMapping as $item) {
+            $boardKey = $item['board_field_key'] ?? '';
+            $fbKey    = $item['facebook_key'] ?? '';
+
+            if (isset(self::CORE_FIELD_MAP[$boardKey], $fieldData[$fbKey]) && '' !== $fieldData[$fbKey]) {
+                $overrides[self::CORE_FIELD_MAP[$boardKey]] = (string) $fieldData[$fbKey];
+            }
+        }
+
+        return $overrides;
+    }
+
     public function getDisplayName(): string
     {
         return 'Facebook / Meta';
@@ -57,10 +94,21 @@ class MetaDriver implements LeadSourceDriver
             $name = mb_trim("{$firstName} {$lastName}");
         }
 
+        // Explicit core-field mappings (e.g. a CUSTOM field assigned to email) win over auto-detection.
+        $coreOverrides = self::resolveCoreFieldOverrides($customMapping, $fieldData);
+        $name          = $coreOverrides['name'] ?? $name;
+        $email         = $coreOverrides['email'] ?? $email;
+        $phone         = $coreOverrides['phone'] ?? $phone;
+
         $customFields = [];
         foreach ($customMapping as $item) {
             $fbKey    = $item['facebook_key'] ?? '';
             $boardKey = $item['board_field_key'] ?? '__ignore__';
+
+            if (isset(self::CORE_FIELD_MAP[$boardKey])) {
+                continue; // already applied as a core override
+            }
+
             if ('__ignore__' !== $boardKey && '__create__' !== $boardKey && isset($fieldData[$fbKey])) {
                 $customFields[$boardKey] = $fieldData[$fbKey];
             }
@@ -222,6 +270,14 @@ class MetaDriver implements LeadSourceDriver
                             Select::make('board_field_key')
                                 ->label(__('lead-pipeline::lead-pipeline.facebook.board_field'))
                                 ->options(function (callable $get) {
+                                    $coreOptions = [
+                                        '__ignore__'     => __('lead-pipeline::lead-pipeline.facebook.no_mapping'),
+                                        '__core_name__'  => __('lead-pipeline::lead-pipeline.facebook.core_name'),
+                                        '__core_email__' => __('lead-pipeline::lead-pipeline.facebook.core_email'),
+                                        '__core_phone__' => __('lead-pipeline::lead-pipeline.facebook.core_phone'),
+                                        '__create__'     => '+ ' . __('lead-pipeline::lead-pipeline.facebook.auto_create_fields'),
+                                    ];
+
                                     $boardFk = LeadSource::fkColumn('lead_board');
 
                                     // Depth varies: Edit = 3 levels, Create = 4 levels
@@ -235,19 +291,12 @@ class MetaDriver implements LeadSourceDriver
                                     }
 
                                     if ( ! $boardId) {
-                                        return [
-                                            '__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping'),
-                                            '__create__' => '+ ' . __('lead-pipeline::lead-pipeline.facebook.auto_create_fields'),
-                                        ];
+                                        return $coreOptions;
                                     }
                                     $board  = LeadBoard::find($boardId);
                                     $fields = $board?->fieldDefinitions()->custom()->ordered()->pluck('name', 'key')->toArray() ?? [];
 
-                                    return [
-                                        '__ignore__' => __('lead-pipeline::lead-pipeline.facebook.no_mapping'),
-                                        '__create__' => '+ ' . __('lead-pipeline::lead-pipeline.facebook.auto_create_fields'),
-                                        ...$fields,
-                                    ];
+                                    return [...$coreOptions, ...$fields];
                                 })
                                 ->live()
                                 ->default('__ignore__')

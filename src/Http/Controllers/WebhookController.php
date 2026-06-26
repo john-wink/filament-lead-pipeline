@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
+use JohnWink\FilamentLeadPipeline\Drivers\MetaDriver;
 use JohnWink\FilamentLeadPipeline\DTOs\WebhookPayloadData;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
@@ -207,13 +208,17 @@ class WebhookController
                 continue;
             }
 
-            $fbPage = FacebookPage::query()->where('page_id', $pageId)->first();
+            // The same page_id can map to multiple FacebookPage rows (one per connection/team).
+            // Consider all of them: the matching source may be bound to any of these rows.
+            $pages = FacebookPage::query()->where('page_id', $pageId)->get();
 
-            if ( ! $fbPage) {
+            if ($pages->isEmpty()) {
                 $this->logger->recordIncoming(null, $request, 'meta-central', 'skipped', 200, "page_not_found:{$pageId}");
 
                 continue;
             }
+
+            $pageUuids = $pages->pluck('uuid')->all();
 
             foreach ($changes as $change) {
                 if ('leadgen' !== ($change['field'] ?? '')) {
@@ -228,10 +233,10 @@ class WebhookController
                 }
 
                 $sources = LeadSource::query()
-                    ->where('facebook_page_uuid', $fbPage->uuid)
+                    ->whereIn('facebook_page_uuid', $pageUuids)
                     ->where('status', '!=', LeadSourceStatusEnum::Paused)
                     ->get()
-                    ->filter(fn ($source) => in_array($formId, $source->facebook_form_ids ?? [], true));
+                    ->filter(fn ($source) => in_array((string) $formId, array_map('strval', $source->facebook_form_ids ?? []), true));
 
                 if ($sources->isEmpty()) {
                     $this->logger->recordIncoming(null, $request, 'meta-central', 'skipped', 200, "form_not_mapped:{$formId}");
@@ -241,19 +246,36 @@ class WebhookController
 
                 $facebook = app(FacebookGraphService::class);
 
-                try {
-                    $leadData = $facebook->getLeadData($leadgenId, $fbPage->page_access_token);
-                } catch (FacebookTokenInvalidException $e) {
-                    $connection = $fbPage->connection;
-                    if ($connection) {
-                        $this->markConnectionNeedsReauth($connection, $e->getMessage());
+                // The lead data is identical regardless of which page row's token is used
+                // (same FB page). Try each available token until one succeeds, so a single
+                // expired connection token doesn't block leads that another connection can fetch.
+                $leadData       = null;
+                $lastTokenError = null;
+
+                foreach ($pages as $candidatePage) {
+                    if (blank($candidatePage->page_access_token)) {
+                        continue;
                     }
 
-                    $this->logger->recordIncoming(null, $request, 'meta-central', 'skipped', 200, 'token_invalid: ' . $e->getMessage());
+                    try {
+                        $leadData = $facebook->getLeadData($leadgenId, $candidatePage->page_access_token);
 
+                        break;
+                    } catch (FacebookTokenInvalidException $e) {
+                        $lastTokenError = $e;
+                        $connection     = $candidatePage->connection;
+                        if ($connection) {
+                            $this->markConnectionNeedsReauth($connection, $e->getMessage());
+                        }
+                    }
+                }
+
+                if (null === $leadData) {
                     // ACK (200 at the end) so Facebook stops retrying — prevents the 36h
                     // retry cascade + webhook subscription disablement. Missed leads are
                     // backfilled via ImportFacebookLeadsJob after reconnect.
+                    $this->logger->recordIncoming(null, $request, 'meta-central', 'skipped', 200, 'token_invalid: ' . ($lastTokenError?->getMessage() ?? 'no usable page token'));
+
                     continue;
                 }
 
@@ -360,6 +382,12 @@ class WebhookController
             $name = mb_trim("{$firstName} {$lastName}");
         }
 
+        // Explicit core-field mappings (Facebook field assigned to name/email/phone) win over auto-detection.
+        $coreOverrides = MetaDriver::resolveCoreFieldOverrides($customMapping, $fieldData);
+        $name          = $coreOverrides['name'] ?? $name;
+        $email         = $coreOverrides['email'] ?? $email;
+        $phone         = $coreOverrides['phone'] ?? $phone;
+
         $defaultAssignee = $source->default_assigned_to;
         $hasAssignee     = filled($defaultAssignee);
 
@@ -416,6 +444,10 @@ class WebhookController
         foreach ($customMapping as $item) {
             $fbKey    = $item['facebook_key'] ?? '';
             $boardKey = $item['board_field_key'] ?? '__ignore__';
+
+            if (isset(MetaDriver::CORE_FIELD_MAP[$boardKey])) {
+                continue; // already applied as a core override (name/email/phone)
+            }
 
             if ('__ignore__' === $boardKey || '__create__' === $boardKey || ! isset($fieldData[$fbKey])) {
                 continue;

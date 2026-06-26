@@ -13,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
+use JohnWink\FilamentLeadPipeline\Drivers\MetaDriver;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
@@ -151,6 +152,12 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     if (( ! $name || '' === $name) && ($firstName || $lastName)) {
                         $name = mb_trim("{$firstName} {$lastName}");
                     }
+
+                    // Explicit core-field mappings (Facebook field assigned to name/email/phone) win over auto-detection.
+                    $coreOverrides = MetaDriver::resolveCoreFieldOverrides($customMapping, $fieldData);
+                    $name          = $coreOverrides['name'] ?? $name;
+                    $email         = $coreOverrides['email'] ?? $email;
+                    $phone         = $coreOverrides['phone'] ?? $phone;
 
                     // Check if lead already exists (by Facebook Lead ID or email)
                     $existingLead = null;
