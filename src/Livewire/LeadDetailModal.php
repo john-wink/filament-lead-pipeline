@@ -364,6 +364,10 @@ class LeadDetailModal extends Component
 
         $this->authorizeAccess();
 
+        if ('value' === $field) {
+            $value = $this->normalizeLeadValue($value);
+        }
+
         $rules = match ($field) {
             'name'  => ['required', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -617,6 +621,34 @@ class LeadDetailModal extends Component
     private function reloadActivities(): void
     {
         $this->lead?->load($this->activityRelations());
+    }
+
+    private function normalizeLeadValue(mixed $value): mixed
+    {
+        if ( ! is_string($value)) {
+            return $value;
+        }
+
+        $value = mb_trim($value);
+
+        if ('' === $value) {
+            return null;
+        }
+
+        $commaPosition = mb_strrpos($value, ',');
+        $dotPosition   = mb_strrpos($value, '.');
+
+        if (false !== $commaPosition && false !== $dotPosition) {
+            return $commaPosition > $dotPosition
+                ? str_replace(',', '.', str_replace('.', '', $value))
+                : str_replace(',', '', $value);
+        }
+
+        if (false !== $commaPosition) {
+            return str_replace(',', '.', $value);
+        }
+
+        return $value;
     }
 
     private function authorizeAccess(): void
