@@ -40,6 +40,32 @@ it('can update core lead fields', function (): void {
         ->and((float) $this->lead->value)->toBe(5000.0);
 });
 
+it('normalizes lead value updates before validation', function (mixed $input, mixed $expected): void {
+    Livewire::test(LeadDetailModal::class)
+        ->call('openModal', $this->lead->getKey())
+        ->call('updateField', 'value', $input)
+        ->assertHasNoErrors();
+
+    $this->lead->refresh();
+
+    if (null === $expected) {
+        expect($this->lead->value)->toBeNull();
+
+        return;
+    }
+
+    expect((float) $this->lead->value)->toBe((float) $expected);
+})->with([
+    'empty string'      => ['', null],
+    'whitespace string' => ['   ', null],
+    'german decimal'    => ['1.234,56', '1234.56'],
+    'comma decimal'     => ['1234,56', '1234.56'],
+    'us thousands'      => ['1,234.56', '1234.56'],
+    'decimal string'    => ['1234.56', '1234.56'],
+    'integer value'     => [1234, 1234],
+    'null value'        => [null, null],
+]);
+
 it('validates core field updates', function (): void {
     Livewire::test(LeadDetailModal::class)
         ->call('openModal', $this->lead->getKey())
