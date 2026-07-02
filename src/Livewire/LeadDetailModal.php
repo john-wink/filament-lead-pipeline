@@ -15,6 +15,7 @@ use JohnWink\FilamentLeadPipeline\Exceptions\LeadAlreadyTransferredException;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
+use JohnWink\FilamentLeadPipeline\Models\LeadFieldValue;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Services\LeadTransferService;
 use Livewire\Attributes\Computed;
@@ -84,10 +85,37 @@ class LeadDetailModal extends Component
             'source',
             'assignedUser',
             'phase',
-            'board',
+            'board.fieldDefinitions',
             'fieldValues.definition',
             ...$this->activityRelations(),
         ])->find($this->leadId);
+    }
+
+    /**
+     * Alle Nicht-System-Felddefinitionen des Boards mit dem jeweils gespeicherten
+     * Wert des Leads (oder null). Das Modal rendert damit auch Felder, die noch
+     * keinen Wert haben — sonst koennten sie nie nachgefuellt werden.
+     *
+     * @return Collection<int, array{definition: LeadFieldDefinition, value: ?LeadFieldValue}>
+     */
+    public function customFieldRows(): Collection
+    {
+        if (null === $this->lead || null === $this->lead->board) {
+            return collect();
+        }
+
+        $valuesByDefinition = $this->lead->fieldValues->keyBy(
+            LeadFieldValue::fkColumn('lead_field_definition'),
+        );
+
+        return $this->lead->board->fieldDefinitions
+            ->where('is_system', false)
+            ->sortBy('sort')
+            ->values()
+            ->map(fn (LeadFieldDefinition $definition): array => [
+                'definition' => $definition,
+                'value'      => $valuesByDefinition->get($definition->getKey()),
+            ]);
     }
 
     public function closeModal(): void

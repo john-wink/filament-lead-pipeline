@@ -59,9 +59,9 @@ it('updates a field without reloading the full relation graph', function (): voi
     DB::disableQueryLog();
 
     expect($this->lead->refresh()->name)->toBe('Neuer Name')
-        // Untergrenze = EIN Graph-Load pro Request (Computed-Lead) + Update.
+        // Untergrenze = EIN Graph-Load pro Request (Computed-Lead, inkl. board.fieldDefinitions) + Update.
         // Vorher: Hydration-Reload + expliziter 7-Relationen-Reload mit 50er-Activities ≈ 16+.
-        ->and($queryCount)->toBeLessThanOrEqual(10);
+        ->and($queryCount)->toBeLessThanOrEqual(11);
 });
 
 it('adding a note reloads only the activity timeline', function (): void {

@@ -540,3 +540,118 @@ it('handles markAsLost when lead is null', function (): void {
         ->call('markAsLost', 'Some reason')
         ->assertOk();
 });
+
+// === CUSTOM FIELDS: ALLE BOARD-DEFINITIONEN ===
+
+it('shows board field definitions even when the lead has no stored value', function (): void {
+    $board = LeadBoard::factory()->create();
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
+
+    $board->fieldDefinitions()->create([
+        'key'  => 'budget',
+        'name' => 'Budget',
+        'type' => LeadFieldTypeEnum::String,
+        'sort' => 1,
+    ]);
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board') => $board->getKey(),
+        Lead::fkColumn('lead_phase') => $phase->getKey(),
+    ]);
+
+    Livewire::test(LeadDetailModal::class)
+        ->dispatch('open-lead-detail', leadId: $lead->getKey())
+        ->assertSee('Budget');
+});
+
+it('shows stored values alongside definitions without a value', function (): void {
+    $board = LeadBoard::factory()->create();
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
+
+    $budget = $board->fieldDefinitions()->create([
+        'key'  => 'budget',
+        'name' => 'Budget',
+        'type' => LeadFieldTypeEnum::String,
+        'sort' => 1,
+    ]);
+
+    $board->fieldDefinitions()->create([
+        'key'  => 'plz',
+        'name' => 'Postleitzahl',
+        'type' => LeadFieldTypeEnum::String,
+        'sort' => 2,
+    ]);
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board') => $board->getKey(),
+        Lead::fkColumn('lead_phase') => $phase->getKey(),
+    ]);
+    $lead->setFieldValue($budget, '500k');
+
+    Livewire::test(LeadDetailModal::class)
+        ->dispatch('open-lead-detail', leadId: $lead->getKey())
+        ->assertSee('500k')
+        ->assertSee('Postleitzahl');
+});
+
+it('orders custom fields by definition sort', function (): void {
+    $board = LeadBoard::factory()->create();
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
+
+    $board->fieldDefinitions()->create(['key' => 'zweites', 'name' => 'Zweites Feld', 'type' => LeadFieldTypeEnum::String, 'sort' => 2]);
+    $board->fieldDefinitions()->create(['key' => 'erstes', 'name' => 'Erstes Feld', 'type' => LeadFieldTypeEnum::String, 'sort' => 1]);
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board') => $board->getKey(),
+        Lead::fkColumn('lead_phase') => $phase->getKey(),
+    ]);
+
+    Livewire::test(LeadDetailModal::class)
+        ->dispatch('open-lead-detail', leadId: $lead->getKey())
+        ->assertSeeInOrder(['Erstes Feld', 'Zweites Feld']);
+});
+
+it('excludes system fields from the custom fields section', function (): void {
+    $board = LeadBoard::factory()->create();
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board') => $board->getKey(),
+        Lead::fkColumn('lead_phase') => $phase->getKey(),
+    ]);
+
+    $component = Livewire::test(LeadDetailModal::class)
+        ->dispatch('open-lead-detail', leadId: $lead->getKey());
+
+    $keys = $component->instance()
+        ->customFieldRows()
+        ->map(fn (array $row): string => $row['definition']->key);
+
+    expect($keys)->not->toContain('name')
+        ->not->toContain('email')
+        ->not->toContain('phone');
+});
+
+it('fills a definition that has no stored value yet', function (): void {
+    $board = LeadBoard::factory()->create();
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create(['sort' => 0]);
+
+    $budget = $board->fieldDefinitions()->create([
+        'key'  => 'budget',
+        'name' => 'Budget',
+        'type' => LeadFieldTypeEnum::String,
+        'sort' => 1,
+    ]);
+
+    $lead = Lead::factory()->create([
+        Lead::fkColumn('lead_board') => $board->getKey(),
+        Lead::fkColumn('lead_phase') => $phase->getKey(),
+    ]);
+
+    Livewire::test(LeadDetailModal::class)
+        ->dispatch('open-lead-detail', leadId: $lead->getKey())
+        ->call('updateCustomField', $budget->getKey(), 'Nachgetragen am Telefon')
+        ->assertOk();
+
+    expect($lead->refresh()->getFieldValue('budget'))->toBe('Nachgetragen am Telefon');
+});

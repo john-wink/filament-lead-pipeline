@@ -191,28 +191,32 @@
 
                 <hr class="lead-section-divider" />
 
-                {{-- Custom Field Values --}}
-                @if($lead->fieldValues->isNotEmpty())
+                {{-- Custom Field Values: alle Board-Definitionen, auch ohne gespeicherten Wert --}}
+                @php $customFieldRows = $this->customFieldRows(); @endphp
+                @if($customFieldRows->isNotEmpty())
                     <div>
                         <h3 class="mb-2.5 text-sm font-semibold text-gray-900 dark:text-gray-100">{{ __('lead-pipeline::lead-pipeline.field.fields') }}</h3>
                         <div class="space-y-1.5">
-                            @foreach($lead->fieldValues as $fieldValue)
-                                @if($fieldValue->definition)
-                                    <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800">
-                                        <span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ $fieldValue->definition->name }}</span>
+                            @foreach($customFieldRows as $row)
+                                @php
+                                    $definition = $row['definition'];
+                                    $fieldValue = $row['value'];
+                                @endphp
+                                    <div class="rounded-lg bg-gray-50 px-3 py-2 dark:bg-gray-800" wire:key="custom-field-{{ $definition->getKey() }}">
+                                        <span class="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ $definition->name }}</span>
                                         <div x-data="{ editing: false }">
                                             @php
-                                                $defType = $fieldValue->definition->type;
-                                                $defId = $fieldValue->definition->getKey();
-                                                $defOptions = $fieldValue->definition->options ?? [];
+                                                $defType = $definition->type;
+                                                $defId = $definition->getKey();
+                                                $defOptions = $definition->options ?? [];
                                             @endphp
 
                                             @if($defType === \JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum::Boolean)
                                                 <select
                                                     wire:change="updateCustomField('{{ $defId }}', $event.target.value)"
                                                     class="rounded border-gray-200 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-primary-500">
-                                                    <option value="0" @selected(!$fieldValue->casted_value)>{{ __('lead-pipeline::lead-pipeline.field.no') }}</option>
-                                                    <option value="1" @selected((bool)$fieldValue->casted_value)>{{ __('lead-pipeline::lead-pipeline.field.yes') }}</option>
+                                                    <option value="0" @selected(!($fieldValue?->casted_value))>{{ __('lead-pipeline::lead-pipeline.field.no') }}</option>
+                                                    <option value="1" @selected((bool)($fieldValue?->casted_value))>{{ __('lead-pipeline::lead-pipeline.field.yes') }}</option>
                                                 </select>
                                             @elseif($defType === \JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum::Select)
                                                 <select
@@ -221,11 +225,11 @@
                                                     <option value="">--</option>
                                                     @foreach($defOptions as $optKey => $optVal)
                                                         @if(is_array($optVal))
-                                                            <option value="{{ $optVal['value'] ?? $optKey }}" @selected(($fieldValue->casted_value ?? '') === ($optVal['value'] ?? $optKey))>
+                                                            <option value="{{ $optVal['value'] ?? $optKey }}" @selected(($fieldValue?->casted_value ?? '') === ($optVal['value'] ?? $optKey))>
                                                                 {{ $optVal['label'] ?? $optVal['value'] ?? $optKey }}
                                                             </option>
                                                         @else
-                                                            <option value="{{ $optKey }}" @selected(($fieldValue->casted_value ?? '') === (string) $optKey)>
+                                                            <option value="{{ $optKey }}" @selected(($fieldValue?->casted_value ?? '') === (string) $optKey)>
                                                                 {{ $optVal }}
                                                             </option>
                                                         @endif
@@ -236,17 +240,17 @@
                                                     @click="editing = true; $nextTick(() => $refs.customTextarea{{ $loop->index }}.focus())"
                                                     class="cursor-pointer text-xs text-gray-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                                                     title="{{ __('lead-pipeline::lead-pipeline.field.click_to_edit') }}">
-                                                    {{ $fieldValue->display_value ?: '...' }}
+                                                    {{ $fieldValue?->display_value ?: '...' }}
                                                 </div>
                                                 <textarea x-show="editing" x-cloak
                                                     x-ref="customTextarea{{ $loop->index }}"
                                                     rows="2"
                                                     @blur="$wire.updateCustomField('{{ $defId }}', $el.value); editing = false"
                                                     @keydown.escape="editing = false"
-                                                    class="w-full rounded border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500">{{ $fieldValue->casted_value ?? '' }}</textarea>
+                                                    class="w-full rounded border-gray-300 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 focus:border-primary-500 focus:ring-primary-500">{{ $fieldValue?->casted_value ?? '' }}</textarea>
                                             @elseif($defType === \JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum::Date)
                                                 <input type="date"
-                                                    value="{{ $fieldValue->casted_value ?? '' }}"
+                                                    value="{{ $fieldValue?->casted_value ?? '' }}"
                                                     @change="$wire.updateCustomField('{{ $defId }}', $el.value)"
                                                     class="rounded border-gray-200 text-xs dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 focus:ring-1 focus:ring-primary-500" />
                                             @else
@@ -265,12 +269,12 @@
                                                     @click="editing = true; $nextTick(() => $refs.customInput{{ $loop->index }}.focus())"
                                                     class="cursor-pointer text-xs text-gray-900 dark:text-gray-100 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                                                     title="{{ __('lead-pipeline::lead-pipeline.field.click_to_edit') }}">
-                                                    {{ $fieldValue->display_value ?: '...' }}
+                                                    {{ $fieldValue?->display_value ?: '...' }}
                                                 </div>
                                                 <input x-show="editing" x-cloak
                                                     x-ref="customInput{{ $loop->index }}"
                                                     type="{{ $inputType }}"
-                                                    value="{{ is_array($fieldValue->casted_value) ? implode(', ', $fieldValue->casted_value) : $fieldValue->casted_value }}"
+                                                    value="{{ is_array($fieldValue?->casted_value) ? implode(', ', $fieldValue->casted_value) : $fieldValue?->casted_value }}"
                                                     @blur="$wire.updateCustomField('{{ $defId }}', $el.value); editing = false"
                                                     @keydown.enter="$el.blur()"
                                                     @keydown.escape="editing = false"
@@ -278,7 +282,6 @@
                                             @endif
                                         </div>
                                     </div>
-                                @endif
                             @endforeach
                         </div>
                     </div>
