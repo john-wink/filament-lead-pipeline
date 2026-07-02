@@ -24,6 +24,7 @@ use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
+use JohnWink\FilamentLeadPipeline\Support\MetaCoreFieldDefaults;
 
 class ImportFacebookLeadsJob implements ShouldQueue
 {
@@ -143,11 +144,11 @@ class ImportFacebookLeadsJob implements ShouldQueue
                         return null;
                     };
 
-                    $name      = $findFirst($mapping['name'] ?? ['full_name', 'vollständiger_name']);
-                    $firstName = $findFirst($mapping['first_name'] ?? ['first_name', 'vorname']);
-                    $lastName  = $findFirst($mapping['last_name'] ?? ['last_name', 'nachname']);
-                    $email     = $findFirst($mapping['email'] ?? ['email', 'e-mail-adresse', 'e-mail']);
-                    $phone     = $findFirst($mapping['phone'] ?? ['phone_number', 'telefonnummer', 'phone']);
+                    $name      = $findFirst($mapping['name'] ?? MetaCoreFieldDefaults::for('name'));
+                    $firstName = $findFirst($mapping['first_name'] ?? MetaCoreFieldDefaults::for('first_name'));
+                    $lastName  = $findFirst($mapping['last_name'] ?? MetaCoreFieldDefaults::for('last_name'));
+                    $email     = $findFirst($mapping['email'] ?? MetaCoreFieldDefaults::for('email'));
+                    $phone     = $findFirst($mapping['phone'] ?? MetaCoreFieldDefaults::for('phone'));
 
                     if (( ! $name || '' === $name) && ($firstName || $lastName)) {
                         $name = mb_trim("{$firstName} {$lastName}");

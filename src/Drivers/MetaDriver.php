@@ -25,6 +25,7 @@ use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
+use JohnWink\FilamentLeadPipeline\Support\MetaCoreFieldDefaults;
 use Throwable;
 
 class MetaDriver implements LeadSourceDriver
@@ -84,11 +85,11 @@ class MetaDriver implements LeadSourceDriver
         $fieldData     = $this->extractFieldData($payload->raw_payload);
         $attribution   = $this->extractAttribution($payload->raw_payload);
 
-        $name      = $this->findFirstMatch($fieldData, $fieldMapping['name'] ?? ['full_name', 'vollständiger_name']);
-        $firstName = $this->findFirstMatch($fieldData, $fieldMapping['first_name'] ?? ['first_name', 'vorname']);
-        $lastName  = $this->findFirstMatch($fieldData, $fieldMapping['last_name'] ?? ['last_name', 'nachname']);
-        $email     = $this->findFirstMatch($fieldData, $fieldMapping['email'] ?? ['email', 'e-mail-adresse', 'e-mail']);
-        $phone     = $this->findFirstMatch($fieldData, $fieldMapping['phone'] ?? ['phone_number', 'telefonnummer', 'phone']);
+        $name      = $this->findFirstMatch($fieldData, $fieldMapping['name'] ?? MetaCoreFieldDefaults::for('name'));
+        $firstName = $this->findFirstMatch($fieldData, $fieldMapping['first_name'] ?? MetaCoreFieldDefaults::for('first_name'));
+        $lastName  = $this->findFirstMatch($fieldData, $fieldMapping['last_name'] ?? MetaCoreFieldDefaults::for('last_name'));
+        $email     = $this->findFirstMatch($fieldData, $fieldMapping['email'] ?? MetaCoreFieldDefaults::for('email'));
+        $phone     = $this->findFirstMatch($fieldData, $fieldMapping['phone'] ?? MetaCoreFieldDefaults::for('phone'));
 
         if (( ! $name || '' === $name) && ($firstName || $lastName)) {
             $name = mb_trim("{$firstName} {$lastName}");

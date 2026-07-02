@@ -185,6 +185,7 @@ return [
         'description_placeholder'  => 'Optional description...',
     ],
     'field' => [
+        'datapoints'            => ':count data points',
         'name'                  => 'Name',
         'email'                 => 'Email',
         'phone'                 => 'Phone',
@@ -225,6 +226,15 @@ return [
     ],
 
     'board_edit' => [
+        'merge_standard_field'       => 'Standard field',
+        'merge_action_label'         => 'Merge fields',
+        'merge_source_label'         => 'Field to dissolve (source)',
+        'merge_target_label'         => 'Move values into (target)',
+        'merge_value_map_label'      => 'Value mapping (optional)',
+        'merge_value_map_help'       => 'Rewrite old source values while moving, e.g. "Bauträger" → "Immo". Unlisted values are moved unchanged.',
+        'merge_description'          => 'All values of the source field are moved into the target field; if a lead already has a target value it is kept and the source value is documented in the activity history. The source field is removed afterwards.',
+        'merge_success'              => ':moved moved, :deduplicated duplicates removed, :conflicts conflicts (target kept, source value logged).',
+        'merge_conflict_activity'    => 'Field ":source" was merged into ":target" — dropped value: :value',
         'field_locked'               => 'Key and type cannot be changed while the field has values or is a system field.',
         'field_delete_blocked'       => 'The field cannot be deleted while it has values or is a system field.',
         'duplicate_terminal'         => 'Only one Won and one Lost phase is allowed per board.',

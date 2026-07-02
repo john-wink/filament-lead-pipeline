@@ -46,6 +46,8 @@ it('shows no due badge for upcoming reminders', function (): void {
 });
 
 it('counts my reminders due today in the my-day stats', function (): void {
+    Illuminate\Support\Carbon::setTestNow(now()->setTime(12, 0));
+
     $mine = (string) $this->user->getKey();
 
     reminderBadgeLead($this->phase, ['assigned_to' => $mine, 'reminder_at' => now()->subHour()]);

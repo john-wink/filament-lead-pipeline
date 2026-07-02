@@ -6,15 +6,19 @@ namespace JohnWink\FilamentLeadPipeline\Filament\Resources;
 
 use Filament\Forms;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
+use JohnWink\FilamentLeadPipeline\Exceptions\InvalidFieldMergeException;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\KanbanBoard;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\SourceManagement;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages;
@@ -23,6 +27,7 @@ use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoardSharedTenant;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoardTeamShare;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
+use JohnWink\FilamentLeadPipeline\Services\LeadFieldMergeService;
 use Throwable;
 
 class LeadBoardResource extends Resource
@@ -188,6 +193,24 @@ class LeadBoardResource extends Resource
                             ->addable()
                             ->deletable()
                             ->collapsible()
+                            ->collapsed()
+                            ->itemLabel(function (array $state): ?Htmlable {
+                                $name = $state['name'] ?? null;
+
+                                if (blank($name)) {
+                                    return null;
+                                }
+
+                                $color = is_string($state['color'] ?? null) && preg_match('/^#[0-9A-Fa-f]{3,8}$/', $state['color'])
+                                    ? $state['color']
+                                    : '#6B7280';
+
+                                return new HtmlString(sprintf(
+                                    '<span class="flex items-center gap-2"><span class="inline-block h-3 w-3 shrink-0 rounded-full" style="background-color: %s"></span>%s</span>',
+                                    $color,
+                                    e($name),
+                                ));
+                            })
                             ->defaultItems(0)
                             ->columns(2),
                     ]),
@@ -197,7 +220,7 @@ class LeadBoardResource extends Resource
                         Forms\Components\Repeater::make('fieldDefinitions')
                             ->label(__('lead-pipeline::lead-pipeline.board.custom_fields'))
                             ->hiddenLabel()
-                            ->relationship('fieldDefinitions', fn ($query) => $query->where('is_system', false))
+                            ->relationship('fieldDefinitions', fn ($query) => $query->where('is_system', false)->withCount('values'))
                             ->schema([
                                 Forms\Components\TextInput::make('name')
                                     ->label(__('lead-pipeline::lead-pipeline.field.name'))
@@ -234,6 +257,25 @@ class LeadBoardResource extends Resource
                             ->addable()
                             ->deletable()
                             ->collapsible()
+                            ->collapsed()
+                            ->itemLabel(function (array $state): ?string {
+                                $name = $state['name'] ?? null;
+
+                                if (blank($name)) {
+                                    return null;
+                                }
+
+                                $count = $state['values_count'] ?? null;
+
+                                if (null === $count) {
+                                    return $name;
+                                }
+
+                                return sprintf('%s — %s', $name, __('lead-pipeline::lead-pipeline.field.datapoints', [
+                                    'count' => (int) $count,
+                                ]));
+                            })
+                            ->extraItemActions([static::mergeFieldItemAction()])
                             ->defaultItems(0)
                             ->columns(2),
                     ]),
@@ -441,6 +483,107 @@ class LeadBoardResource extends Resource
             'create' => Pages\CreateLeadBoard::route('/create'),
             'edit'   => Pages\EditLeadBoard::route('/{record}/edit'),
         ];
+    }
+
+    /** @return array<string, string> Merge-Ziel-Optionen des Boards; Standard-Felder schreiben in die Lead-Spalte. */
+    public static function mergeTargetOptionsFor(LeadBoard $board, ?string $excludeId = null): array
+    {
+        return $board
+            ->fieldDefinitions()
+            ->when($excludeId, fn (Builder $query) => $query->whereKeyNot($excludeId))
+            ->orderByDesc('is_system')
+            ->orderBy('sort')
+            ->get()
+            ->mapWithKeys(fn (LeadFieldDefinition $definition): array => [
+                $definition->getKey() => $definition->is_system
+                    ? sprintf('%s — %s', $definition->name, __('lead-pipeline::lead-pipeline.board_edit.merge_standard_field'))
+                    : sprintf('%s (%s)', $definition->name, $definition->key),
+            ])
+            ->all();
+    }
+
+    /**
+     * Gemeinsame Merge-Ausfuehrung fuer Header- und Repeater-Item-Action:
+     * Service-Aufruf, Ergebnis-Notification und Redirect auf die Edit-Seite,
+     * damit kein staler Repeater-State das Ergebnis wieder zerstoert.
+     *
+     * @param  array<string, mixed>  $valueMap
+     */
+    public static function executeFieldMerge(LeadBoard $board, string $sourceId, string $targetId, array $valueMap, mixed $livewire): void
+    {
+        $definitions = $board->fieldDefinitions();
+
+        $source = (clone $definitions)->findOrFail($sourceId);
+        $target = (clone $definitions)->findOrFail($targetId);
+
+        try {
+            $result = app(LeadFieldMergeService::class)->merge(
+                $source,
+                $target,
+                array_filter($valueMap, fn ($value): bool => filled($value)),
+                auth()->user(),
+            );
+        } catch (InvalidFieldMergeException $exception) {
+            Notification::make()
+                ->danger()
+                ->title($exception->getMessage())
+                ->send();
+
+            return;
+        }
+
+        Notification::make()
+            ->success()
+            ->title(__('lead-pipeline::lead-pipeline.board_edit.merge_action_label'))
+            ->body(__('lead-pipeline::lead-pipeline.board_edit.merge_success', [
+                'moved'        => $result->moved,
+                'deduplicated' => $result->deduplicated,
+                'conflicts'    => $result->conflicts,
+            ]))
+            ->send();
+
+        $livewire->redirect(static::getUrl('edit', ['record' => $board]));
+    }
+
+    /**
+     * Item-Action am Feld-Repeater: ueberfuehrt die Datenpunkte des Felds
+     * direkt in ein anderes Feld (oder ein Standard-Feld) via Merge-Service.
+     */
+    protected static function mergeFieldItemAction(): Forms\Components\Actions\Action
+    {
+        return Forms\Components\Actions\Action::make('mergeInto')
+            ->label(__('lead-pipeline::lead-pipeline.board_edit.merge_action_label'))
+            ->icon('heroicon-o-arrows-pointing-in')
+            ->modalDescription(__('lead-pipeline::lead-pipeline.board_edit.merge_description'))
+            ->visible(fn (array $arguments): bool => str_starts_with((string) ($arguments['item'] ?? ''), 'record-'))
+            ->form(function (array $arguments, Forms\Components\Repeater $component): array {
+                $source = $component->getCachedExistingRecords()->get((string) ($arguments['item'] ?? ''));
+                $board  = $component->getRecord();
+
+                if ( ! $source instanceof LeadFieldDefinition || ! $board instanceof LeadBoard) {
+                    return [];
+                }
+
+                return [
+                    Forms\Components\Select::make('target')
+                        ->label(__('lead-pipeline::lead-pipeline.board_edit.merge_target_label'))
+                        ->options(static::mergeTargetOptionsFor($board, $source->getKey()))
+                        ->required(),
+                    Forms\Components\KeyValue::make('value_map')
+                        ->label(__('lead-pipeline::lead-pipeline.board_edit.merge_value_map_label'))
+                        ->helperText(__('lead-pipeline::lead-pipeline.board_edit.merge_value_map_help')),
+                ];
+            })
+            ->action(function (array $arguments, array $data, Forms\Components\Repeater $component, $livewire): void {
+                $source = $component->getCachedExistingRecords()->get((string) ($arguments['item'] ?? ''));
+                $board  = $component->getRecord();
+
+                if ( ! $source instanceof LeadFieldDefinition || ! $board instanceof LeadBoard) {
+                    return;
+                }
+
+                static::executeFieldMerge($board, $source->getKey(), $data['target'], $data['value_map'] ?? [], $livewire);
+            });
     }
 
     /** @return array<int, class-string> */

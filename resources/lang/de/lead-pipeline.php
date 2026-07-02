@@ -185,6 +185,7 @@ return [
         'description_placeholder'  => 'Optionale Beschreibung...',
     ],
     'field' => [
+        'datapoints'            => ':count Datenpunkte',
         'name'                  => 'Name',
         'email'                 => 'E-Mail',
         'phone'                 => 'Telefon',
@@ -225,6 +226,15 @@ return [
     ],
 
     'board_edit' => [
+        'merge_standard_field'       => 'Standard-Feld',
+        'merge_action_label'         => 'Felder zusammenführen',
+        'merge_source_label'         => 'Feld auflösen (Quelle)',
+        'merge_target_label'         => 'Werte übernehmen nach (Ziel)',
+        'merge_value_map_label'      => 'Werte-Zuordnung (optional)',
+        'merge_value_map_help'       => 'Alte Werte der Quelle beim Übernehmen umschreiben, z. B. „Bauträger" → „Immo". Nicht aufgeführte Werte werden unverändert übernommen.',
+        'merge_description'          => 'Alle Werte des Quellfelds werden in das Zielfeld übernommen; hat ein Lead bereits einen Zielwert, bleibt dieser erhalten und der Quellwert wird in der Aktivitäten-Historie dokumentiert. Das Quellfeld wird anschließend entfernt.',
+        'merge_success'              => ':moved übernommen, :deduplicated Duplikate entfernt, :conflicts Konflikte (Zielwert behalten, Quellwert in Historie).',
+        'merge_conflict_activity'    => 'Feld „:source" wurde in „:target" zusammengeführt — verworfener Wert: :value',
         'field_locked'               => 'Schlüssel und Typ können nicht geändert werden, solange das Feld Werte hat oder ein Systemfeld ist.',
         'field_delete_blocked'       => 'Das Feld kann nicht gelöscht werden, solange es Werte hat oder ein Systemfeld ist.',
         'duplicate_terminal'         => 'Pro Board ist nur eine Gewonnen- und eine Verloren-Phase erlaubt.',

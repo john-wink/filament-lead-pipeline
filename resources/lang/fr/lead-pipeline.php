@@ -185,6 +185,7 @@ return [
         'description_placeholder'  => 'Description optionnelle...',
     ],
     'field' => [
+        'datapoints'        => ':count points de données',
         'name'              => 'Nom',
         'email'             => 'E-mail',
         'phone'             => 'Téléphone',
@@ -223,6 +224,15 @@ return [
     ],
 
     'board_edit' => [
+        'merge_standard_field'       => 'Champ standard',
+        'merge_action_label'         => 'Fusionner les champs',
+        'merge_source_label'         => 'Champ à dissoudre (source)',
+        'merge_target_label'         => 'Transférer les valeurs vers (cible)',
+        'merge_value_map_label'      => 'Correspondance des valeurs (optionnel)',
+        'merge_value_map_help'       => 'Réécrire les anciennes valeurs sources lors du transfert, p. ex. « Bauträger » → « Immo ». Les valeurs non listées sont transférées telles quelles.',
+        'merge_description'          => 'Toutes les valeurs du champ source sont transférées vers le champ cible ; si un lead possède déjà une valeur cible, elle est conservée et la valeur source est documentée dans l\'historique. Le champ source est ensuite supprimé.',
+        'merge_success'              => ':moved transférées, :deduplicated doublons supprimés, :conflicts conflits (cible conservée, valeur source consignée).',
+        'merge_conflict_activity'    => 'Le champ « :source » a été fusionné dans « :target » — valeur abandonnée : :value',
         'field_locked'               => 'La clé et le type ne peuvent pas être modifiés tant que le champ a des valeurs ou est un champ système.',
         'field_delete_blocked'       => 'Le champ ne peut pas être supprimé tant qu’il a des valeurs ou est un champ système.',
         'duplicate_terminal'         => 'Une seule phase Gagné et une seule phase Perdu sont autorisées par tableau.',
