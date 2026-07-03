@@ -52,10 +52,11 @@ return [
     | Registrierte Quell-Treiber. Neue Treiber hier registrieren.
     */
     'drivers' => [
-        'zapier' => JohnWink\FilamentLeadPipeline\Drivers\ZapierDriver::class,
-        'meta'   => JohnWink\FilamentLeadPipeline\Drivers\MetaDriver::class,
-        'api'    => JohnWink\FilamentLeadPipeline\Drivers\ApiDriver::class,
-        'funnel' => JohnWink\FilamentLeadPipeline\Drivers\FunnelDriver::class,
+        'zapier'      => JohnWink\FilamentLeadPipeline\Drivers\ZapierDriver::class,
+        'meta'        => JohnWink\FilamentLeadPipeline\Drivers\MetaDriver::class,
+        'api'         => JohnWink\FilamentLeadPipeline\Drivers\ApiDriver::class,
+        'funnel'      => JohnWink\FilamentLeadPipeline\Drivers\FunnelDriver::class,
+        'immoscout24' => JohnWink\FilamentLeadPipeline\Drivers\ImmoScoutDriver::class,
     ],
 
     /*
@@ -152,6 +153,21 @@ return [
                 'lost'         => 'closed_lost',
                 'disqualified' => 'disqualified',
             ],
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | ImmoScout24 Integration
+    |--------------------------------------------------------------------------
+    | Baufinanzierungs-Leads werden per Polling importiert (die Lead-API ist
+    | pull-only, ohne Webhooks). Credentials liegen pro Team in
+    | immoscout_connections; hier steht nur der Scheduler-Takt.
+    */
+    'immoscout' => [
+        'sync' => [
+            'enabled' => env('LEAD_PIPELINE_IMMOSCOUT_SYNC_ENABLED', true),
+            'cadence' => env('LEAD_PIPELINE_IMMOSCOUT_SYNC_CADENCE', 'everyFifteenMinutes'),
         ],
     ],
 

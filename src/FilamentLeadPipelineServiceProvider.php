@@ -38,6 +38,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                 Commands\SendScheduledReportsCommand::class,
                 Commands\SendLeadRemindersCommand::class,
                 Commands\PruneWebhookLogsCommand::class,
+                Commands\SyncImmoScoutLeadsCommand::class,
             ])
             ->hasInstallCommand(function (InstallCommand $command): void {
                 $command
@@ -107,6 +108,18 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
                 $cadence = (string) config('lead-pipeline.facebook.refresh.cadence', 'hourly');
                 $allowed = ['everyMinute', 'everyFiveMinutes', 'everyTenMinutes', 'everyFifteenMinutes', 'everyThirtyMinutes', 'hourly', 'daily', 'twiceDaily', 'weekly'];
                 in_array($cadence, $allowed, true) ? $event->{$cadence}() : $event->hourly();
+            });
+        }
+
+        if (config('lead-pipeline.immoscout.sync.enabled', true)) {
+            $this->callAfterResolving(Schedule::class, function (Schedule $schedule): void {
+                $event = $schedule->command(Commands\SyncImmoScoutLeadsCommand::class)
+                    ->withoutOverlapping()
+                    ->onOneServer();
+
+                $cadence = (string) config('lead-pipeline.immoscout.sync.cadence', 'everyFifteenMinutes');
+                $allowed = ['everyFiveMinutes', 'everyTenMinutes', 'everyFifteenMinutes', 'everyThirtyMinutes', 'hourly', 'daily'];
+                in_array($cadence, $allowed, true) ? $event->{$cadence}() : $event->everyFifteenMinutes();
             });
         }
 

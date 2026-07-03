@@ -16,6 +16,7 @@ enum LeadSourceTypeEnum: string implements HasColor, HasIcon, HasLabel
     case Funnel           = 'funnel';
     case Manual           = 'manual';
     case InternalTransfer = 'internal_transfer';
+    case ImmoScout24      = 'immoscout24';
 
     public function getLabel(): string
     {
@@ -26,6 +27,7 @@ enum LeadSourceTypeEnum: string implements HasColor, HasIcon, HasLabel
             self::Funnel           => 'Funnel',
             self::Manual           => __('lead-pipeline::lead-pipeline.source_type.manual'),
             self::InternalTransfer => __('lead-pipeline::lead-pipeline.source_type.internal_transfer'),
+            self::ImmoScout24      => 'ImmoScout24',
         };
     }
 
@@ -38,6 +40,7 @@ enum LeadSourceTypeEnum: string implements HasColor, HasIcon, HasLabel
             self::Funnel           => 'success',
             self::Manual           => 'primary',
             self::InternalTransfer => 'info',
+            self::ImmoScout24      => 'warning',
         };
     }
 
@@ -50,6 +53,7 @@ enum LeadSourceTypeEnum: string implements HasColor, HasIcon, HasLabel
             self::Funnel           => 'heroicon-o-funnel',
             self::Manual           => 'heroicon-o-pencil-square',
             self::InternalTransfer => 'heroicon-o-arrow-right-circle',
+            self::ImmoScout24      => 'heroicon-o-home-modern',
         };
     }
 

@@ -1,0 +1,138 @@
+{
+    "lead": [
+        {
+            "id": 1,
+            "providerId": 3847,
+            "providerName": "Baufinanz & Partner GmbH",
+            "shortName": "Zentrale",
+            "requestType": "APPOINTMENT_REQUEST",
+            "shopLead": false,
+            "contactRequest": {
+                "financingTerms": {
+                    "amortizationRate": 2.0,
+                    "postalCode": "10243",
+                    "geoCode": "1276003001017",
+                    "locationName": "Berlin-Friedrichshain (Friedrichshain)",
+                    "employment": "EMPLOYED",
+                    "fixedNominalInterestRate": "TEN_YEARS",
+                    "financing": {
+                        "type": "PurchaseFinancing",
+                        "purchasePrice": 595000.0,
+                        "ownFunds": 45000.0,
+                        "additionalCosts": 6000.0,
+                        "financingStart": "IN_BETWEEN_THREE_AND_SIX_MONTHS",
+                        "projectState": "REAL_ESTATE_VISITED"
+                    }
+                },
+                "contactChannel": "EMAIL",
+                "availability": "ALL_DAY",
+                "salutation": "MR",
+                "surname": "Mustermann",
+                "forename": "Max",
+                "email": "max.mustermann@is24.de",
+                "phoneNumber": "55501456789",
+                "message": "Bitte um Rückruf.",
+                "numberOfBorrowers": 2,
+                "bank": "Meine Hausbank",
+                "contactAddress": {
+                    "street": "Schlossallee",
+                    "streetNumber": "1",
+                    "postalCode": "13245",
+                    "location": "Berlin"
+                },
+                "dpaAccepted": false,
+                "kfwPromotion": false,
+                "arvatoScoringPermitted": false,
+                "title": "NO_TITLE",
+                "source": "WEBAPP",
+                "ssoId": 654321,
+                "useType": "UNKNOWN"
+            },
+            "realEstate": {},
+            "processingStatus": "NEW",
+            "processingStatusChanged": "2026-07-03T18:00:56",
+            "price": 0,
+            "shopBudgetReduction": 0,
+            "singleLead": false,
+            "leadType": "DEFAULT",
+            "scoutId": "19003525",
+            "extendedDataAccessible": false
+        },
+        {
+            "id": 2,
+            "providerId": 3847,
+            "providerName": "Baufinanz & Partner GmbH",
+            "shortName": "Zentrale",
+            "requestType": "APPOINTMENT_REQUEST",
+            "shopLead": false,
+            "contactRequest": {
+                "financingTerms": {
+                    "amortizationRate": 1,
+                    "postalCode": "10243",
+                    "geoCode": "1276003001017",
+                    "locationName": "Berlin-Friedrichshain (Friedrichshain)",
+                    "employment": "FREELANCER",
+                    "fixedNominalInterestRate": "TEN_YEARS",
+                    "financing": {
+                        "type": "FollowupFinancing",
+                        "propertyValue": 545000.0,
+                        "remainingDebt": 250000.0,
+                        "financingStart": "IN_LESS_THAN_ONE_YEAR"
+                    }
+                },
+                "contactChannel": "EMAIL",
+                "salutation": "MR",
+                "surname": "Mustermann",
+                "forename": "Max",
+                "email": "max.mustermann@is24.de",
+                "phoneNumber": "55501456789",
+                "message": "",
+                "exposeId": 29648095,
+                "numberOfBorrowers": 1,
+                "currentCredits": 75000,
+                "bank": "Meine Hausbank",
+                "primaryAppointmentDate": 1783029600000,
+                "secondaryAppointmentDate": 1783461600000,
+                "primaryAppointmentTime": "EIGHTEEN_UNTIL_NINETEEN",
+                "secondaryAppointmentTime": "ELEVEN_UNTIL_TWELVE",
+                "contactAddress": {
+                    "street": "Schlossallee",
+                    "streetNumber": "1",
+                    "postalCode": "13245",
+                    "location": "Berlin"
+                },
+                "dpaAccepted": false,
+                "kfwPromotion": false,
+                "arvatoScoringPermitted": false,
+                "title": "NO_TITLE",
+                "segmentClass": "PREMIUM_M",
+                "source": "WEBAPP",
+                "ssoId": 654321,
+                "useType": "UNKNOWN"
+            },
+            "realEstate": {
+                "id": 29648095,
+                "title": "Großzügiges Landhaus mit Alpenblick",
+                "type": "HOUSE_BUY",
+                "purchasePrice": 545000,
+                "livingArea": 150.0,
+                "siteArea": 610.0,
+                "constructionDate": 2013,
+                "address": {
+                    "street": "Hauptstrasse",
+                    "houseNumber": "10",
+                    "postcode": "12345",
+                    "city": "Berlin"
+                }
+            },
+            "processingStatus": "NEW",
+            "processingStatusChanged": "2026-07-03T18:00:56",
+            "price": 0,
+            "shopBudgetReduction": 0,
+            "singleLead": false,
+            "leadType": "DEFAULT",
+            "scoutId": "19003525",
+            "extendedDataAccessible": false
+        }
+    ]
+}
