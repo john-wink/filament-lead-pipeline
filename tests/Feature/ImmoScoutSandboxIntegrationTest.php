@@ -76,3 +76,25 @@ it('imports real test leads end-to-end from the sandbox', function (): void {
     fn (): bool => '' === (string) getenv('IS24_SANDBOX_CONSUMER_KEY'),
     'IS24 sandbox credentials not provided',
 );
+
+it('fetches a real request token for the connect flow from the sandbox', function (): void {
+    config([
+        'lead-pipeline.immoscout.consumer_key'    => (string) getenv('IS24_SANDBOX_CONSUMER_KEY'),
+        'lead-pipeline.immoscout.consumer_secret' => (string) getenv('IS24_SANDBOX_CONSUMER_SECRET'),
+    ]);
+
+    $api = app(ImmoScoutApiService::class);
+
+    $requestToken = $api->fetchRequestToken(
+        ImmoScoutEnvironmentEnum::Sandbox,
+        'https://finance-estate.test/lead-pipeline/immoscout/callback',
+    );
+
+    expect($requestToken['token'])->not->toBeEmpty()
+        ->and($requestToken['secret'])->not->toBeEmpty()
+        ->and($api->confirmAccessUrl(ImmoScoutEnvironmentEnum::Sandbox, $requestToken['token']))
+        ->toContain('confirm_access?oauth_token=' . $requestToken['token']);
+})->skip(
+    fn (): bool => '' === (string) getenv('IS24_SANDBOX_CONSUMER_KEY'),
+    'IS24 sandbox credentials not provided',
+);

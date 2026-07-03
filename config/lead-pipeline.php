@@ -165,6 +165,13 @@ return [
     | immoscout_connections; hier steht nur der Scheduler-Takt.
     */
     'immoscout' => [
+        // App-Level-Credentials (Self-Service-Portal von ImmoScout24). Werden für
+        // den "Verbinden"-Button (3-legged OAuth) genutzt und beim Connect in die
+        // Team-Connection kopiert. Ohne Key ist nur die manuelle Anlage möglich.
+        'consumer_key'    => env('IMMOSCOUT_CONSUMER_KEY'),
+        'consumer_secret' => env('IMMOSCOUT_CONSUMER_SECRET'),
+        'environment'     => env('IMMOSCOUT_ENVIRONMENT', 'production'),
+
         'sync' => [
             'enabled' => env('LEAD_PIPELINE_IMMOSCOUT_SYNC_ENABLED', true),
             'cadence' => env('LEAD_PIPELINE_IMMOSCOUT_SYNC_CADENCE', 'everyFifteenMinutes'),

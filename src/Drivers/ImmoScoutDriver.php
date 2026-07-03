@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Drivers;
 
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -76,6 +77,11 @@ class ImmoScoutDriver implements LeadSourceDriver
     public function getConfigFormSchema(): array
     {
         return [
+            Placeholder::make('immoscout_connect')
+                ->label(__('lead-pipeline::lead-pipeline.immoscout.connection'))
+                ->content(fn () => view('lead-pipeline::filament.components.immoscout-connect-button'))
+                ->visible(fn (): bool => filled(config('lead-pipeline.immoscout.consumer_key'))),
+
             Select::make('config.immoscout_connection_uuid')
                 ->label(__('lead-pipeline::lead-pipeline.immoscout.connection'))
                 ->options(function (): array {

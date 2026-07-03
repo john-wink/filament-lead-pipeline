@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use JohnWink\FilamentLeadPipeline\Http\Controllers\AnalyticsExportController;
 use JohnWink\FilamentLeadPipeline\Http\Controllers\FacebookOAuthController;
+use JohnWink\FilamentLeadPipeline\Http\Controllers\ImmoScoutOAuthController;
 use JohnWink\FilamentLeadPipeline\Http\Controllers\WebhookController;
 
 /*
@@ -21,6 +22,15 @@ Route::middleware(['web', 'auth'])
             ->name('lead-pipeline.facebook.redirect');
         Route::get('callback', [FacebookOAuthController::class, 'callback'])
             ->name('lead-pipeline.facebook.callback');
+    });
+
+Route::middleware(['web', 'auth'])
+    ->prefix('lead-pipeline/immoscout')
+    ->group(function (): void {
+        Route::get('redirect', [ImmoScoutOAuthController::class, 'redirect'])
+            ->name('lead-pipeline.immoscout.redirect');
+        Route::get('callback', [ImmoScoutOAuthController::class, 'callback'])
+            ->name('lead-pipeline.immoscout.callback');
     });
 
 Route::middleware(['web', 'auth'])

@@ -10,7 +10,12 @@ namespace JohnWink\FilamentLeadPipeline\Support;
  */
 class ImmoScoutOAuthSigner
 {
-    /** @param array<string, string> $queryParams */
+    /**
+     * @param  array<string, string>  $queryParams
+     * @param  array<string, string>  $extraOauth  Additional oauth_* protocol params
+     *                                             (oauth_callback, oauth_verifier) that
+     *                                             must be part of the signature base string.
+     */
     public function authorizationHeader(
         string $method,
         string $url,
@@ -21,14 +26,15 @@ class ImmoScoutOAuthSigner
         string $tokenSecret = '',
         ?string $nonce = null,
         ?int $timestamp = null,
+        array $extraOauth = [],
     ): string {
-        $oauth = [
+        $oauth = array_merge([
             'oauth_consumer_key'     => $consumerKey,
             'oauth_nonce'            => $nonce ?? bin2hex(random_bytes(16)),
             'oauth_signature_method' => 'HMAC-SHA1',
             'oauth_timestamp'        => (string) ($timestamp ?? time()),
             'oauth_version'          => '1.0',
-        ];
+        ], $extraOauth);
 
         if ('' !== $token) {
             $oauth['oauth_token'] = $token;

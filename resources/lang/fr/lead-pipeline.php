@@ -599,6 +599,10 @@ return [
         ],
     ],
     'immoscout' => [
+        'connect_button'         => 'Connecter ImmoScout24',
+        'reconnect_button'       => 'Reconnecter',
+        'connected_badge'        => 'Connecté : :name',
+        'connect_hint'           => 'Un clic — connexion chez ImmoScout24, confirmer l accès, terminé.',
         'environment'            => 'Environnement',
         'environment_production' => 'Produktion',
         'environment_sandbox'    => 'Sandbox',

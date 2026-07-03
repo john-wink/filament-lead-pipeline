@@ -612,6 +612,10 @@ return [
         ],
     ],
     'immoscout' => [
+        'connect_button'         => 'Connect with ImmoScout24',
+        'reconnect_button'       => 'Reconnect',
+        'connected_badge'        => 'Connected: :name',
+        'connect_hint'           => 'One click — log in at ImmoScout24, confirm access, done.',
         'environment'            => 'Environment',
         'environment_production' => 'Production',
         'environment_sandbox'    => 'Sandbox',
