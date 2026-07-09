@@ -165,6 +165,7 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
         Models\LeadBoard::observe(Observers\LeadBoardObserver::class);
         Models\LeadFieldDefinition::observe(Observers\LeadFieldDefinitionObserver::class);
         Models\LeadPhase::observe(Observers\LeadPhaseObserver::class);
+        Models\LeadActivity::observe(Observers\LeadActivityObserver::class);
 
         // Register funnel web routes LAST so they don't catch other routes
         // when route_prefix is empty (/{slug} would match everything)
