@@ -12,6 +12,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use JohnWink\FilamentLeadPipeline\Models\MetaInsightSnapshot;
 
 class LeadActivityMetricsService
 {
@@ -277,14 +278,27 @@ class LeadActivityMetricsService
     }
 
     /**
-     * Wirtschaftlichkeit je Lead-Quelle (ohne Ad-Kosten; Kosten optional in Task 13).
+     * Wirtschaftlichkeit je Lead-Quelle inkl. Ad-Kosten aus Meta-Insights (Task 13).
      * INNER JOIN — Quellen ohne zugeordnete Leads erscheinen nicht in der Liste.
      *
-     * @return list<array{source: string, leads: int, won: int, conversion: float, avg_value: float}>
+     * Näherung bei den Kosten: `meta_insight_snapshots.spend` liegt nur auf
+     * Campaign-Ebene vor (keine Ad-ID-Spalte). Für jede Quelle wird der Spend
+     * über alle Kampagnen summiert, die von ihren Leads via `source_campaign_id`
+     * referenziert werden. Teilt sich eine Kampagne mehrere Quellen, wird ihr
+     * Spend JEDER dieser Quellen voll angerechnet (Über-Attribution) — die Daten
+     * kennen keine 1:1-Zuordnung Kampagne↔Quelle. `breakdown_type = 'none'`
+     * filtert Demografie-/Placement-Breakdown-Zeilen heraus, die sonst denselben
+     * Spend mehrfach zählen würden. Ohne aktuellen Tenant oder ohne passenden
+     * Snapshot bleiben die Kosten-Felder `null` (nicht `0.0`).
+     *
+     * @return list<array{
+     *     source: string, leads: int, won: int, conversion: float, avg_value: float,
+     *     cost_per_lead: ?float, cost_per_acquisition: ?float
+     * }>
      */
-    public function sourceEconomics(Builder $leads): array
+    public function sourceEconomics(Builder $leads, ?CarbonImmutable $from = null, ?CarbonImmutable $to = null): array
     {
-        return (clone $leads)
+        $rows = (clone $leads)
             ->join('lead_sources', 'leads.' . Lead::fkColumn('lead_source'), '=', 'lead_sources.' . Lead::pkColumn())
             ->selectRaw('lead_sources.name as source')
             ->selectRaw('COUNT(*) as leads')
@@ -292,14 +306,32 @@ class LeadActivityMetricsService
             ->selectRaw('AVG(CASE WHEN leads.value > 0 THEN leads.value END) as avg_value')
             ->groupBy('lead_sources.name')
             ->orderByDesc('leads')
-            ->get()
-            ->map(fn ($row): array => [
-                'source'     => (string) $row->source,
-                'leads'      => (int) $row->leads,
-                'won'        => (int) $row->won,
-                'conversion' => $row->leads > 0 ? round($row->won / $row->leads * 100, 1) : 0.0,
-                'avg_value'  => round((float) ($row->avg_value ?? 0), 2),
-            ])
+            ->get();
+
+        $campaignIdsBySource = $this->campaignIdsBySource($leads);
+        $allCampaignIds      = array_values(array_unique(array_merge([], ...array_values($campaignIdsBySource))));
+        $spendByCampaign     = $this->adSpendByCampaign($allCampaignIds, $from, $to);
+
+        return $rows
+            ->map(function ($row) use ($campaignIdsBySource, $spendByCampaign): array {
+                $leadsCount = (int) $row->leads;
+                $won        = (int) $row->won;
+
+                $spend = array_sum(array_map(
+                    fn (string $campaignId): float => $spendByCampaign[$campaignId] ?? 0.0,
+                    $campaignIdsBySource[$row->source] ?? [],
+                ));
+
+                return [
+                    'source'               => (string) $row->source,
+                    'leads'                => $leadsCount,
+                    'won'                  => $won,
+                    'conversion'           => $leadsCount > 0 ? round($won / $leadsCount * 100, 1) : 0.0,
+                    'avg_value'            => round((float) ($row->avg_value ?? 0), 2),
+                    'cost_per_lead'        => ($spend > 0 && $leadsCount > 0) ? round($spend / $leadsCount, 2) : null,
+                    'cost_per_acquisition' => ($spend > 0 && $won > 0) ? round($spend / $won, 2) : null,
+                ];
+            })
             ->all();
     }
 
@@ -354,5 +386,63 @@ class LeadActivityMetricsService
         usort($rows, fn (array $a, array $b): int => $b['ops_score'] <=> $a['ops_score']);
 
         return $rows;
+    }
+
+    /**
+     * Distinct, nicht-null `source_campaign_id`s je Lead-Quelle, ermittelt aus
+     * dem übergebenen (bereits gescopeten) Leads-Builder.
+     *
+     * @return array<string, list<string>> lead_sources.name => Kampagnen-IDs
+     */
+    private function campaignIdsBySource(Builder $leads): array
+    {
+        return (clone $leads)
+            ->join('lead_sources', 'leads.' . Lead::fkColumn('lead_source'), '=', 'lead_sources.' . Lead::pkColumn())
+            ->whereNotNull('leads.source_campaign_id')
+            ->select('lead_sources.name as source', 'leads.source_campaign_id')
+            ->distinct()
+            ->get()
+            ->groupBy('source')
+            ->map(fn ($group) => $group->pluck('source_campaign_id')->all())
+            ->all();
+    }
+
+    /**
+     * Summierter Meta-Ad-Spend je Kampagne für den aktuellen Tenant, ohne
+     * Breakdown-Zeilen (`breakdown_type = 'none'`), optional auf einen Zeitraum
+     * eingeschränkt. Ohne aktuellen Tenant oder ohne Kampagnen-IDs wird gar
+     * nicht erst gegen die DB gefragt.
+     *
+     * @param  list<string>  $campaignIds
+     * @return array<string, float> campaign_id => Spend-Summe
+     */
+    private function adSpendByCampaign(array $campaignIds, ?CarbonImmutable $from, ?CarbonImmutable $to): array
+    {
+        $tenantId = function_exists('filament') ? filament()->getTenant()?->getKey() : null;
+
+        if (null === $tenantId || [] === $campaignIds) {
+            return [];
+        }
+
+        $query = MetaInsightSnapshot::query()
+            ->where(config('lead-pipeline.tenancy.foreign_key', 'team_uuid'), $tenantId)
+            ->where('breakdown_type', 'none')
+            ->whereIn('campaign_id', $campaignIds);
+
+        // Apply each bound independently — a partial range (only $from or only
+        // $to) must still filter, not silently sum all-time spend.
+        if (null !== $from) {
+            $query->where('date', '>=', $from->toDateString());
+        }
+        if (null !== $to) {
+            $query->where('date', '<=', $to->toDateString());
+        }
+
+        return $query
+            ->selectRaw('campaign_id, SUM(spend) as total_spend')
+            ->groupBy('campaign_id')
+            ->pluck('total_spend', 'campaign_id')
+            ->map(fn (mixed $spend): float => (float) $spend)
+            ->all();
     }
 }

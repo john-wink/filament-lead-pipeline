@@ -2,7 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Models\Team;
+use App\Models\User;
 use Carbon\CarbonImmutable;
+use Filament\Facades\Filament;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
@@ -11,6 +14,7 @@ use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Models\MetaInsightSnapshot;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
 
 function scoped(): Illuminate\Database\Eloquent\Builder
@@ -240,6 +244,122 @@ it('excludes a leadless source entirely (INNER JOIN, never divides by zero)', fu
     $rows = app(LeadActivityMetricsService::class)->sourceEconomics(scoped());
 
     expect(collect($rows)->firstWhere('source', 'Empty'))->toBeNull();
+});
+
+it('computes cost_per_lead and cost_per_acquisition from Meta ad spend attributed via source_campaign_id', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $team = Team::query()->firstWhere('slug', 'test');
+    $this->actingAs(User::factory()->create());
+    Filament::setTenant($team);
+
+    $facebook = LeadSource::factory()->create(['name' => 'Facebook Ads']);
+    Lead::factory()->count(2)->create([
+        Lead::fkColumn('lead_source') => $facebook->getKey(),
+        'status'                      => LeadStatusEnum::Won,
+        'source_campaign_id'          => 'c-100',
+    ]);
+    Lead::factory()->create([
+        Lead::fkColumn('lead_source') => $facebook->getKey(),
+        'status'                      => LeadStatusEnum::Lost,
+        'source_campaign_id'          => 'c-100',
+    ]);
+
+    MetaInsightSnapshot::factory()->create([
+        'team_uuid'      => $team->uuid,
+        'campaign_id'    => 'c-100',
+        'breakdown_type' => 'none',
+        'spend'          => 300,
+    ]);
+
+    // Breakdown-Zeile (z. B. Gender-Split) für dieselbe Kampagne — muss NICHT
+    // mitgezählt werden, sonst würde derselbe Spend doppelt erfasst.
+    MetaInsightSnapshot::factory()->gender('female')->create([
+        'team_uuid'   => $team->uuid,
+        'campaign_id' => 'c-100',
+        'spend'       => 999,
+    ]);
+
+    $rows        = app(LeadActivityMetricsService::class)->sourceEconomics(scoped());
+    $facebookRow = collect($rows)->firstWhere('source', 'Facebook Ads');
+
+    expect($facebookRow['leads'])->toBe(3)
+        ->and($facebookRow['won'])->toBe(2)
+        ->and($facebookRow['cost_per_lead'])->toBe(100.0)       // 300 / 3 leads
+        ->and($facebookRow['cost_per_acquisition'])->toBe(150.0); // 300 / 2 won
+});
+
+it('returns null ad-cost when a source has leads but no matching Meta insight snapshot', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $team = Team::query()->firstWhere('slug', 'test');
+    $this->actingAs(User::factory()->create());
+    Filament::setTenant($team);
+
+    // Campaign id present on the lead, but no snapshot row exists for it.
+    $orphan = LeadSource::factory()->create(['name' => 'Orphan Campaign']);
+    Lead::factory()->create([
+        Lead::fkColumn('lead_source') => $orphan->getKey(),
+        'status'                      => LeadStatusEnum::Won,
+        'source_campaign_id'          => 'c-999',
+    ]);
+
+    // No campaign attribution at all.
+    $noAttribution = LeadSource::factory()->create(['name' => 'No Attribution']);
+    Lead::factory()->create([
+        Lead::fkColumn('lead_source') => $noAttribution->getKey(),
+        'status'                      => LeadStatusEnum::Won,
+        'source_campaign_id'          => null,
+    ]);
+
+    $rows = app(LeadActivityMetricsService::class)->sourceEconomics(scoped());
+
+    expect(collect($rows)->firstWhere('source', 'Orphan Campaign')['cost_per_lead'])->toBeNull()
+        ->and(collect($rows)->firstWhere('source', 'Orphan Campaign')['cost_per_acquisition'])->toBeNull()
+        ->and(collect($rows)->firstWhere('source', 'No Attribution')['cost_per_lead'])->toBeNull()
+        ->and(collect($rows)->firstWhere('source', 'No Attribution')['cost_per_acquisition'])->toBeNull();
+});
+
+it('does not query ad spend and returns null cost columns when there is no current tenant', function (): void {
+    $website = LeadSource::factory()->create(['name' => 'Untenanted']);
+    Lead::factory()->create([
+        Lead::fkColumn('lead_source') => $website->getKey(),
+        'status'                      => LeadStatusEnum::Won,
+        'source_campaign_id'          => 'c-100',
+    ]);
+
+    $rows = app(LeadActivityMetricsService::class)->sourceEconomics(scoped());
+    $row  = collect($rows)->firstWhere('source', 'Untenanted');
+
+    expect($row['cost_per_lead'])->toBeNull()
+        ->and($row['cost_per_acquisition'])->toBeNull();
+});
+
+it('scopes ad spend to the requested date range, each bound applied independently', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $team = Team::query()->firstWhere('slug', 'test');
+    $this->actingAs(User::factory()->create());
+    Filament::setTenant($team);
+
+    $src = LeadSource::factory()->create(['name' => 'Range Src']);
+    Lead::factory()->create([
+        Lead::fkColumn('lead_source') => $src->getKey(),
+        'status'                      => LeadStatusEnum::Won,
+        'source_campaign_id'          => 'c-range',
+    ]);
+
+    // In-range spend (100, March) + out-of-range spend (500, January) for the same campaign.
+    MetaInsightSnapshot::factory()->create(['team_uuid' => $team->uuid, 'campaign_id' => 'c-range', 'breakdown_type' => 'none', 'spend' => 100, 'date' => '2026-03-10']);
+    MetaInsightSnapshot::factory()->create(['team_uuid' => $team->uuid, 'campaign_id' => 'c-range', 'breakdown_type' => 'none', 'spend' => 500, 'date' => '2026-01-01']);
+
+    $svc = app(LeadActivityMetricsService::class);
+
+    // Full range → only March spend counts.
+    $full = collect($svc->sourceEconomics(scoped(), CarbonImmutable::parse('2026-03-01'), CarbonImmutable::parse('2026-03-31')))->firstWhere('source', 'Range Src');
+    expect($full['cost_per_lead'])->toBe(100.0);
+
+    // Partial range (only lower bound Feb 1) → excludes Jan spend, keeps March.
+    // Without the independent-bound fix this would silently sum all-time spend (600).
+    $partial = collect($svc->sourceEconomics(scoped(), CarbonImmutable::parse('2026-02-01'), null))->firstWhere('source', 'Range Src');
+    expect($partial['cost_per_lead'])->toBe(100.0);
 });
 
 it('ranks advisors by a composite ops score', function (): void {
