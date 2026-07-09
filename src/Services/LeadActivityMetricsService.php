@@ -209,4 +209,70 @@ class LeadActivityMetricsService
             ->map(fn ($row): array => ['reason' => (string) $row->lost_reason, 'count' => (int) $row->cnt])
             ->all();
     }
+
+    /**
+     * Call/Email-Aktivitäten nach Wochentag (Mo–Sa) × 6 Zeitslots (8–20 Uhr).
+     * Aktivitäten außerhalb der Slot-Stunden oder außerhalb von Mo–Sa werden verworfen.
+     *
+     * @return array{slots: list<string>, days: list<string>, matrix: list<list<int>>}
+     */
+    public function contactHeatmap(Builder $leads, CarbonImmutable $from, CarbonImmutable $to): array
+    {
+        $slots  = ['8–10', '10–12', '12–14', '14–16', '16–18', '18–20'];
+        $days   = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        $matrix = array_fill(0, 6, array_fill(0, 6, 0));
+
+        $leadIds    = (clone $leads)->pluck(Lead::pkColumn());
+        $activities = LeadActivity::query()
+            ->whereIn(Lead::fkColumn('lead'), $leadIds)
+            ->whereIn('type', [LeadActivityTypeEnum::Call->value, LeadActivityTypeEnum::Email->value])
+            ->whereBetween('created_at', [$from, $to])
+            ->get(['created_at']);
+
+        foreach ($activities as $activity) {
+            $dow  = (int) $activity->created_at->dayOfWeekIso; // 1 = Mon … 7 = Sun
+            $hour = (int) $activity->created_at->hour;
+
+            if ($dow > 6 || $hour < 8 || $hour >= 20) {
+                continue;
+            }
+
+            $slotIndex = intdiv($hour - 8, 2);
+            $matrix[$dow - 1][$slotIndex]++;
+        }
+
+        return ['slots' => $slots, 'days' => $days, 'matrix' => $matrix];
+    }
+
+    /**
+     * Pipeline-Velocity: offene Leads × Gewinnrate × Ø-Wert ÷ Ø-Zykluszeit.
+     * Ø-Zykluszeit = Ø Tage von created_at bis converted_at (nur Leads mit gesetztem converted_at).
+     *
+     * @return array{open: int, win_rate: float, avg_value: float, cycle_days: float, velocity: float}
+     */
+    public function pipelineVelocity(Builder $leads): array
+    {
+        $open    = (clone $leads)->where('status', LeadStatusEnum::Active)->count();
+        $won     = (clone $leads)->where('status', LeadStatusEnum::Won)->count();
+        $lost    = (clone $leads)->where('status', LeadStatusEnum::Lost)->count();
+        $winRate = ($won + $lost) > 0 ? $won / ($won + $lost) : 0.0;
+
+        $avgValue = (float) ((clone $leads)->where('value', '>', 0)->avg('value') ?? 0);
+
+        $cycleDays = (float) ((clone $leads)
+            ->whereNotNull('converted_at')
+            ->get(['created_at', 'converted_at'])
+            ->map(fn (Lead $lead): float => (float) CarbonImmutable::parse($lead->created_at)->diffInDays(CarbonImmutable::parse($lead->converted_at), absolute: true))
+            ->avg() ?? 0);
+
+        $velocity = $cycleDays > 0 ? $open * $winRate * $avgValue / $cycleDays : 0.0;
+
+        return [
+            'open'       => $open,
+            'win_rate'   => round($winRate * 100, 1),
+            'avg_value'  => round($avgValue, 2),
+            'cycle_days' => round($cycleDays, 1),
+            'velocity'   => round($velocity, 2),
+        ];
+    }
 }

@@ -143,3 +143,79 @@ it('computes average dwell time per phase from moved activities', function (): v
 
     expect($byPhase['phase-a']['avg_days'])->toBe(4.0); // 10d ago → 6d ago
 });
+
+it('builds a 6x6 contact-time heatmap', function (): void {
+    $now  = CarbonImmutable::parse('2026-03-16 09:30:00'); // Monday, slot 8-10
+    $lead = Lead::factory()->create();
+
+    // LeadActivity::$fillable excludes created_at (see movedActivity() docblock
+    // above) — make()+forceFill()+save() to actually pin the timestamp.
+    $activity = $lead->activities()->make(['type' => LeadActivityTypeEnum::Call->value]);
+    $activity->forceFill(['created_at' => $now]);
+    $activity->save();
+
+    $heat = app(LeadActivityMetricsService::class)->contactHeatmap(scoped(), $now->subDays(7), $now->addDay());
+
+    expect($heat['days'])->toHaveCount(6)
+        ->and($heat['slots'])->toHaveCount(6)
+        ->and($heat['matrix'][0][0])->toBe(1); // Monday, first slot
+});
+
+it('excludes non-contact activities and activities outside the window/hours from the heatmap', function (): void {
+    $now  = CarbonImmutable::parse('2026-03-16 09:30:00'); // Monday, slot 8-10
+    $lead = Lead::factory()->create();
+
+    // A Note is not a contact activity → excluded regardless of timing.
+    $note = $lead->activities()->make(['type' => LeadActivityTypeEnum::Note->value]);
+    $note->forceFill(['created_at' => $now]);
+    $note->save();
+
+    // A Call at 21:00 falls outside the 8–20 window → excluded.
+    $lateCall = $lead->activities()->make(['type' => LeadActivityTypeEnum::Call->value]);
+    $lateCall->forceFill(['created_at' => $now->setTime(21, 0)]);
+    $lateCall->save();
+
+    // An Email a day before the requested [from, to] window → excluded.
+    $outOfRange = $lead->activities()->make(['type' => LeadActivityTypeEnum::Email->value]);
+    $outOfRange->forceFill(['created_at' => $now->subDays(10)]);
+    $outOfRange->save();
+
+    $heat = app(LeadActivityMetricsService::class)->contactHeatmap(scoped(), $now->subDays(7), $now->addDay());
+
+    expect(array_sum(array_map('array_sum', $heat['matrix'])))->toBe(0);
+});
+
+it('computes pipeline velocity from open, win-rate, value and cycle time', function (): void {
+    $now = CarbonImmutable::parse('2026-03-01 00:00:00');
+    CarbonImmutable::setTestNow($now);
+
+    // open
+    Lead::factory()->count(2)->create(['status' => LeadStatusEnum::Active]);
+
+    // won, converted after 10/20/30 days from created_at; only two carry a value
+    Lead::factory()->create(['status' => LeadStatusEnum::Won, 'value' => 10000, 'converted_at' => $now->addDays(10)]);
+    Lead::factory()->create(['status' => LeadStatusEnum::Won, 'value' => 20000, 'converted_at' => $now->addDays(20)]);
+    Lead::factory()->create(['status' => LeadStatusEnum::Won, 'value' => null, 'converted_at' => $now->addDays(30)]);
+
+    // lost
+    Lead::factory()->create(['status' => LeadStatusEnum::Lost]);
+
+    $velocity = app(LeadActivityMetricsService::class)->pipelineVelocity(scoped());
+
+    expect($velocity['open'])->toBe(2)
+        ->and($velocity['win_rate'])->toBe(75.0)      // 3 won / (3 won + 1 lost)
+        ->and($velocity['avg_value'])->toBe(15000.0)  // (10000 + 20000) / 2, null excluded
+        ->and($velocity['cycle_days'])->toBe(20.0)     // (10 + 20 + 30) / 3
+        ->and($velocity['velocity'])->toBe(1125.0);    // 2 × 0.75 × 15000 / 20
+});
+
+it('guards pipeline velocity against division by zero', function (): void {
+    Lead::factory()->count(2)->create(['status' => LeadStatusEnum::Active]);
+
+    $velocity = app(LeadActivityMetricsService::class)->pipelineVelocity(scoped());
+
+    expect($velocity['open'])->toBe(2)
+        ->and($velocity['win_rate'])->toBe(0.0)   // no won/lost leads at all
+        ->and($velocity['cycle_days'])->toBe(0.0) // no converted_at present
+        ->and($velocity['velocity'])->toBe(0.0);
+});
