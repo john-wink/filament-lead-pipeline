@@ -3,8 +3,15 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use App\Models\User;
+use Illuminate\Support\Carbon;
+use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\LeadOperations;
+use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 
 use function Pest\Livewire\livewire;
 
@@ -35,4 +42,53 @@ it('switches preset and board through the lifecycle', function (): void {
 
 it('renders successfully without any tenant-visible boards', function (): void {
     livewire(LeadOperations::class)->assertSuccessful();
+});
+
+it('restricts a non-admin advisor to their own leads across all boards when no board is selected', function (): void {
+    Carbon::setTestNow(now());
+
+    $admin   = User::factory()->create(['first_name' => 'Ada', 'last_name' => 'Min']);
+    $advisor = User::factory()->create(['first_name' => 'Avi', 'last_name' => 'Sor']);
+    $this->team->users()->syncWithoutDetaching([$admin->id, $advisor->id]);
+
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $board->admins()->syncWithoutDetaching([$admin->id]); // advisor is NOT a board admin
+
+    $phase  = LeadPhase::factory()->for($board, 'board')->create(['type' => LeadPhaseTypeEnum::Won]);
+    $source = LeadSource::factory()->for($board, 'board')->create(['name' => 'Colleague-Only-Source']);
+
+    // Colleague's lead: would leak cross-board ops data if the fix regressed.
+    Lead::factory()
+        ->for($phase, 'phase')
+        ->for($board, 'board')
+        ->create([
+            Lead::fkColumn('lead_source') => $source->getKey(),
+            'assigned_to'                 => $admin->id,
+            'status'                      => LeadStatusEnum::Won,
+        ]);
+
+    $ownLead = Lead::factory()
+        ->for($phase, 'phase')
+        ->for($board, 'board')
+        ->create([
+            'assigned_to' => $advisor->id,
+            'status'      => LeadStatusEnum::Won,
+        ]);
+
+    $this->actingAs($advisor);
+    filament()->setTenant($this->team);
+
+    $instance = livewire(LeadOperations::class)->instance();
+
+    $scopedLeads = (new ReflectionMethod($instance, 'scopedLeads'))->invoke($instance);
+    expect($scopedLeads->pluck(Lead::pkColumn())->all())->toBe([$ownLead->getKey()]);
+
+    $viewData          = (new ReflectionMethod($instance, 'getViewData'))->invoke($instance);
+    $rankingAdvisorIds = collect($viewData['ranking'])->pluck('advisor_id')->all();
+
+    expect($rankingAdvisorIds)->toBe([(string) $advisor->id])
+        ->and($rankingAdvisorIds)->not->toContain((string) $admin->id);
+
+    $sourceNames = collect($viewData['sources'])->pluck('source')->all();
+    expect($sourceNames)->not->toContain('Colleague-Only-Source');
 });

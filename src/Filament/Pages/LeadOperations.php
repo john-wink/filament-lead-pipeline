@@ -50,6 +50,15 @@ class LeadOperations extends Page
         $this->advisorId = ('' === $advisorId || 'all' === $advisorId) ? null : $advisorId;
     }
 
+    public function getExportUrl(): string
+    {
+        return route('lead-pipeline.operations.export', array_filter([
+            'boardId'   => $this->boardId,
+            'preset'    => $this->preset,
+            'advisorId' => $this->advisorId,
+        ]));
+    }
+
     /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
     protected function range(): array
     {
@@ -78,9 +87,25 @@ class LeadOperations extends Page
             if ($board && $user) {
                 $query->visibleTo($user, $board);
             }
-        } elseif (function_exists('filament') && filament()->getTenant()) {
-            $boardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
-            $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $boardIds);
+        } elseif (function_exists('filament')) {
+            $tenantId = filament()->getTenant()?->getKey();
+
+            if ($tenantId && $user) {
+                // Mirrors AnalyticsExportController::baseQuery(): without a selected
+                // board, a non-board-admin must not see leads across the whole
+                // tenant — only their own, across all tenant-visible boards.
+                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
+                    ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
+                    ->pluck(LeadBoard::pkColumn());
+
+                if ($adminBoardIds->isEmpty()) {
+                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
+                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
+                        ->where('leads.assigned_to', $user->getKey());
+                } else {
+                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $adminBoardIds);
+                }
+            }
         }
 
         if (null !== $this->advisorId) {

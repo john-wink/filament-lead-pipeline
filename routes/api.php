@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Route;
 use JohnWink\FilamentLeadPipeline\Http\Controllers\AnalyticsExportController;
 use JohnWink\FilamentLeadPipeline\Http\Controllers\FacebookOAuthController;
 use JohnWink\FilamentLeadPipeline\Http\Controllers\ImmoScoutOAuthController;
+use JohnWink\FilamentLeadPipeline\Http\Controllers\LeadOperationsExportController;
 use JohnWink\FilamentLeadPipeline\Http\Controllers\WebhookController;
 
 /*
@@ -36,6 +37,10 @@ Route::middleware(['web', 'auth'])
 Route::middleware(['web', 'auth'])
     ->get('lead-pipeline/analytics/export', AnalyticsExportController::class)
     ->name('lead-pipeline.analytics.export');
+
+Route::middleware(['web', 'auth'])
+    ->get('lead-pipeline/operations/export', LeadOperationsExportController::class)
+    ->name('lead-pipeline.operations.export');
 
 Route::prefix(config('lead-pipeline.webhooks.prefix', 'api/lead-pipeline/webhooks'))
     ->middleware([...config('lead-pipeline.webhooks.middleware', ['api']), 'throttle:' . config('lead-pipeline.webhooks.rate_limit', 60) . ',1'])

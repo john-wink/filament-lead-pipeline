@@ -10,6 +10,10 @@
         @foreach (['today' => __('lead-pipeline::lead-pipeline.analytics.today'), '7' => __('lead-pipeline::lead-pipeline.analytics.days_7'), '30' => __('lead-pipeline::lead-pipeline.analytics.days_30'), '90' => __('lead-pipeline::lead-pipeline.analytics.days_90')] as $key => $label)
             <x-filament::button size="sm" :color="$preset === $key ? 'primary' : 'gray'" wire:click="setPreset('{{ $key }}')">{{ $label }}</x-filament::button>
         @endforeach
+
+        <a href="{{ $this->getExportUrl() }}" class="ms-auto">
+            <x-filament::button size="sm" icon="heroicon-o-arrow-down-tray" tag="span">{{ __('lead-pipeline::lead-pipeline.operations.export') }}</x-filament::button>
+        </a>
     </div>
 
     <div class="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
