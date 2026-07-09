@@ -4,13 +4,33 @@ declare(strict_types=1);
 
 use Carbon\CarbonImmutable;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
 
 function scoped(): Illuminate\Database\Eloquent\Builder
 {
     return Lead::query();
+}
+
+/**
+ * `LeadActivity::$fillable` intentionally excludes `created_at`, so a plain
+ * `activities()->create(['created_at' => ...])` is silently discarded by mass
+ * assignment and Eloquent stamps `now()` instead. `make()` + `forceFill()` sets
+ * it as a dirty attribute before the first save, so `updateTimestamps()` skips
+ * overwriting it — the explicit timestamp actually persists.
+ */
+function movedActivity(Lead $lead, array $properties, Carbon\CarbonInterface $createdAt): LeadActivity
+{
+    $activity = $lead->activities()->make(['type' => LeadActivityTypeEnum::Moved->value, 'properties' => $properties]);
+    $activity->forceFill(['created_at' => $createdAt]);
+    $activity->save();
+
+    return $activity;
 }
 
 afterEach(fn () => CarbonImmutable::setTestNow());
@@ -76,4 +96,50 @@ it('computes follow-up, untouched and contact-attempt stats (snapshot)', functio
         ->and($stats['untouched'])->toBe(1)               // B only (C young, D has a Note touch)
         ->and($stats['next_step_rate'])->toBe(50.0)       // A + C have reminders, of 4 active
         ->and($stats['avg_contact_attempts'])->toBe(0.5); // 2 Call/Email attempts / 4 active (D's Note excluded)
+});
+
+it('aggregates loss reasons descending', function (): void {
+    Lead::factory()->count(3)->create(['lost_reason' => 'Finanzierung geplatzt']);
+    Lead::factory()->create(['lost_reason' => 'Budget zu klein']);
+    Lead::factory()->create(['lost_reason' => null]);
+
+    $reasons = app(LeadActivityMetricsService::class)->lossReasons(scoped());
+
+    expect($reasons[0]['reason'])->toBe('Finanzierung geplatzt')
+        ->and($reasons[0]['count'])->toBe(3)
+        ->and(collect($reasons)->firstWhere('reason', null))->toBeNull(); // nulls excluded
+});
+
+it('builds a funnel with drop-off per phase', function (): void {
+    $board = LeadBoard::factory()->create();
+    $p1    = LeadPhase::factory()->create([LeadPhase::fkColumn('lead_board') => $board->getKey(), 'sort' => 1, 'name' => 'Anfrage']);
+    $p2    = LeadPhase::factory()->create([LeadPhase::fkColumn('lead_board') => $board->getKey(), 'sort' => 2, 'name' => 'Qualifiziert']);
+
+    // The LeadBoardObserver mandatorily attaches a terminal "Nicht qualifiziert"
+    // phase (sort = 1) on board creation, before p1/p2 exist. Push it past p2 so
+    // it doesn't land between our two phases and skew the ordered funnel/drop_pct.
+    $board->phases()->where('type', LeadPhaseTypeEnum::Disqualified->value)->update(['sort' => 99]);
+
+    Lead::factory()->count(4)->create([Lead::fkColumn('lead_board') => $board->getKey(), Lead::fkColumn('lead_phase') => $p1->getKey()]);
+    Lead::factory()->count(1)->create([Lead::fkColumn('lead_board') => $board->getKey(), Lead::fkColumn('lead_phase') => $p2->getKey()]);
+
+    $funnel = app(LeadActivityMetricsService::class)->funnel($board);
+
+    expect($funnel[0]['label'])->toBe('Anfrage')
+        ->and($funnel[0]['count'])->toBe(4)
+        ->and($funnel[1]['label'])->toBe('Qualifiziert')
+        ->and($funnel[1]['count'])->toBe(1)
+        ->and($funnel[1]['drop_pct'])->toBe(75.0);
+});
+
+it('computes average dwell time per phase from moved activities', function (): void {
+    $lead = Lead::factory()->create();
+
+    movedActivity($lead, ['new_phase' => 'phase-a'], now()->subDays(10));
+    movedActivity($lead, ['old_phase' => 'phase-a', 'new_phase' => 'phase-b'], now()->subDays(6));
+
+    $dwell   = app(LeadActivityMetricsService::class)->stageDwell(scoped());
+    $byPhase = collect($dwell)->keyBy('phase_id');
+
+    expect($byPhase['phase-a']['avg_days'])->toBe(4.0); // 10d ago → 6d ago
 });

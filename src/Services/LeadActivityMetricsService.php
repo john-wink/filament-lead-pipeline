@@ -10,6 +10,8 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
+use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 
 class LeadActivityMetricsService
 {
@@ -100,5 +102,111 @@ class LeadActivityMetricsService
             'untouched'            => $untouched,
             'avg_contact_attempts' => $activeCount > 0 ? round($attemptCount / $activeCount, 1) : 0.0,
         ];
+    }
+
+    /**
+     * Verweildauer je Phase, ermittelt aus aufeinanderfolgenden Moved-Activities
+     * (Eintritt in eine Phase bis zum nächsten Move). "Überaltert" = Verweildauer
+     * über dem 1,5-fachen Median der Phase.
+     *
+     * @return list<array{phase_id: string, label: string, avg_days: float, overaged_pct: float}>
+     */
+    public function stageDwell(Builder $leads): array
+    {
+        $leadIds = (clone $leads)->pluck(Lead::pkColumn());
+
+        $moves = LeadActivity::query()
+            ->whereIn(Lead::fkColumn('lead'), $leadIds)
+            ->where('type', LeadActivityTypeEnum::Moved->value)
+            ->orderBy(Lead::fkColumn('lead'))
+            ->orderBy('created_at')
+            ->get([Lead::fkColumn('lead'), 'properties', 'created_at']);
+
+        /** @var array<string, list<float>> $durations phaseId => list of dwell days */
+        $durations = [];
+        foreach ($moves->groupBy(Lead::fkColumn('lead')) as $leadMoves) {
+            $ordered = $leadMoves->values();
+            for ($i = 0; $i < $ordered->count() - 1; $i++) {
+                $phaseId = $ordered[$i]->properties['new_phase'] ?? null;
+                if (blank($phaseId)) {
+                    continue;
+                }
+
+                // absolute: true — Carbon 3's diffInDays is signed by default; activities
+                // are ordered by created_at above, but a clock skew or backfilled import
+                // must never yield a negative dwell that silently reads as zero/overaged-free.
+                $days = CarbonImmutable::parse($ordered[$i]->created_at)
+                    ->diffInDays(CarbonImmutable::parse($ordered[$i + 1]->created_at), absolute: true);
+
+                $durations[$phaseId][] = $days;
+            }
+        }
+
+        $phaseNames = LeadPhase::query()
+            ->whereIn(LeadPhase::pkColumn(), array_keys($durations))
+            ->pluck('name', LeadPhase::pkColumn());
+
+        $result = [];
+        foreach ($durations as $phaseId => $list) {
+            sort($list);
+            $median    = $list[(int) floor((count($list) - 1) / 2)];
+            $threshold = $median * 1.5;
+            $overaged  = count(array_filter($list, fn (float $d): bool => $d > $threshold));
+
+            $result[] = [
+                'phase_id'     => (string) $phaseId,
+                'label'        => (string) ($phaseNames[$phaseId] ?? '—'),
+                'avg_days'     => round(array_sum($list) / count($list), 1),
+                'overaged_pct' => round($overaged / count($list) * 100, 1),
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Leads je Phase (in Sortierreihenfolge) mit Absprungrate zur Vorstufe.
+     *
+     * @return list<array{label: string, count: int, drop_pct: float}>
+     */
+    public function funnel(LeadBoard $board): array
+    {
+        $phases = $board->phases()->ordered()->get();
+        $result = [];
+        $prev   = null;
+
+        foreach ($phases as $phase) {
+            $count   = $phase->leads()->count();
+            $dropPct = (null !== $prev && $prev > 0) ? round(($prev - $count) / $prev * 100, 1) : 0.0;
+
+            $result[] = [
+                'label'    => (string) $phase->name,
+                'count'    => $count,
+                'drop_pct' => max($dropPct, 0.0),
+            ];
+
+            $prev = $count;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Verlustgründe gruppiert nach Häufigkeit, absteigend. Leere/fehlende Gründe
+     * werden ausgeschlossen, da sie keine auswertbare Information liefern.
+     *
+     * @return list<array{reason: string, count: int}>
+     */
+    public function lossReasons(Builder $leads): array
+    {
+        return (clone $leads)
+            ->whereNotNull('lost_reason')
+            ->where('lost_reason', '!=', '')
+            ->selectRaw('lost_reason, COUNT(*) as cnt')
+            ->groupBy('lost_reason')
+            ->orderByDesc('cnt')
+            ->get()
+            ->map(fn ($row): array => ['reason' => (string) $row->lost_reason, 'count' => (int) $row->cnt])
+            ->all();
     }
 }
