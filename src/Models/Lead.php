@@ -281,6 +281,8 @@ class Lead extends Model
                 'old_phase' => $oldPhase?->getKey(),
                 'new_phase' => $phase->getKey(),
             ],
+            'causer_type' => auth()->check() ? config('lead-pipeline.user_model') : null,
+            'causer_id'   => auth()->id(),
         ]);
 
         return $this->refresh();
