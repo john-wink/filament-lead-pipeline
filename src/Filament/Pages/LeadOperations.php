@@ -30,6 +30,26 @@ class LeadOperations extends Page
         return __('lead-pipeline::lead-pipeline.operations.nav');
     }
 
+    /**
+     * Nest under the "Leads" navigation item (LeadBoardResource) instead of
+     * cluttering the top level with a second entry — the parent label must
+     * match LeadBoardResource::getNavigationLabel() exactly.
+     */
+    public static function getNavigationParentItem(): ?string
+    {
+        return config('lead-pipeline.navigation.label', __('lead-pipeline::lead-pipeline.navigation.label'));
+    }
+
+    public static function getNavigationGroup(): ?string
+    {
+        return config('lead-pipeline.navigation.group');
+    }
+
+    public static function getNavigationSort(): ?int
+    {
+        return ((int) config('lead-pipeline.navigation.sort', 10)) + 2;
+    }
+
     public function getTitle(): string
     {
         return __('lead-pipeline::lead-pipeline.operations.title');

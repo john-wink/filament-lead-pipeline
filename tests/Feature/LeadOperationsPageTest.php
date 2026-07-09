@@ -135,3 +135,12 @@ it('aborts with 403 when a forged board id is not accessible on the tenant', fun
         ->call('setBoard', (string) $foreignBoard->getKey())
         ->assertForbidden();
 });
+
+it('nests under the Leads navigation item instead of adding a top-level entry', function (): void {
+    // Parent label must match LeadBoardResource (the "Leads" nav item) exactly,
+    // and share its group, so Filament renders it as a Leads sub-item.
+    expect(LeadOperations::getNavigationParentItem())
+        ->toBe(JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getNavigationLabel())
+        ->and(LeadOperations::getNavigationGroup())
+        ->toBe(JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getNavigationGroup());
+});
