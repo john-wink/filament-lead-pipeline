@@ -31,6 +31,8 @@ it('has every operations key resolved in all locales', function (string $locale)
         'ops_ranking',
         'ops_score',
         'export',
+        'cost_per_lead',
+        'cost_per_acquisition',
     ];
 
     foreach ($keys as $key) {

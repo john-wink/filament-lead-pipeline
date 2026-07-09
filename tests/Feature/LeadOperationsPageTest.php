@@ -12,6 +12,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Models\MetaInsightSnapshot;
 
 use function Pest\Livewire\livewire;
 
@@ -91,4 +92,46 @@ it('restricts a non-admin advisor to their own leads across all boards when no b
 
     $sourceNames = collect($viewData['sources'])->pluck('source')->all();
     expect($sourceNames)->not->toContain('Colleague-Only-Source');
+});
+
+it('renders ad-cost columns and the funnel section when a funded board is selected', function (): void {
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $board->admins()->syncWithoutDetaching([$this->user->id]);
+
+    LeadPhase::factory()->for($board, 'board')->create(['name' => 'Neu']);
+    $wonPhase = LeadPhase::factory()->for($board, 'board')->create(['type' => LeadPhaseTypeEnum::Won, 'name' => 'Gewonnen']);
+
+    $source = LeadSource::factory()->for($board, 'board')->create(['name' => 'Funded-Source']);
+    Lead::factory()
+        ->for($wonPhase, 'phase')
+        ->for($board, 'board')
+        ->create([
+            Lead::fkColumn('lead_source') => $source->getKey(),
+            'status'                      => LeadStatusEnum::Won,
+            'source_campaign_id'          => 'c-page-1',
+        ]);
+
+    MetaInsightSnapshot::factory()->create([
+        'team_uuid'      => $this->team->uuid,
+        'campaign_id'    => 'c-page-1',
+        'breakdown_type' => 'none',
+        'spend'          => 100,
+    ]);
+
+    livewire(LeadOperations::class)
+        ->call('setBoard', (string) $board->getKey())
+        ->assertSee(__('lead-pipeline::lead-pipeline.operations.cost_per_lead'))
+        ->assertSee(__('lead-pipeline::lead-pipeline.operations.cost_per_acquisition'))
+        ->assertSee(__('lead-pipeline::lead-pipeline.operations.funnel'))
+        ->assertSee('Funded-Source')
+        ->assertSee('100,00');
+});
+
+it('aborts with 403 when a forged board id is not accessible on the tenant', function (): void {
+    $otherTeam    = Team::factory()->create();
+    $foreignBoard = LeadBoard::factory()->create(['team_uuid' => $otherTeam->uuid]);
+
+    livewire(LeadOperations::class)
+        ->call('setBoard', (string) $foreignBoard->getKey())
+        ->assertForbidden();
 });

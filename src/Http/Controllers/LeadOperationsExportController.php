@@ -46,13 +46,23 @@ class LeadOperationsExportController
             fputcsv($handle, [], ';');
 
             fputcsv($handle, ['=== ' . __('lead-pipeline::lead-pipeline.operations.source_economics') . ' ==='], ';');
-            fputcsv($handle, ['Quelle', 'Leads', 'Gewonnen', 'Conversion %', 'Ø Wert'], ';');
+            fputcsv($handle, [
+                'Quelle',
+                'Leads',
+                'Gewonnen',
+                'Conversion %',
+                __('lead-pipeline::lead-pipeline.operations.cost_per_lead'),
+                __('lead-pipeline::lead-pipeline.operations.cost_per_acquisition'),
+                'Ø Wert',
+            ], ';');
             foreach ($sources as $src) {
                 fputcsv($handle, [
                     $src['source'],
                     $src['leads'],
                     $src['won'],
                     number_format($src['conversion'], 1, ',', '.'),
+                    null === $src['cost_per_lead'] ? '' : number_format($src['cost_per_lead'], 2, ',', '.'),
+                    null === $src['cost_per_acquisition'] ? '' : number_format($src['cost_per_acquisition'], 2, ',', '.'),
                     number_format($src['avg_value'], 2, ',', '.'),
                 ], ';');
             }

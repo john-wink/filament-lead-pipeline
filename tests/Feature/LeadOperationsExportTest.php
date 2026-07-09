@@ -11,6 +11,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Models\MetaInsightSnapshot;
 
 beforeEach(function (): void {
     $this->team  = Team::query()->firstWhere('slug', 'test');
@@ -51,6 +52,37 @@ it('streams an operations CSV with BOM, semicolons, and German decimals', functi
         ->and($content)->toContain(';')
         ->and($content)->toContain('Webflow-Formular')
         ->and($content)->toContain('1.234,50');
+});
+
+it('includes ad-cost columns in the source economics CSV section', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $this->actingAs($this->admin);
+    Filament::setTenant($this->team);
+
+    $costSource = LeadSource::factory()->for($this->board, 'board')->create(['name' => 'Cost-Source']);
+    Lead::factory()
+        ->for($this->wonPhase, 'phase')
+        ->for($this->board, 'board')
+        ->create([
+            Lead::fkColumn('lead_source') => $costSource->getKey(),
+            'assigned_to'                 => $this->admin->id,
+            'status'                      => LeadStatusEnum::Won,
+            'source_campaign_id'          => 'c-cost-1',
+        ]);
+
+    MetaInsightSnapshot::factory()->create([
+        'team_uuid'      => $this->team->uuid,
+        'campaign_id'    => 'c-cost-1',
+        'breakdown_type' => 'none',
+        'spend'          => 100,
+    ]);
+
+    $content = $this->get($this->exportUrl)->assertOk()->streamedContent();
+
+    expect($content)->toContain('Kosten/Lead')
+        ->and($content)->toContain('Kosten/Akquise')
+        ->and($content)->toContain('Cost-Source')
+        ->and($content)->toContain('100,00');
 });
 
 it('rejects boards the requesting user cannot access on their tenant', function (): void {

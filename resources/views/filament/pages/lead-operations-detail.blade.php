@@ -135,6 +135,8 @@
                     <th>{{ __('lead-pipeline::lead-pipeline.analytics.sources_leads') }}</th>
                     <th>{{ __('lead-pipeline::lead-pipeline.analytics.sources_won') }}</th>
                     <th>{{ __('lead-pipeline::lead-pipeline.analytics.sources_conversion') }}</th>
+                    <th>{{ __('lead-pipeline::lead-pipeline.operations.cost_per_lead') }}</th>
+                    <th>{{ __('lead-pipeline::lead-pipeline.operations.cost_per_acquisition') }}</th>
                     <th class="text-right">&Oslash; Wert</th>
                 </tr>
             </thead>
@@ -145,12 +147,38 @@
                         <td>{{ $src['leads'] }}</td>
                         <td>{{ $src['won'] }}</td>
                         <td>{{ number_format($src['conversion'], 1, ',', '.') }} %</td>
+                        <td>{{ null === $src['cost_per_lead'] ? '–' : number_format($src['cost_per_lead'], 2, ',', '.') . ' €' }}</td>
+                        <td>{{ null === $src['cost_per_acquisition'] ? '–' : number_format($src['cost_per_acquisition'], 2, ',', '.') . ' €' }}</td>
                         <td class="text-right">{{ number_format($src['avg_value'], 2, ',', '.') }} €</td>
                     </tr>
                 @endforeach
             </tbody>
         </table>
     </x-filament::section>
+
+    @if (! empty($funnel))
+        <x-filament::section class="lg:col-span-2">
+            <x-slot name="heading">{{ __('lead-pipeline::lead-pipeline.operations.funnel') }}</x-slot>
+            <table class="w-full text-sm tabular-nums">
+                <thead>
+                    <tr class="text-left text-gray-500">
+                        <th>{{ __('lead-pipeline::lead-pipeline.phase.singular') }}</th>
+                        <th>Anzahl</th>
+                        <th class="text-right">Drop %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($funnel as $row)
+                        <tr class="border-t border-gray-100 dark:border-gray-700">
+                            <td class="py-1">{{ $row['label'] }}</td>
+                            <td>{{ $row['count'] }}</td>
+                            <td class="text-right">{{ number_format($row['drop_pct'], 1, ',', '.') }} %</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </x-filament::section>
+    @endif
 
     <x-filament::section class="lg:col-span-2">
         <x-slot name="heading">{{ __('lead-pipeline::lead-pipeline.operations.ops_ranking') }}</x-slot>

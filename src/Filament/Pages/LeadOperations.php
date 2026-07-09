@@ -78,12 +78,17 @@ class LeadOperations extends Page
         $user  = auth()->user();
 
         if ($this->boardId) {
+            $board = LeadBoard::find($this->boardId);
+            if ($board && ! $board->isAccessibleByTenant(filament()->getTenant())) {
+                abort(403);
+            }
+
             // Column names are qualified with the leads table: some service methods
             // (e.g. sourceEconomics) join lead_sources, which has its own
             // lead_board_uuid column — an unqualified where() here would become
             // ambiguous once that join is applied.
             $query->where('leads.' . Lead::fkColumn('lead_board'), $this->boardId);
-            $board = LeadBoard::find($this->boardId);
+
             if ($board && $user) {
                 $query->visibleTo($user, $board);
             }

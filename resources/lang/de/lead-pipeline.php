@@ -702,5 +702,7 @@ return [
         'ops_ranking'          => 'Lead-Ops-Ranking',
         'ops_score'            => 'Ops-Score',
         'export'               => 'Export CSV',
+        'cost_per_lead'        => 'Kosten/Lead',
+        'cost_per_acquisition' => 'Kosten/Akquise',
     ],
 ];
