@@ -10,6 +10,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
 
 function scoped(): Illuminate\Database\Eloquent\Builder
@@ -218,4 +219,76 @@ it('guards pipeline velocity against division by zero', function (): void {
         ->and($velocity['win_rate'])->toBe(0.0)   // no won/lost leads at all
         ->and($velocity['cycle_days'])->toBe(0.0) // no converted_at present
         ->and($velocity['velocity'])->toBe(0.0);
+});
+
+it('summarises economics per source', function (): void {
+    $s1 = LeadSource::factory()->create(['name' => 'Website']);
+    Lead::factory()->count(2)->create([Lead::fkColumn('lead_source') => $s1->getKey(), 'status' => LeadStatusEnum::Won, 'value' => 100]);
+    Lead::factory()->create([Lead::fkColumn('lead_source') => $s1->getKey(), 'status' => LeadStatusEnum::Lost, 'value' => 0]);
+
+    $rows    = app(LeadActivityMetricsService::class)->sourceEconomics(scoped());
+    $website = collect($rows)->firstWhere('source', 'Website');
+
+    expect($website['leads'])->toBe(3)
+        ->and($website['won'])->toBe(2)
+        ->and($website['conversion'])->toBe(66.7); // 2 won of 3 leads
+});
+
+it('excludes a leadless source entirely (INNER JOIN, never divides by zero)', function (): void {
+    LeadSource::factory()->create(['name' => 'Empty']);
+
+    $rows = app(LeadActivityMetricsService::class)->sourceEconomics(scoped());
+
+    expect(collect($rows)->firstWhere('source', 'Empty'))->toBeNull();
+});
+
+it('ranks advisors by a composite ops score', function (): void {
+    $now = CarbonImmutable::parse('2026-03-15 12:00:00');
+
+    // Strong advisor: fast response (10 min) + won + 1 contact attempt.
+    $ace = Lead::factory()->create(['assigned_to' => 'ace', 'status' => LeadStatusEnum::Won, 'created_at' => $now->subDay(), 'first_response_at' => $now->subDay()->addMinutes(10)]);
+    $ace->activities()->create(['type' => LeadActivityTypeEnum::Call->value]);
+
+    // Weak advisor: slow response (30h) + lost + no contact attempts.
+    Lead::factory()->create(['assigned_to' => 'slow', 'status' => LeadStatusEnum::Lost, 'created_at' => $now->subDay(), 'first_response_at' => $now->subDay()->addHours(30)]);
+
+    $rows = app(LeadActivityMetricsService::class)->advisorOps(scoped(), $now->subDays(7), $now);
+    $byId = collect($rows)->keyBy('advisor_id');
+
+    // ace: sla_pct=100 (10min <= 60min SLA), winRate=1 (won, no lost),
+    //      responseScore=1-10/1440=0.9930556
+    //   -> ops_score = round((1*0.4 + 1*0.4 + 0.9930556*0.2)*100, 1) = 99.9
+    // slow: sla_pct=0 (1800min > 60min SLA), winRate=0 (lost, no won),
+    //      responseScore=max(0, 1-min(1800/1440,1))=0
+    //   -> ops_score = round((0*0.4 + 0*0.4 + 0*0.2)*100, 1) = 0.0
+    expect($rows)->toHaveCount(2)
+        ->and($rows[0]['advisor_id'])->toBe('ace')
+        ->and($rows[0]['ops_score'])->toBe(99.9)
+        ->and($rows[0]['contact_attempts'])->toBe(1)
+        ->and($byId['slow']['ops_score'])->toBe(0.0)
+        ->and($byId['slow']['contact_attempts'])->toBe(0)
+        ->and($rows[0]['ops_score'])->toBeGreaterThan($rows[1]['ops_score']);
+});
+
+it('guards advisor ops against an empty advisor set', function (): void {
+    Lead::factory()->create(['assigned_to' => null]);
+
+    $rows = app(LeadActivityMetricsService::class)->advisorOps(scoped(), CarbonImmutable::parse('2026-03-01'), CarbonImmutable::parse('2026-03-15'));
+
+    expect($rows)->toBe([]);
+});
+
+it('guards advisor ops win rate against division by zero when won+lost is empty', function (): void {
+    $now = CarbonImmutable::parse('2026-03-15 12:00:00');
+
+    // "idle" has an assigned lead that is still Active — no won, no lost.
+    Lead::factory()->create(['assigned_to' => 'idle', 'status' => LeadStatusEnum::Active, 'created_at' => $now->subDay(), 'first_response_at' => null]);
+
+    $rows = app(LeadActivityMetricsService::class)->advisorOps(scoped(), $now->subDays(7), $now);
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]['advisor_id'])->toBe('idle')
+        ->and($rows[0]['won'])->toBe(0)
+        // winRate=0 (guarded), sla_pct=0 (never responded), responseScore=0 (avg_minutes null) -> ops_score=0.0
+        ->and($rows[0]['ops_score'])->toBe(0.0);
 });
