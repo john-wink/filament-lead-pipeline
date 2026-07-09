@@ -6,6 +6,10 @@ namespace JohnWink\FilamentLeadPipeline\Services;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
+use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
 
 class LeadActivityMetricsService
 {
@@ -58,6 +62,43 @@ class LeadActivityMetricsService
             'avg_minutes' => $responded > 0 ? round(array_sum($minutes) / $responded, 1) : null,
             'buckets'     => $buckets,
             'sla_pct'     => $responded > 0 ? round($withinSla / $responded * 100, 1) : 0.0,
+        ];
+    }
+
+    /**
+     * Snapshot of the current state of active leads (not scoped to a period).
+     *
+     * @return array{overdue_followups: int, next_step_rate: float, untouched: int, avg_contact_attempts: float}
+     */
+    public function operationsStats(Builder $leads): array
+    {
+        $leadFk       = Lead::fkColumn('lead');
+        $contactTypes = [LeadActivityTypeEnum::Call->value, LeadActivityTypeEnum::Email->value];
+        $touchTypes   = [...$contactTypes, LeadActivityTypeEnum::Note->value];
+        $staleDays    = (int) config('lead-pipeline.kanban.stale_warning_days', 7);
+
+        $activeLeads = (clone $leads)->where('status', LeadStatusEnum::Active);
+        $activeCount = (clone $activeLeads)->count();
+
+        $overdue      = (clone $activeLeads)->whereNotNull('reminder_at')->where('reminder_at', '<', now())->count();
+        $withNextStep = (clone $activeLeads)->whereNotNull('reminder_at')->count();
+
+        $untouched = (clone $activeLeads)
+            ->where('created_at', '<', now()->subDays($staleDays))
+            ->whereDoesntHave('activities', fn (Builder $q): Builder => $q->whereIn('type', $touchTypes))
+            ->count();
+
+        $leadIds      = (clone $activeLeads)->pluck(Lead::pkColumn());
+        $attemptCount = LeadActivity::query()
+            ->whereIn($leadFk, $leadIds)
+            ->whereIn('type', $contactTypes)
+            ->count();
+
+        return [
+            'overdue_followups'    => $overdue,
+            'next_step_rate'       => $activeCount > 0 ? round($withNextStep / $activeCount * 100, 1) : 0.0,
+            'untouched'            => $untouched,
+            'avg_contact_attempts' => $activeCount > 0 ? round($attemptCount / $activeCount, 1) : 0.0,
         ];
     }
 }
