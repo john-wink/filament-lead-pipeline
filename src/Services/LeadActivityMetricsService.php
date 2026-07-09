@@ -6,6 +6,7 @@ namespace JohnWink\FilamentLeadPipeline\Services;
 
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
@@ -421,6 +422,14 @@ class LeadActivityMetricsService
         $tenantId = function_exists('filament') ? filament()->getTenant()?->getKey() : null;
 
         if (null === $tenantId || [] === $campaignIds) {
+            return [];
+        }
+
+        // Ad-cost enrichment is optional per tenant/deployment: an installation
+        // that never set up Meta insights sync has no meta_insight_snapshots
+        // table. Skip cost attribution silently rather than 500 the whole
+        // operations page (mirrors SyncMetaInsightsJob's Schema::hasTable guard).
+        if ( ! Schema::hasTable((new MetaInsightSnapshot())->getTable())) {
             return [];
         }
 

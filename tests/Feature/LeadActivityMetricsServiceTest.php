@@ -6,6 +6,7 @@ use App\Models\Team;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
+use Illuminate\Support\Facades\Schema;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
@@ -330,6 +331,31 @@ it('does not query ad spend and returns null cost columns when there is no curre
     $row  = collect($rows)->firstWhere('source', 'Untenanted');
 
     expect($row['cost_per_lead'])->toBeNull()
+        ->and($row['cost_per_acquisition'])->toBeNull();
+});
+
+it('does not throw and returns null ad-cost when the meta_insight_snapshots table is absent', function (): void {
+    // Reproduces the production-eota 500: a deployment that never provisioned
+    // the Meta insights table must not take down the whole operations page.
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $team = Team::query()->firstWhere('slug', 'test');
+    $this->actingAs(User::factory()->create());
+    Filament::setTenant($team);
+
+    $facebook = LeadSource::factory()->create(['name' => 'No-Table Ads']);
+    Lead::factory()->create([
+        Lead::fkColumn('lead_source') => $facebook->getKey(),
+        'status'                      => LeadStatusEnum::Won,
+        'source_campaign_id'          => 'c-100', // has campaign attribution → would query the table
+    ]);
+
+    Schema::drop('meta_insight_snapshots'); // SQLite DDL is transactional → rolled back after the test
+
+    $rows = app(LeadActivityMetricsService::class)->sourceEconomics(scoped());
+    $row  = collect($rows)->firstWhere('source', 'No-Table Ads');
+
+    expect($row['leads'])->toBe(1)
+        ->and($row['cost_per_lead'])->toBeNull()
         ->and($row['cost_per_acquisition'])->toBeNull();
 });
 
