@@ -49,6 +49,8 @@ class Lead extends Model
         'reminder_at',
         'reminder_note',
         'reminder_notified_at',
+        'first_response_at',
+        'first_response_by',
         'assigned_to',
         'raw_data',
         'source_campaign_id',
@@ -300,6 +302,7 @@ class Lead extends Model
             'lost_at'              => 'datetime',
             'reminder_at'          => 'datetime',
             'reminder_notified_at' => 'datetime',
+            'first_response_at'    => 'datetime',
             'raw_data'             => 'array',
         ];
     }
