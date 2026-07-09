@@ -453,6 +453,7 @@ return [
         ],
     ],
     'analytics' => [
+        'all_boards'         => 'Alle Boards',
         'title_board'        => 'Board-Auswertung',
         'title_all'          => 'Gesamtauswertung',
         'title'              => 'Auswertung',

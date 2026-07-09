@@ -447,6 +447,7 @@ return [
         ],
     ],
     'analytics' => [
+        'all_boards'         => 'All boards',
         'title_board'        => 'Board Analytics',
         'title_all'          => 'Overall Analytics',
         'title'              => 'Analytics',

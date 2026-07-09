@@ -434,6 +434,7 @@ return [
         ],
     ],
     'analytics' => [
+        'all_boards'         => 'Tous les tableaux',
         'title_board'        => 'Analyse du tableau',
         'title_all'          => 'Analyse globale',
         'title'              => 'Analyse',
