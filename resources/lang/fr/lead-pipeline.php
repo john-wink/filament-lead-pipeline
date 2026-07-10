@@ -680,8 +680,6 @@ return [
         'funnel'               => 'Entonnoir de leads',
         'loss_reasons'         => 'Motifs de perte',
         'source_economics'     => 'Rentabilité des sources',
-        'ops_ranking'          => 'Classement des opérations',
-        'ops_score'            => 'Score opérationnel',
         'export'               => 'Export CSV',
         'cost_per_lead'        => 'Coût par lead',
         'cost_per_acquisition' => 'Coût par acquisition',

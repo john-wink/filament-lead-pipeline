@@ -693,8 +693,6 @@ return [
         'funnel'               => 'Lead funnel',
         'loss_reasons'         => 'Loss reasons',
         'source_economics'     => 'Source economics',
-        'ops_ranking'          => 'Lead ops ranking',
-        'ops_score'            => 'Ops score',
         'export'               => 'Export CSV',
         'cost_per_lead'        => 'Cost/Lead',
         'cost_per_acquisition' => 'Cost/Acquisition',

@@ -201,3 +201,25 @@ it('honours custom dateFrom/dateTo over the preset and supports the all preset',
 
     expect($all)->toContain('600,00');
 });
+
+it('exports the advisor matrix with resolved names and subscores', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $this->actingAs($this->admin);
+    Filament::setTenant($this->team);
+
+    $advisor = User::factory()->create(['first_name' => 'CSV', 'last_name' => 'Berater']);
+    $board   = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $board->admins()->syncWithoutDetaching([$this->admin->id]);
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create();
+    Lead::factory()->for($board, 'board')->for($phase, 'phase')->create(['assigned_to' => $advisor->id]);
+
+    $response = $this->get(route('lead-pipeline.operations.export', ['boardId' => $board->getKey(), 'preset' => 'all']));
+
+    $response->assertOk();
+    $csv = $response->streamedContent();
+
+    expect($csv)->toContain('CSV Berater')
+        ->toContain(__('lead-pipeline::lead-pipeline.operations.matrix_title'))
+        ->not->toContain((string) $advisor->id)
+        ->toContain('Score');
+});

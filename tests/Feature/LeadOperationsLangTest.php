@@ -28,8 +28,6 @@ it('has every operations key resolved in all locales', function (string $locale)
         'funnel',
         'loss_reasons',
         'source_economics',
-        'ops_ranking',
-        'ops_score',
         'export',
         'cost_per_lead',
         'cost_per_acquisition',

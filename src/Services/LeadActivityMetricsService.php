@@ -362,60 +362,6 @@ class LeadActivityMetricsService
     }
 
     /**
-     * Lead-Ops-Ranking je zugewiesenem Berater: gewichteter Composite aus
-     * SLA-Erfüllung (40 %), Gewinnrate (40 %) und Reaktions-Score (20 %),
-     * absteigend nach `ops_score` sortiert.
-     *
-     * @return list<array{
-     *     advisor_id: ?string, avg_response_minutes: ?float, sla_pct: float,
-     *     contact_attempts: int, won: int, ops_score: float
-     * }>
-     */
-    public function advisorOps(Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to, ?int $slaMinutes = null): array
-    {
-        $slaMinutes ??= (int) config('lead-pipeline.operations.sla_minutes', 60);
-        $advisorIds = (clone $leads)->whereNotNull('assigned_to')->distinct()->pluck('assigned_to');
-
-        // int|string: pluck('assigned_to') yields int under 'id' primary-key mode,
-        // string under 'uuid' — strict_types would TypeError on a string-only hint.
-        $rows = $advisorIds->map(function (int|string $advisorId) use ($leads, $from, $to, $slaMinutes): array {
-            $scoped   = (clone $leads)->where('assigned_to', $advisorId);
-            $response = $this->responseStats((clone $scoped), $from, $to, $slaMinutes);
-
-            $won     = (clone $scoped)->where('status', LeadStatusEnum::Won)->count();
-            $lost    = (clone $scoped)->where('status', LeadStatusEnum::Lost)->count();
-            $winRate = ($won + $lost) > 0 ? $won / ($won + $lost) : 0.0;
-
-            $attempts = LeadActivity::query()
-                ->whereIn(Lead::fkColumn('lead'), (clone $scoped)->pluck(Lead::pkColumn()))
-                ->whereIn('type', [LeadActivityTypeEnum::Call->value, LeadActivityTypeEnum::Email->value])
-                ->count();
-
-            $responseScore = null === $response['avg_minutes']
-                ? 0.0
-                : max(0.0, 1 - min($response['avg_minutes'] / 1440, 1.0)); // 0 min → 1, ≥24h → 0
-
-            $opsScore = round(
-                ($response['sla_pct'] / 100 * 0.4 + $winRate * 0.4 + $responseScore * 0.2) * 100,
-                1,
-            );
-
-            return [
-                'advisor_id'           => (string) $advisorId,
-                'avg_response_minutes' => $response['avg_minutes'],
-                'sla_pct'              => $response['sla_pct'],
-                'contact_attempts'     => $attempts,
-                'won'                  => $won,
-                'ops_score'            => $opsScore,
-            ];
-        })->values()->all();
-
-        usort($rows, fn (array $a, array $b): int => $b['ops_score'] <=> $a['ops_score']);
-
-        return $rows;
-    }
-
-    /**
      * Aktivitäts- und Ergebnis-Matrix je Berater im gewählten Zeitraum.
      *
      * Semantik: Aktivitäts-Spalten (`calls`/`emails`/`notes`/`moves`) zählen
