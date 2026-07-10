@@ -204,12 +204,21 @@ class LeadOperations extends Page
     /** @return array<string, string> */
     protected function advisorOptions(): array
     {
-        $ids = (clone $this->scopedLeads())
-            ->whereNotNull('leads.assigned_to')
-            ->reorder()
-            ->select('leads.assigned_to')
-            ->distinct()
-            ->pluck('assigned_to');
+        // Options must ignore the current advisor selection, otherwise the
+        // select collapses to the selected advisor and blocks switching A→B.
+        $previous        = $this->advisorId;
+        $this->advisorId = null;
+
+        try {
+            $ids = (clone $this->scopedLeads())
+                ->whereNotNull('leads.assigned_to')
+                ->reorder()
+                ->select('leads.assigned_to')
+                ->distinct()
+                ->pluck('assigned_to');
+        } finally {
+            $this->advisorId = $previous;
+        }
 
         $userModel = config('lead-pipeline.user_model');
 

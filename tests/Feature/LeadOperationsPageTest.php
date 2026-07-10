@@ -177,6 +177,25 @@ it('clears custom dates when a preset pill is clicked', function (): void {
         ->assertSet('preset', '7');
 });
 
+it('keeps all advisors selectable after one advisor is chosen', function (): void {
+    $advisorA = User::factory()->create(['first_name' => 'Berater', 'last_name' => 'Alpha']);
+    $advisorB = User::factory()->create(['first_name' => 'Berater', 'last_name' => 'Beta']);
+    $this->team->users()->syncWithoutDetaching([$advisorA->id, $advisorB->id]);
+
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $board->admins()->syncWithoutDetaching([$this->user->id]);
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create();
+
+    Lead::factory()->for($board, 'board')->for($phase, 'phase')->create(['assigned_to' => $advisorA->id]);
+    Lead::factory()->for($board, 'board')->for($phase, 'phase')->create(['assigned_to' => $advisorB->id]);
+
+    livewire(LeadOperations::class)
+        ->call('setBoard', (string) $board->getKey())
+        ->call('setAdvisor', (string) $advisorA->id)
+        ->assertSee('Berater Alpha')
+        ->assertSee('Berater Beta'); // must still be offered in the select
+});
+
 it('includes custom dates in the export url', function (): void {
     $instance = livewire(LeadOperations::class)
         ->set('dateFrom', '2026-03-01')
