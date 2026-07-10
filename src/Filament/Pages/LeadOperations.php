@@ -193,7 +193,7 @@ class LeadOperations extends Page
             'funnel'         => $board ? $service->funnel($board) : [],
             'lossReasons'    => $service->lossReasons($leads(), $from, $to),
             'sources'        => $service->sourceEconomics($leads(), $from, $to),
-            'ranking'        => $service->advisorOps($leads(), $from, $to),
+            'matrix'         => $service->advisorActivityMatrix($leads(), $from, $to),
         ];
     }
 

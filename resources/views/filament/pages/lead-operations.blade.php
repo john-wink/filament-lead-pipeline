@@ -39,19 +39,19 @@
             <div class="text-2xl font-bold tabular-nums">{{ number_format($response['sla_pct'], 1, ',', '.') }} %</div>
         </x-filament::section>
         <x-filament::section>
-            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.overdue_followups') }}</div>
+            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.overdue_followups') }}<span class="ms-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-gray-500 dark:bg-gray-800">{{ __('lead-pipeline::lead-pipeline.operations.as_of_today') }}</span></div>
             <div class="text-2xl font-bold tabular-nums">{{ $operations['overdue_followups'] }}</div>
         </x-filament::section>
         <x-filament::section>
-            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.untouched') }}</div>
+            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.untouched') }}<span class="ms-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-gray-500 dark:bg-gray-800">{{ __('lead-pipeline::lead-pipeline.operations.as_of_today') }}</span></div>
             <div class="text-2xl font-bold tabular-nums">{{ $operations['untouched'] }}</div>
         </x-filament::section>
         <x-filament::section>
-            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.avg_contact_attempts') }}</div>
+            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.avg_contact_attempts') }}<span class="ms-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-gray-500 dark:bg-gray-800">{{ __('lead-pipeline::lead-pipeline.operations.as_of_today') }}</span></div>
             <div class="text-2xl font-bold tabular-nums">{{ number_format($operations['avg_contact_attempts'], 1, ',', '.') }}</div>
         </x-filament::section>
         <x-filament::section>
-            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.next_step_rate') }}</div>
+            <div class="text-sm text-gray-500">{{ __('lead-pipeline::lead-pipeline.operations.next_step_rate') }}<span class="ms-1 rounded bg-gray-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-gray-500 dark:bg-gray-800">{{ __('lead-pipeline::lead-pipeline.operations.as_of_today') }}</span></div>
             <div class="text-2xl font-bold tabular-nums">{{ number_format($operations['next_step_rate'], 1, ',', '.') }} %</div>
         </x-filament::section>
     </div>

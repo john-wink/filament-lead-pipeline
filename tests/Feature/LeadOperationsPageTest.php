@@ -84,11 +84,11 @@ it('restricts a non-admin advisor to their own leads across all boards when no b
     $scopedLeads = (new ReflectionMethod($instance, 'scopedLeads'))->invoke($instance);
     expect($scopedLeads->pluck(Lead::pkColumn())->all())->toBe([$ownLead->getKey()]);
 
-    $viewData          = (new ReflectionMethod($instance, 'getViewData'))->invoke($instance);
-    $rankingAdvisorIds = collect($viewData['ranking'])->pluck('advisor_id')->all();
+    $viewData         = (new ReflectionMethod($instance, 'getViewData'))->invoke($instance);
+    $matrixAdvisorIds = collect($viewData['matrix']['rows'])->pluck('advisor_id')->all();
 
-    expect($rankingAdvisorIds)->toBe([(string) $advisor->id])
-        ->and($rankingAdvisorIds)->not->toContain((string) $admin->id);
+    expect($matrixAdvisorIds)->toBe([(string) $advisor->id])
+        ->and($matrixAdvisorIds)->not->toContain((string) $admin->id);
 
     $sourceNames = collect($viewData['sources'])->pluck('source')->all();
     expect($sourceNames)->not->toContain('Colleague-Only-Source');
@@ -194,6 +194,32 @@ it('keeps all advisors selectable after one advisor is chosen', function (): voi
         ->call('setAdvisor', (string) $advisorA->id)
         ->assertSee('Berater Alpha')
         ->assertSee('Berater Beta'); // must still be offered in the select
+});
+
+it('renders the advisor matrix with resolved names instead of raw ids', function (): void {
+    // name is a computed accessor (first_name . ' ' . last_name), not a fillable
+    // column — the factory must set the underlying columns, not 'name'.
+    $advisor = User::factory()->create(['first_name' => 'Maria', 'last_name' => 'Muster']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id]);
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $board->admins()->syncWithoutDetaching([$this->user->id]);
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create();
+    Lead::factory()->for($phase, 'phase')->for($board, 'board')->create(['assigned_to' => $advisor->id]);
+
+    livewire(LeadOperations::class)
+        ->call('setBoard', (string) $board->getKey())
+        ->assertSee(__('lead-pipeline::lead-pipeline.operations.matrix_title'))
+        ->assertSee('Maria Muster');
+    // No assertDontSee((string) $advisor->id) here: the matrix row's wire:key
+    // ("matrix-row-{advisor_id}") legitimately contains the raw id in markup,
+    // so asserting its absence would collide with that attribute.
+});
+
+it('labels snapshot metrics as as-of-today', function (): void {
+    LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+
+    livewire(LeadOperations::class)
+        ->assertSee(__('lead-pipeline::lead-pipeline.operations.as_of_today'));
 });
 
 it('includes custom dates in the export url', function (): void {
