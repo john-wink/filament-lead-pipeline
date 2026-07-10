@@ -667,6 +667,63 @@ class LeadActivityMetricsService
     }
 
     /**
+     * Tagesgruppiertes Aktivitätsprotokoll eines Beraters: nur Activities mit
+     * `causer_id = $advisorId` auf den gescopten Leads im Fenster, neueste
+     * zuerst. `label` = lokalisierter Wochentag + Datum; `type_label`/`color`/
+     * `icon` aus `LeadActivityTypeEnum`. `has_more` zeigt an, ob nach dem
+     * aktuellen Offset+Limit noch weitere Treffer existieren.
+     *
+     * @return array{
+     *   days: list<array{date: string, label: string, items: list<array{
+     *     time: string, type: string, type_label: string, color: string, icon: string,
+     *     lead_id: string, lead_name: string, description: string
+     *   }>}>,
+     *   total: int, has_more: bool
+     * }
+     */
+    public function advisorProtocol(int|string $advisorId, Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to, int $limit = 50, int $offset = 0): array
+    {
+        $leadFk  = Lead::fkColumn('lead');
+        $leadIds = (clone $leads)->pluck('leads.' . Lead::pkColumn());
+
+        $query = LeadActivity::query()
+            ->whereIn($leadFk, $leadIds)
+            ->where('causer_id', $advisorId)
+            ->when($from, fn (Builder $q): Builder => $q->where('created_at', '>=', $from))
+            ->when($to, fn (Builder $q): Builder => $q->where('created_at', '<=', $to));
+
+        $total = (clone $query)->count();
+
+        $activities = $query
+            ->with('lead')
+            ->latest('created_at')
+            ->skip($offset)
+            ->take($limit)
+            ->get();
+
+        $days = $activities
+            ->groupBy(fn (LeadActivity $a): string => $a->created_at->toDateString())
+            ->map(fn ($group, string $date): array => [
+                'date'  => $date,
+                'label' => $group->first()->created_at->translatedFormat('l, d.m.Y'),
+                'items' => $group->map(fn (LeadActivity $a): array => [
+                    'time'        => $a->created_at->format('H:i'),
+                    'type'        => $a->type->value,
+                    'type_label'  => (string) $a->type->getLabel(),
+                    'color'       => (string) $a->type->getColor(),
+                    'icon'        => (string) $a->type->getIcon(),
+                    'lead_id'     => (string) $a->{$leadFk},
+                    'lead_name'   => (string) ($a->lead?->name ?? '—'),
+                    'description' => (string) ($a->description ?? ''),
+                ])->values()->all(),
+            ])
+            ->values()
+            ->all();
+
+        return ['days' => $days, 'total' => $total, 'has_more' => ($offset + $limit) < $total];
+    }
+
+    /**
      * Score v2: vier erklärbare Teilscores (0–100) + gewichtete Summe.
      *
      * - `activity` = `min(100, apl / (2 × teamMedianApl) × 100)`; ist der
