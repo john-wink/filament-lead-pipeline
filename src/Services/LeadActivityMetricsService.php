@@ -429,9 +429,14 @@ class LeadActivityMetricsService
      * `assigned_to` gescoped); `activities_per_lead` = (calls+emails+notes+
      * moves) / aktuell zugewiesene Leads (null wenn 0 zugewiesen).
      *
-     * Berater-Menge = Union aus Activity-Causern im Fenster UND aktuell
-     * zugewiesenen Beratern der gescopten Leads (wer nichts tat, erscheint
-     * mit Nullen — genau das will das Management sehen).
+     * Berater-Menge = Union aus Activity-Causern im Fenster, aktuell
+     * zugewiesenen Beratern der gescopten Leads, Erstkontaktern
+     * (`first_response_by`) und Assignment-Empfängern im Fenster (wer nichts
+     * tat, erscheint mit Nullen — genau das will das Management sehen).
+     *
+     * Team-Aggregat: `sla_pct` mittelt nur über Berater mit mindestens einer
+     * Antwort im Fenster (`avg_response_minutes` ≠ null) — Nicht-Responder
+     * verwässern den Team-SLA nicht.
      *
      * @return array{
      *   rows: list<array{
@@ -455,9 +460,9 @@ class LeadActivityMetricsService
         // (which also has a created_at column), so a bare "created_at" is
         // ambiguous once that join is applied — qualifying it here keeps this
         // closure safe to reuse across joined and unjoined lead_activities queries.
-        $activityWindow = fn ($q) => $q
-            ->when($from, fn ($qq) => $qq->where('lead_activities.created_at', '>=', $from))
-            ->when($to, fn ($qq) => $qq->where('lead_activities.created_at', '<=', $to));
+        $activityWindow = fn (Builder $q): Builder => $q
+            ->when($from, fn (Builder $qq): Builder => $qq->where('lead_activities.created_at', '>=', $from))
+            ->when($to, fn (Builder $qq): Builder => $qq->where('lead_activities.created_at', '<=', $to));
 
         // 1) Aktivitäts-Zählungen je Causer × Typ (eine Query).
         $countable = [
@@ -496,8 +501,8 @@ class LeadActivityMetricsService
         // 3) Erstkontakte & Neuzuweisungen.
         $firstContacts = (clone $leads)
             ->whereNotNull('first_response_by')
-            ->when($from, fn ($q) => $q->where('first_response_at', '>=', $from))
-            ->when($to, fn ($q) => $q->where('first_response_at', '<=', $to))
+            ->when($from, fn (Builder $q): Builder => $q->where('first_response_at', '>=', $from))
+            ->when($to, fn (Builder $q): Builder => $q->where('first_response_at', '<=', $to))
             ->reorder()
             ->selectRaw('first_response_by as advisor, COUNT(*) as cnt')
             ->groupBy('first_response_by')
@@ -518,7 +523,10 @@ class LeadActivityMetricsService
             ->groupBy('advisor')
             ->pluck('cnt', 'advisor');
 
-        // 4) Berater-Menge: Causer ∪ aktuell Zugewiesene; Namen auflösen.
+        // 4) Berater-Menge: Causer ∪ aktuell Zugewiesene ∪ Erstkontakter ∪
+        //    Assignment-Empfänger — wer nur via first_response_by oder
+        //    properties->assigned_to im Fenster auftaucht, bekommt trotzdem
+        //    eine Zeile. Namen auflösen.
         $assignedCounts = (clone $leads)
             ->whereNotNull('leads.assigned_to')
             ->reorder()
@@ -528,6 +536,8 @@ class LeadActivityMetricsService
 
         $advisorIds = collect($activityCounts->keys())
             ->merge($assignedCounts->keys()->map(fn ($k): string => (string) $k))
+            ->merge($firstContacts->keys()->map(fn ($k): string => (string) $k))
+            ->merge($assignedNew->keys()->map(fn ($k): string => (string) $k))
             ->unique()
             ->values();
 
@@ -596,6 +606,16 @@ class LeadActivityMetricsService
         $responseValues = array_values(array_filter(array_column($rows, 'avg_response_minutes'), fn ($v): bool => null !== $v));
         $aplValues      = array_values(array_filter(array_column($rows, 'activities_per_lead'), fn ($v): bool => null !== $v));
 
+        // sla_pct only over advisors who actually responded in the window
+        // (avg_response_minutes !== null): responseStats() reports 0.0 — not
+        // null — for zero responses, so averaging over all rows would let
+        // inactive advisors dilute the team SLA, inconsistent with the
+        // null-filtered avg_response_minutes/activities_per_lead aggregates.
+        $slaValues = array_column(
+            array_filter($rows, fn (array $row): bool => null !== $row['avg_response_minutes']),
+            'sla_pct',
+        );
+
         return [
             'calls'                => $sum('calls'),
             'emails'               => $sum('emails'),
@@ -607,7 +627,7 @@ class LeadActivityMetricsService
             'lost'                 => $lost,
             'conversion'           => ($won + $lost) > 0 ? round($won / ($won + $lost) * 100, 1) : 0.0,
             'avg_response_minutes' => [] === $responseValues ? null : round(array_sum($responseValues) / count($responseValues), 1),
-            'sla_pct'              => [] === $rows ? 0.0 : round(array_sum(array_column($rows, 'sla_pct')) / count($rows), 1),
+            'sla_pct'              => [] === $slaValues ? 0.0 : round(array_sum($slaValues) / count($slaValues), 1),
             'activities_per_lead'  => [] === $aplValues ? null : round(array_sum($aplValues) / count($aplValues), 2),
         ];
     }

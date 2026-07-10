@@ -103,6 +103,59 @@ it('normalises activities per assigned lead', function (): void {
     expect($row['activities_per_lead'])->toBe(0.5); // 2 Aktivitäten / 4 zugewiesene Leads
 });
 
+it('excludes non-responding advisors from the team sla average and surfaces first-contact-only advisors', function (): void {
+    Carbon::setTestNow('2026-06-15 12:00:00');
+
+    $responder  = config('lead-pipeline.user_model')::factory()->create(['first_name' => 'Flink', 'last_name' => '']);
+    $idle       = config('lead-pipeline.user_model')::factory()->create(['first_name' => 'Passiv', 'last_name' => '']);
+    $firstOnly  = config('lead-pipeline.user_model')::factory()->create(['first_name' => 'Erstheld', 'last_name' => '']);
+    $assignOnly = config('lead-pipeline.user_model')::factory()->create(['first_name' => 'Zugeteilt', 'last_name' => '']);
+
+    $board = LeadBoard::factory()->create();
+    $open  = LeadPhase::factory()->for($board, 'board')->open()->create();
+
+    // Flink antwortet in 30 min (SLA-konform) — einziger Responder im Fenster.
+    Lead::factory()->for($board, 'board')->for($open, 'phase')->create([
+        'assigned_to'       => $responder->getKey(),
+        'created_at'        => CarbonImmutable::parse('2026-06-10 09:00:00'),
+        'first_response_at' => CarbonImmutable::parse('2026-06-10 09:30:00'),
+        'first_response_by' => $responder->getKey(),
+    ]);
+
+    // Passiv: nur zugewiesen, keine Antwort im Fenster → darf den Team-SLA nicht verwässern.
+    Lead::factory()->for($board, 'board')->for($open, 'phase')->create(['assigned_to' => $idle->getKey()]);
+
+    // Erstheld taucht NUR über first_response_by auf (weder Causer noch aktuell zugewiesen).
+    $orphan = Lead::factory()->for($board, 'board')->for($open, 'phase')->create([
+        'assigned_to'       => null,
+        'first_response_at' => CarbonImmutable::parse('2026-06-11 10:00:00'),
+        'first_response_by' => $firstOnly->getKey(),
+    ]);
+
+    // Zugeteilt taucht NUR über eine Assignment-Activity auf (Causer war Flink;
+    // Assignment zählt nicht in die Causer-Universum-Query).
+    activityBy(
+        $orphan,
+        LeadActivityTypeEnum::Assignment,
+        $responder->getKey(),
+        CarbonImmutable::parse('2026-06-11'),
+        ['assigned_to' => $assignOnly->getKey()]
+    );
+
+    $matrix = app(LeadActivityMetricsService::class)->advisorActivityMatrix(
+        scopedLeads(),
+        CarbonImmutable::parse('2026-06-01'),
+        CarbonImmutable::parse('2026-06-30'),
+    );
+
+    $rows = collect($matrix['rows'])->keyBy('advisor_name');
+
+    expect($matrix['team']['sla_pct'])->toBe(100.0)          // nur Flink zählt (Passiv: avg_response_minutes null)
+        ->and($rows['Passiv']['sla_pct'])->toBe(0.0)         // Zeile bleibt, verwässert aber nicht
+        ->and($rows['Erstheld']['first_contacts'])->toBe(1)  // first-contact-only Berater erscheint
+        ->and($rows['Zugeteilt']['assigned_new'])->toBe(1);  // assignment-only Berater erscheint
+});
+
 it('counts first contacts and new assignments in the window', function (): void {
     Carbon::setTestNow('2026-06-15 12:00:00');
     $advisor = config('lead-pipeline.user_model')::factory()->create(['first_name' => 'Erst', 'last_name' => '']);
