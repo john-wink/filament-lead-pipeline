@@ -36,24 +36,29 @@ trait ScopesOperationsLeads
             if ($board && $user) {
                 $query->visibleTo($user, $board);
             }
-        } elseif (function_exists('filament')) {
-            $tenantId = filament()->getTenant()?->getKey();
+        } else {
+            // No board filter: without a resolvable tenant AND user, we cannot prove
+            // the caller is scoped to a single tenant — fail closed instead of
+            // returning an unscoped (cross-tenant) query.
+            $tenant = function_exists('filament') ? filament()->getTenant() : null;
 
-            if ($tenantId && $user) {
-                // Mirrors AnalyticsExportController::baseQuery(): without a selected
-                // board, a non-board-admin must not see leads across the whole
-                // tenant — only their own, across all tenant-visible boards.
-                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
-                    ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
-                    ->pluck(LeadBoard::pkColumn());
+            if (null === $tenant || null === $user) {
+                abort(403);
+            }
 
-                if ($adminBoardIds->isEmpty()) {
-                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
-                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
-                        ->where('leads.assigned_to', $user->getKey());
-                } else {
-                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $adminBoardIds);
-                }
+            // Mirrors AnalyticsExportController::baseQuery(): without a selected
+            // board, a non-board-admin must not see leads across the whole
+            // tenant — only their own, across all tenant-visible boards.
+            $adminBoardIds = LeadBoard::visibleToTenant($tenant)
+                ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
+                ->pluck(LeadBoard::pkColumn());
+
+            if ($adminBoardIds->isEmpty()) {
+                $allBoardIds = LeadBoard::visibleToTenant($tenant)->pluck(LeadBoard::pkColumn());
+                $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
+                    ->where('leads.assigned_to', $user->getKey());
+            } else {
+                $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $adminBoardIds);
             }
         }
 
@@ -94,8 +99,8 @@ trait ScopesOperationsLeads
     {
         if (filled($dateFrom) || filled($dateTo)) {
             return [
-                filled($dateFrom) ? CarbonImmutable::parse($dateFrom)->startOfDay() : null,
-                filled($dateTo) ? CarbonImmutable::parse($dateTo)->endOfDay() : null,
+                filled($dateFrom) ? $this->parseOperationsDateBound($dateFrom)?->startOfDay() : null,
+                filled($dateTo) ? $this->parseOperationsDateBound($dateTo)?->endOfDay() : null,
             ];
         }
 
@@ -108,5 +113,42 @@ trait ScopesOperationsLeads
             'all'   => [null, null],
             default => [$now->subDays(30), $now],
         };
+    }
+
+    /**
+     * A malformed dateFrom/dateTo query param (or livewire property) must degrade to an
+     * unbounded edge instead of throwing — this is reachable directly from an
+     * unauthenticated-shaped query string on the export route, so a parse failure must
+     * never surface as a 500.
+     */
+    protected function parseOperationsDateBound(string $value): ?CarbonImmutable
+    {
+        return rescue(fn (): CarbonImmutable => CarbonImmutable::parse($value), null, false);
+    }
+
+    /**
+     * Non-leadership callers only ever see their own advisor row — applied identically
+     * on the page (getViewData()) and the export controller so the two surfaces cannot
+     * drift. The underlying leak vector: advisorActivityMatrix() groups activity counts
+     * by causer_id, so a colleague logging a call/note on MY lead would otherwise appear
+     * as their own foreign row (this also covers the board branch of
+     * Lead::scopeVisibleTo(), which — for boards shared with the tenant — releases all
+     * leads regardless of assignee).
+     *
+     * @param  array<string, mixed>  $matrix
+     * @return array<string, mixed>
+     */
+    protected function filterMatrixRowsForNonLeadership(array $matrix, ?string $boardId): array
+    {
+        if ($this->isOperationsLeadership($boardId)) {
+            return $matrix;
+        }
+
+        $matrix['rows'] = array_values(array_filter(
+            $matrix['rows'],
+            fn (array $row): bool => $row['advisor_id'] === (string) auth()->id(),
+        ));
+
+        return $matrix;
     }
 }

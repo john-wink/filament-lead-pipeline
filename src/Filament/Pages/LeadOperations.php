@@ -80,12 +80,12 @@ class LeadOperations extends Page
 
     public function updatedDateFrom(): void
     {
-        $this->preset = 'custom';
+        $this->syncPresetWithCustomDates();
     }
 
     public function updatedDateTo(): void
     {
-        $this->preset = 'custom';
+        $this->syncPresetWithCustomDates();
     }
 
     public function getExportUrl(): string
@@ -96,7 +96,18 @@ class LeadOperations extends Page
             'advisorId' => $this->advisorId,
             'dateFrom'  => $this->dateFrom,
             'dateTo'    => $this->dateTo,
+            'tenant'    => filament()->getTenant()?->getKey(),
         ]));
+    }
+
+    /**
+     * 'custom' only applies while at least one custom bound is set — otherwise the pill
+     * row would be left with no highlighted preset while silently using the 30-day
+     * default, which reads as a dangling/undefined state to the user.
+     */
+    protected function syncPresetWithCustomDates(): void
+    {
+        $this->preset = (blank($this->dateFrom) && blank($this->dateTo)) ? '30' : 'custom';
     }
 
     /** @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable} */
@@ -124,21 +135,13 @@ class LeadOperations extends Page
 
         $board = $this->boardId ? LeadBoard::find($this->boardId) : null;
 
-        $matrix = $service->advisorActivityMatrix($leads(), $from, $to);
-        if ( ! $isLeadership) {
-            // Zusätzlicher Gurt trotz serverseitig erzwungener advisorId: der
-            // eigentliche Leak-Vektor ist, dass advisorActivityMatrix() die
-            // Aktivitäts-Zählungen nach causer_id gruppiert — ein Kollege, der
-            // auf einem MEINER Leads eine Notiz/einen Anruf loggt, erschiene
-            // sonst als eigene fremde Zeile. (Sekundär deckt der Filter auch den
-            // Board-Zweig ab, in dem Lead::scopeVisibleTo() bei mit dem Tenant
-            // geteilten Boards alle Leads unabhängig vom Assignee freigibt.)
-            // Nur die eigene Zeile bleibt; das Team-Aggregat bleibt als Vergleich.
-            $matrix['rows'] = array_values(array_filter(
-                $matrix['rows'],
-                fn (array $row): bool => $row['advisor_id'] === (string) auth()->id(),
-            ));
-        }
+        // See ScopesOperationsLeads::filterMatrixRowsForNonLeadership() for why this is
+        // needed in addition to the server-enforced advisorId — shared with the export
+        // controller so the two surfaces cannot drift.
+        $matrix = $this->filterMatrixRowsForNonLeadership(
+            $service->advisorActivityMatrix($leads(), $from, $to),
+            $this->boardId,
+        );
 
         return [
             'boards' => (function_exists('filament') && filament()->getTenant())

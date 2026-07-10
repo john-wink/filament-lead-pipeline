@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Http\Controllers;
 
+use Filament\Facades\Filament;
+use Filament\Models\Contracts\HasTenants;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use JohnWink\FilamentLeadPipeline\Concerns\ScopesOperationsLeads;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
@@ -15,9 +18,17 @@ class LeadOperationsExportController
 
     public function __invoke(Request $request, LeadActivityMetricsService $service): StreamedResponse
     {
-        $boardId   = $request->query('boardId');
-        $advisorId = $request->query('advisorId');
-        if ( ! $this->isOperationsLeadership($boardId)) {
+        // Outside a panel request Filament's own tenant middleware never runs, so
+        // filament()->getTenant() is null here by default — resolve and validate the
+        // tenant ourselves BEFORE any scoping/leadership check, and fail closed if we
+        // can't (see ScopesOperationsLeads::scopedOperationsLeads()'s no-board branch,
+        // which would otherwise fall open with a null tenant).
+        Filament::setTenant($this->resolveExportTenant($request));
+
+        $boardId      = $request->query('boardId');
+        $advisorId    = $request->query('advisorId');
+        $isLeadership = $this->isOperationsLeadership($boardId);
+        if ( ! $isLeadership) {
             $advisorId = (string) auth()->id();
         }
 
@@ -29,7 +40,11 @@ class LeadOperationsExportController
 
         $leads = $this->scopedOperationsLeads($boardId, $advisorId);
 
-        $matrix  = $service->advisorActivityMatrix((clone $leads), $from, $to);
+        // withDeltas: false — the CSV has no delta columns, so skip computing them.
+        $matrix = $this->filterMatrixRowsForNonLeadership(
+            $service->advisorActivityMatrix((clone $leads), $from, $to, withDeltas: false),
+            $boardId,
+        );
         $sources = $service->sourceEconomics((clone $leads), $from, $to);
 
         $filename = 'lead-ops-' . now()->format('Y-m-d') . '.csv';
@@ -98,5 +113,45 @@ class LeadOperationsExportController
 
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /**
+     * Fail-closed tenant resolution for this out-of-panel route:
+     *  - If Filament already has a tenant (an actual in-panel request, or a test that
+     *    called Filament::setTenant() itself), trust it — it went through the panel's
+     *    own tenancy middleware already.
+     *  - Otherwise this is a bare `tenant=` query param straight off the export link
+     *    (see LeadOperations::getExportUrl()): resolve it via
+     *    config('lead-pipeline.tenancy.model') and require the authenticated user to
+     *    implement Filament's own HasTenants contract and pass canAccessTenant() —
+     *    the same check Filament's tenant middleware would have run.
+     *  - Anything that can't be resolved or verified aborts 403 before any leadership
+     *    check or lead scoping happens.
+     */
+    protected function resolveExportTenant(Request $request): Model
+    {
+        if ($tenant = filament()->getTenant()) {
+            return $tenant;
+        }
+
+        $user = auth()->user();
+        if ( ! $user instanceof HasTenants) {
+            abort(403);
+        }
+
+        $tenantModelClass = config('lead-pipeline.tenancy.model');
+        $tenantKey        = $request->query('tenant');
+
+        if ( ! $tenantModelClass || ! filled($tenantKey)) {
+            abort(403);
+        }
+
+        $tenant = $tenantModelClass::query()->find($tenantKey);
+
+        if ( ! $tenant instanceof Model || ! $user->canAccessTenant($tenant)) {
+            abort(403);
+        }
+
+        return $tenant;
     }
 }

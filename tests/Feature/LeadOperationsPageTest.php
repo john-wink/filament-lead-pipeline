@@ -232,3 +232,26 @@ it('includes custom dates in the export url', function (): void {
         ->toContain('dateFrom=2026-03-01')
         ->toContain('dateTo=2026-03-31');
 });
+
+it('includes the current tenant in the export url so the out-of-panel route can resolve it', function (): void {
+    $instance = livewire(LeadOperations::class)->instance();
+
+    expect($instance->getExportUrl())->toContain('tenant=' . $this->team->getKey());
+});
+
+it('does not throw when dateFrom is unparseable', function (): void {
+    $this->withoutExceptionHandling();
+
+    livewire(LeadOperations::class)
+        ->set('dateFrom', 'garbage')
+        ->assertSuccessful();
+});
+
+it('resets the dangling custom preset back to 30 once both custom dates are cleared', function (): void {
+    livewire(LeadOperations::class)
+        ->set('dateFrom', '2026-03-01')
+        ->assertSet('preset', 'custom')
+        ->set('dateFrom', '')
+        ->assertSet('preset', '30')
+        ->assertSet('dateTo', null);
+});

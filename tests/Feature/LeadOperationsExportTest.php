@@ -85,6 +85,38 @@ it('includes ad-cost columns in the source economics CSV section', function (): 
         ->and($content)->toContain('100,00');
 });
 
+it('does not leak a colleague causer row into a non-admin advisor CSV export via activity causer_id', function (): void {
+    $advisor   = User::factory()->create(['first_name' => 'Nur', 'last_name' => 'Meins']);
+    $colleague = User::factory()->create(['first_name' => 'Fremder', 'last_name' => 'Causer']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id, $colleague->id]);
+    // $advisor is NOT an admin of $this->board (only $this->admin is, from beforeEach).
+
+    $ownLead = Lead::factory()
+        ->for($this->wonPhase, 'phase')
+        ->for($this->board, 'board')
+        ->create(['assigned_to' => $advisor->id, 'status' => LeadStatusEnum::Won]);
+
+    // $colleague logs a note on ADVISOR's own lead — advisorActivityMatrix() groups
+    // activity counts by causer_id, so without the non-leadership row filter this
+    // would surface $colleague as their own foreign matrix row in $advisor's export,
+    // even though the lead itself is correctly scoped to $advisor.
+    $ownLead->activities()->create([
+        'type'        => JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Note->value,
+        'description' => 'Fremde Notiz',
+        'causer_type' => config('lead-pipeline.user_model'),
+        'causer_id'   => $colleague->id,
+    ]);
+
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $this->actingAs($advisor);
+    Filament::setTenant($this->team);
+
+    $csv = $this->get('/lead-pipeline/operations/export?preset=365')->assertOk()->streamedContent();
+
+    expect($csv)->toContain('Nur Meins')
+        ->and($csv)->not->toContain('Fremder Causer');
+});
+
 it('rejects boards the requesting user cannot access on their tenant', function (): void {
     $other     = User::factory()->create();
     $otherTeam = Team::factory()->create();
@@ -222,4 +254,87 @@ it('exports the advisor matrix with resolved names and subscores', function (): 
         ->toContain(__('lead-pipeline::lead-pipeline.operations.matrix_title'))
         ->not->toContain((string) $advisor->id)
         ->toContain('Score');
+});
+
+// --- Unmasked out-of-panel export tests ------------------------------------------
+// Every test above calls Filament::setCurrentPanel()/setTenant() itself before
+// hitting the route — that masks the real production shape: the export route is
+// registered outside any panel (routes/api.php), so Filament's own tenancy
+// middleware never runs and filament()->getTenant() is null. These tests
+// deliberately skip those calls (auth only) to reproduce the real request.
+
+it('resolves leadership from a valid tenant query param outside a panel request', function (): void {
+    $advisor = User::factory()->create(['first_name' => 'Aussen', 'last_name' => 'Berater']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id]);
+
+    $advisorSource = LeadSource::factory()->for($this->board, 'board')->create(['name' => 'Aussen-Quelle']);
+    Lead::factory()
+        ->for($this->wonPhase, 'phase')
+        ->for($this->board, 'board')
+        ->create([
+            Lead::fkColumn('lead_source') => $advisorSource->getKey(),
+            'assigned_to'                 => $advisor->id,
+            'status'                      => LeadStatusEnum::Won,
+        ]);
+
+    // $this->admin is a board admin (leadership per beforeEach). No
+    // Filament::setCurrentPanel()/setTenant() call here — only auth plus the
+    // tenant query param LeadOperations::getExportUrl() now sends.
+    $this->actingAs($this->admin);
+
+    $csv = $this->get($this->exportUrl . '&tenant=' . $this->team->getKey())
+        ->assertOk()
+        ->streamedContent();
+
+    expect($csv)->toContain('Ada Min')
+        ->and($csv)->toContain('Aussen Berater');
+});
+
+it('scopes a non-admin advisor to their own row when exporting with a tenant param outside a panel request', function (): void {
+    $advisor = User::factory()->create(['first_name' => 'Nur', 'last_name' => 'Eigene']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id]);
+    // $advisor is NOT an admin of $this->board (only $this->admin is, from beforeEach).
+
+    $advisorSource = LeadSource::factory()->for($this->board, 'board')->create(['name' => 'Eigene-Quelle']);
+    Lead::factory()
+        ->for($this->wonPhase, 'phase')
+        ->for($this->board, 'board')
+        ->create([
+            Lead::fkColumn('lead_source') => $advisorSource->getKey(),
+            'assigned_to'                 => $advisor->id,
+            'status'                      => LeadStatusEnum::Won,
+        ]);
+
+    $this->actingAs($advisor);
+
+    $csv = $this->get($this->exportUrl . '&tenant=' . $this->team->getKey())
+        ->assertOk()
+        ->streamedContent();
+
+    // The beforeEach lead (Webflow-Formular) is assigned to $this->admin on the same
+    // board — a leader would see it, but this non-admin advisor must not.
+    expect($csv)->toContain('Nur Eigene')
+        ->and($csv)->not->toContain('Webflow-Formular');
+});
+
+it('aborts with 403 when no tenant can be resolved outside a panel request', function (): void {
+    $this->actingAs($this->admin);
+
+    // No &tenant= query param, and nothing set Filament::setTenant() in-process.
+    $this->get($this->exportUrl)->assertForbidden();
+});
+
+it('aborts with 403 for a forged tenant param the user cannot access', function (): void {
+    $otherTeam = Team::factory()->create();
+
+    $this->actingAs($this->admin);
+
+    $this->get($this->exportUrl . '&tenant=' . $otherTeam->getKey())->assertForbidden();
+});
+
+it('does not 500 on an unparseable dateFrom outside a panel request with a valid tenant', function (): void {
+    $this->actingAs($this->admin);
+
+    $this->get('/lead-pipeline/operations/export?boardId=' . $this->board->getKey() . '&tenant=' . $this->team->getKey() . '&dateFrom=garbage')
+        ->assertOk();
 });
