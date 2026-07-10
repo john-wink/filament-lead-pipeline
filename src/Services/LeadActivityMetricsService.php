@@ -415,6 +415,203 @@ class LeadActivityMetricsService
         return $rows;
     }
 
+    /**
+     * Aktivitäts- und Ergebnis-Matrix je Berater im gewählten Zeitraum.
+     *
+     * Semantik: Aktivitäts-Spalten (`calls`/`emails`/`notes`/`moves`) zählen
+     * nach `causer_id` (wer hat es getan); `first_contacts` = Leads mit
+     * `first_response_by` = Berater und `first_response_at` im Fenster;
+     * `assigned_new` = `assignment`-Activities mit `properties->assigned_to`
+     * = Berater im Fenster; `won`/`lost` = Moved-Activities in Won-/Lost-Typ-
+     * Phasen im Fenster, gezählt nach `leads.assigned_to` (Ergebnis-
+     * verantwortung, nicht Causer); `conversion` = won/(won+lost)*100;
+     * `avg_response_minutes`/`sla_pct` via `responseStats()` je Berater (auf
+     * `assigned_to` gescoped); `activities_per_lead` = (calls+emails+notes+
+     * moves) / aktuell zugewiesene Leads (null wenn 0 zugewiesen).
+     *
+     * Berater-Menge = Union aus Activity-Causern im Fenster UND aktuell
+     * zugewiesenen Beratern der gescopten Leads (wer nichts tat, erscheint
+     * mit Nullen — genau das will das Management sehen).
+     *
+     * @return array{
+     *   rows: list<array{
+     *     advisor_id: string, advisor_name: string,
+     *     calls: int, emails: int, notes: int, moves: int,
+     *     first_contacts: int, assigned_new: int, won: int, lost: int,
+     *     conversion: float, avg_response_minutes: ?float, sla_pct: float,
+     *     activities_per_lead: ?float
+     *   }>,
+     *   team: array{calls: int, emails: int, notes: int, moves: int, first_contacts: int,
+     *     assigned_new: int, won: int, lost: int, conversion: float,
+     *     avg_response_minutes: ?float, sla_pct: float, activities_per_lead: ?float}
+     * }
+     */
+    public function advisorActivityMatrix(Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to): array
+    {
+        $leadFk  = Lead::fkColumn('lead');
+        $leadIds = (clone $leads)->pluck('leads.' . Lead::pkColumn());
+
+        // Qualified with the table name: outcomeCounts() below joins `leads`
+        // (which also has a created_at column), so a bare "created_at" is
+        // ambiguous once that join is applied — qualifying it here keeps this
+        // closure safe to reuse across joined and unjoined lead_activities queries.
+        $activityWindow = fn ($q) => $q
+            ->when($from, fn ($qq) => $qq->where('lead_activities.created_at', '>=', $from))
+            ->when($to, fn ($qq) => $qq->where('lead_activities.created_at', '<=', $to));
+
+        // 1) Aktivitäts-Zählungen je Causer × Typ (eine Query).
+        $countable = [
+            LeadActivityTypeEnum::Call->value,
+            LeadActivityTypeEnum::Email->value,
+            LeadActivityTypeEnum::Note->value,
+            LeadActivityTypeEnum::Moved->value,
+        ];
+        $activityCounts = LeadActivity::query()
+            ->whereIn($leadFk, $leadIds)
+            ->whereNotNull('causer_id')
+            ->whereIn('type', $countable)
+            ->tap($activityWindow)
+            ->selectRaw('causer_id, type, COUNT(*) as cnt')
+            ->groupBy('causer_id', 'type')
+            ->get()
+            ->groupBy(fn ($row): string => (string) $row->causer_id);
+
+        // 2) Won/Lost im Fenster nach Ergebnisverantwortung (leads.assigned_to).
+        $wonPhaseIds  = $this->phaseIdsOfType($leads, LeadPhaseTypeEnum::Won);
+        $lostPhaseIds = $this->phaseIdsOfType($leads, LeadPhaseTypeEnum::Lost);
+
+        $outcomeCounts = fn (array $phaseIds) => LeadActivity::query()
+            ->whereIn('lead_activities.' . $leadFk, $leadIds)
+            ->where('type', LeadActivityTypeEnum::Moved->value)
+            ->whereIn('properties->new_phase', $phaseIds)
+            ->tap($activityWindow)
+            ->join('leads', 'leads.' . Lead::pkColumn(), '=', 'lead_activities.' . $leadFk)
+            ->whereNotNull('leads.assigned_to')
+            ->selectRaw('leads.assigned_to as advisor, COUNT(*) as cnt')
+            ->groupBy('leads.assigned_to')
+            ->pluck('cnt', 'advisor');
+        $wonByAdvisor  = $outcomeCounts($wonPhaseIds);
+        $lostByAdvisor = $outcomeCounts($lostPhaseIds);
+
+        // 3) Erstkontakte & Neuzuweisungen.
+        $firstContacts = (clone $leads)
+            ->whereNotNull('first_response_by')
+            ->when($from, fn ($q) => $q->where('first_response_at', '>=', $from))
+            ->when($to, fn ($q) => $q->where('first_response_at', '<=', $to))
+            ->reorder()
+            ->selectRaw('first_response_by as advisor, COUNT(*) as cnt')
+            ->groupBy('first_response_by')
+            ->pluck('cnt', 'advisor');
+
+        // json_unquote() doesn't exist on SQLite; json_extract() already returns
+        // the unquoted scalar there, so the extraction expression is driver-branched.
+        $jsonAdvisor = 'sqlite' === LeadActivity::query()->getConnection()->getDriverName()
+            ? "json_extract(properties, '$.assigned_to')"
+            : "json_unquote(json_extract(properties, '$.assigned_to'))";
+
+        $assignedNew = LeadActivity::query()
+            ->whereIn($leadFk, $leadIds)
+            ->where('type', LeadActivityTypeEnum::Assignment->value)
+            ->whereNotNull('properties->assigned_to')
+            ->tap($activityWindow)
+            ->selectRaw("{$jsonAdvisor} as advisor, COUNT(*) as cnt")
+            ->groupBy('advisor')
+            ->pluck('cnt', 'advisor');
+
+        // 4) Berater-Menge: Causer ∪ aktuell Zugewiesene; Namen auflösen.
+        $assignedCounts = (clone $leads)
+            ->whereNotNull('leads.assigned_to')
+            ->reorder()
+            ->selectRaw('leads.assigned_to as advisor, COUNT(*) as cnt')
+            ->groupBy('leads.assigned_to')
+            ->pluck('cnt', 'advisor');
+
+        $advisorIds = collect($activityCounts->keys())
+            ->merge($assignedCounts->keys()->map(fn ($k): string => (string) $k))
+            ->unique()
+            ->values();
+
+        $userModel = config('lead-pipeline.user_model');
+        $names     = $userModel::query()
+            ->whereIn((new $userModel())->getKeyName(), $advisorIds)
+            ->get()
+            ->keyBy(fn ($u): string => (string) $u->getKey());
+
+        $rows = $advisorIds->map(function (string $id) use (
+            $activityCounts,
+            $wonByAdvisor,
+            $lostByAdvisor,
+            $firstContacts,
+            $assignedNew,
+            $assignedCounts,
+            $names,
+            $leads,
+            $from,
+            $to,
+        ): array {
+            $byType = ($activityCounts->get($id) ?? collect())->keyBy('type');
+            $count  = fn (LeadActivityTypeEnum $t): int => (int) ($byType[$t->value]->cnt ?? 0);
+
+            $won  = (int) ($wonByAdvisor[$id] ?? 0);
+            $lost = (int) ($lostByAdvisor[$id] ?? 0);
+
+            $response = $this->responseStats(
+                (clone $leads)->where('leads.assigned_to', $id),
+                $from,
+                $to,
+            );
+
+            $assigned      = (int) ($assignedCounts[$id] ?? 0);
+            $activityTotal = $count(LeadActivityTypeEnum::Call) + $count(LeadActivityTypeEnum::Email)
+                + $count(LeadActivityTypeEnum::Note) + $count(LeadActivityTypeEnum::Moved);
+
+            return [
+                'advisor_id'           => $id,
+                'advisor_name'         => (string) ($names[$id]->name ?? __('lead-pipeline::lead-pipeline.field.unknown')),
+                'calls'                => $count(LeadActivityTypeEnum::Call),
+                'emails'               => $count(LeadActivityTypeEnum::Email),
+                'notes'                => $count(LeadActivityTypeEnum::Note),
+                'moves'                => $count(LeadActivityTypeEnum::Moved),
+                'first_contacts'       => (int) ($firstContacts[$id] ?? 0),
+                'assigned_new'         => (int) ($assignedNew[$id] ?? 0),
+                'won'                  => $won,
+                'lost'                 => $lost,
+                'conversion'           => ($won + $lost) > 0 ? round($won / ($won + $lost) * 100, 1) : 0.0,
+                'avg_response_minutes' => $response['avg_minutes'],
+                'sla_pct'              => $response['sla_pct'],
+                'activities_per_lead'  => $assigned > 0 ? round($activityTotal / $assigned, 2) : null,
+            ];
+        })->values()->all();
+
+        return ['rows' => $rows, 'team' => $this->teamAggregate($rows)];
+    }
+
+    /** @param list<array<string, mixed>> $rows */
+    private function teamAggregate(array $rows): array
+    {
+        $sum  = fn (string $k): int => (int) array_sum(array_column($rows, $k));
+        $won  = $sum('won');
+        $lost = $sum('lost');
+
+        $responseValues = array_values(array_filter(array_column($rows, 'avg_response_minutes'), fn ($v): bool => null !== $v));
+        $aplValues      = array_values(array_filter(array_column($rows, 'activities_per_lead'), fn ($v): bool => null !== $v));
+
+        return [
+            'calls'                => $sum('calls'),
+            'emails'               => $sum('emails'),
+            'notes'                => $sum('notes'),
+            'moves'                => $sum('moves'),
+            'first_contacts'       => $sum('first_contacts'),
+            'assigned_new'         => $sum('assigned_new'),
+            'won'                  => $won,
+            'lost'                 => $lost,
+            'conversion'           => ($won + $lost) > 0 ? round($won / ($won + $lost) * 100, 1) : 0.0,
+            'avg_response_minutes' => [] === $responseValues ? null : round(array_sum($responseValues) / count($responseValues), 1),
+            'sla_pct'              => [] === $rows ? 0.0 : round(array_sum(array_column($rows, 'sla_pct')) / count($rows), 1),
+            'activities_per_lead'  => [] === $aplValues ? null : round(array_sum($aplValues) / count($aplValues), 2),
+        ];
+    }
+
     /** @return list<int|string> Phase-PKs des Typs auf den Boards der gescopten Leads */
     private function phaseIdsOfType(Builder $leads, LeadPhaseTypeEnum $type): array
     {
