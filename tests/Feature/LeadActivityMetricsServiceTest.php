@@ -201,6 +201,29 @@ it('windows stage dwell to moves inside the range', function (): void {
     expect($windowed)->toBe([]);
 });
 
+// Charakterisierungs-Test: dokumentiert den vertraglichen Fenster-Randfall aus
+// dem stageDwell()-PHPDoc — Paare, die die Fenstergrenze überspannen, werden
+// bewusst verworfen (kein Clipping), nicht anteilig gezählt.
+it('drops dwell pairs that straddle the window boundary (documented contract)', function (): void {
+    $board  = LeadBoard::factory()->create();
+    $phaseA = LeadPhase::factory()->for($board, 'board')->create(['name' => 'Rand']);
+    $phaseB = LeadPhase::factory()->for($board, 'board')->create(['name' => 'Ziel']);
+    $lead   = Lead::factory()->for($board, 'board')->for($phaseB, 'phase')->create();
+
+    // Eintritt VOR dem Fenster, Austritt IM Fenster → Paar überspannt die Grenze → verworfen.
+    movedActivity($lead, ['new_phase' => $phaseA->getKey()], CarbonImmutable::parse('2026-05-28'));
+    movedActivity($lead, ['new_phase' => $phaseB->getKey()], CarbonImmutable::parse('2026-06-05'));
+
+    $windowed = app(LeadActivityMetricsService::class)
+        ->stageDwell(scoped(), CarbonImmutable::parse('2026-06-01'), CarbonImmutable::parse('2026-06-30'));
+
+    expect($windowed)->toBe([]);
+
+    // Unbounded zählt das Paar (8 Tage in Phase 'Rand').
+    $all = app(LeadActivityMetricsService::class)->stageDwell(scoped());
+    expect(collect($all)->firstWhere('label', 'Rand')['avg_days'])->toBe(8.0);
+});
+
 it('builds a 6x6 contact-time heatmap', function (): void {
     $now  = CarbonImmutable::parse('2026-03-16 09:30:00'); // Monday, slot 8-10
     $lead = Lead::factory()->create();

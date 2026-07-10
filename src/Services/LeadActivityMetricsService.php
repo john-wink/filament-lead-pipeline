@@ -114,6 +114,11 @@ class LeadActivityMetricsService
      * (Eintritt in eine Phase bis zum nächsten Move). "Überaltert" = Verweildauer
      * über dem 1,5-fachen Median der Phase.
      *
+     * Gefenstert wird auf die Moves selbst: ein Dwell-Paar zählt nur, wenn BEIDE
+     * Moves im Fenster liegen. Paare, die die Fenstergrenze überspannen, werden
+     * bewusst verworfen (kein Clipping) — die Kennzahl beschreibt Bewegungen,
+     * die vollständig im Zeitraum stattfanden.
+     *
      * @return list<array{phase_id: string, label: string, avg_days: float, overaged_pct: float}>
      */
     public function stageDwell(Builder $leads, ?CarbonImmutable $from = null, ?CarbonImmutable $to = null): array

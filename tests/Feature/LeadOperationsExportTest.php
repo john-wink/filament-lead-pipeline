@@ -149,3 +149,55 @@ it('lets a board admin see all sources across the tenant when the export has no 
     expect($content)->toContain('Advisor-Only-Source')
         ->and($content)->toContain('Webflow-Formular');
 });
+
+it('honours custom dateFrom/dateTo over the preset and supports the all preset', function (): void {
+    Filament::setCurrentPanel(Filament::getPanel('admin'));
+    $this->actingAs($this->admin);
+    Filament::setTenant($this->team);
+
+    $src = LeadSource::factory()->for($this->board, 'board')->create(['name' => 'Range-Quelle']);
+
+    // Lead (Won) mit Kampagnen-Attribution; Kampagnen-Spend März 100 / Januar 500.
+    Lead::factory()
+        ->for($this->wonPhase, 'phase')
+        ->for($this->board, 'board')
+        ->create([
+            Lead::fkColumn('lead_source') => $src->getKey(),
+            'assigned_to'                 => $this->admin->id,
+            'status'                      => LeadStatusEnum::Won,
+            'source_campaign_id'          => 'c-exp',
+        ]);
+    MetaInsightSnapshot::factory()->create(['team_uuid' => $this->team->uuid, 'campaign_id' => 'c-exp', 'breakdown_type' => 'none', 'spend' => 100, 'date' => '2026-03-10']);
+    MetaInsightSnapshot::factory()->create(['team_uuid' => $this->team->uuid, 'campaign_id' => 'c-exp', 'breakdown_type' => 'none', 'spend' => 500, 'date' => '2026-01-05']);
+
+    // Custom-Datum gewinnt über das Preset → nur der März-Spend (100) zählt.
+    $csv = $this->get(route('lead-pipeline.operations.export', [
+        'boardId'  => $this->board->getKey(),
+        'preset'   => '7',
+        'dateFrom' => '2026-03-01',
+        'dateTo'   => '2026-03-31',
+    ]))->assertOk()->streamedContent();
+
+    expect($csv)->toContain('Range-Quelle')
+        ->and($csv)->toContain('100,00')
+        ->and($csv)->not->toContain('600,00');
+
+    // Diskriminanz-Check: dasselbe Preset OHNE Custom-Datum fenstert auf die
+    // letzten 7 Tage → kein Snapshot im Fenster, keine Kostenwerte.
+    $presetOnly = $this->get(route('lead-pipeline.operations.export', [
+        'boardId' => $this->board->getKey(),
+        'preset'  => '7',
+    ]))->assertOk()->streamedContent();
+
+    expect($presetOnly)->toContain('Range-Quelle')
+        ->and($presetOnly)->not->toContain('100,00')
+        ->and($presetOnly)->not->toContain('600,00');
+
+    // 'all' → unbounded, summiert beide Snapshots (600).
+    $all = $this->get(route('lead-pipeline.operations.export', [
+        'boardId' => $this->board->getKey(),
+        'preset'  => 'all',
+    ]))->assertOk()->streamedContent();
+
+    expect($all)->toContain('600,00');
+});
