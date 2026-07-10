@@ -47,6 +47,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Operations / Mitarbeiter-Auswertung
+    |--------------------------------------------------------------------------
+    */
+    'operations' => [
+        'sla_minutes'   => 60,   // Erstreaktions-SLA in Minuten
+        'score_weights' => [     // Score v2 Teilscore-Gewichte (werden normalisiert)
+            'activity'  => 30,
+            'tempo'     => 25,
+            'result'    => 30,
+            'diligence' => 15,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Source Drivers
     |--------------------------------------------------------------------------
     | Registrierte Quell-Treiber. Neue Treiber hier registrieren.

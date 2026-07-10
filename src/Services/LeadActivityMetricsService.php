@@ -24,8 +24,9 @@ class LeadActivityMetricsService
      *     sla_pct: float
      * }
      */
-    public function responseStats(Builder $leads, CarbonImmutable $from, CarbonImmutable $to, int $slaMinutes = 60): array
+    public function responseStats(Builder $leads, CarbonImmutable $from, CarbonImmutable $to, ?int $slaMinutes = null): array
     {
+        $slaMinutes ??= (int) config('lead-pipeline.operations.sla_minutes', 60);
         $rows = (clone $leads)
             ->whereBetween('created_at', [$from, $to])
             ->get(['created_at', 'first_response_at']);
@@ -346,8 +347,9 @@ class LeadActivityMetricsService
      *     contact_attempts: int, won: int, ops_score: float
      * }>
      */
-    public function advisorOps(Builder $leads, CarbonImmutable $from, CarbonImmutable $to, int $slaMinutes = 60): array
+    public function advisorOps(Builder $leads, CarbonImmutable $from, CarbonImmutable $to, ?int $slaMinutes = null): array
     {
+        $slaMinutes ??= (int) config('lead-pipeline.operations.sla_minutes', 60);
         $advisorIds = (clone $leads)->whereNotNull('assigned_to')->distinct()->pluck('assigned_to');
 
         // int|string: pluck('assigned_to') yields int under 'id' primary-key mode,
