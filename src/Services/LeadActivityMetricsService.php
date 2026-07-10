@@ -638,6 +638,35 @@ class LeadActivityMetricsService
     }
 
     /**
+     * @return array{
+     *   row: ?array<string, mixed>,        // Matrix-Row des Beraters (inkl. scores/deltas), null wenn unbekannt
+     *   team: array<string, mixed>,        // Team-Aggregate (inkl. score_avg)
+     *   rank: ?int, total_advisors: int    // Platz im Score-Ranking (1-basiert)
+     * }
+     */
+    public function advisorScorecard(int|string $advisorId, Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to): array
+    {
+        $matrix = $this->advisorActivityMatrix($leads, $from, $to);
+
+        $rank = null;
+        $row  = null;
+        foreach ($matrix['rows'] as $i => $candidate) {
+            if ($candidate['advisor_id'] === (string) $advisorId) {
+                $rank = $i + 1;
+                $row  = $candidate;
+                break;
+            }
+        }
+
+        return [
+            'row'            => $row,
+            'team'           => $matrix['team'],
+            'rank'           => $rank,
+            'total_advisors' => count($matrix['rows']),
+        ];
+    }
+
+    /**
      * Score v2: vier erklärbare Teilscores (0–100) + gewichtete Summe.
      *
      * - `activity` = `min(100, apl / (2 × teamMedianApl) × 100)`; ist der
