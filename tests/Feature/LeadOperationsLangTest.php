@@ -33,6 +33,7 @@ it('has every operations key resolved in all locales', function (string $locale)
         'export',
         'cost_per_lead',
         'cost_per_acquisition',
+        'all_advisors',
     ];
 
     foreach ($keys as $key) {

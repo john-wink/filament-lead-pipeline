@@ -144,3 +144,46 @@ it('nests under the Leads navigation item instead of adding a top-level entry', 
         ->and(LeadOperations::getNavigationGroup())
         ->toBe(JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getNavigationGroup());
 });
+
+it('supports the all preset and a custom date range with custom taking precedence', function (): void {
+    $component = livewire(LeadOperations::class)
+        ->call('setPreset', 'all')
+        ->assertSet('preset', 'all');
+
+    $component->set('dateFrom', '2026-03-01')
+        ->assertSet('preset', 'custom')
+        ->set('dateTo', '2026-03-31')
+        ->assertSuccessful();
+
+    $instance    = $component->instance();
+    [$from, $to] = (new ReflectionMethod($instance, 'range'))->invoke($instance);
+
+    expect($from->toDateString())->toBe('2026-03-01')
+        ->and($to->toDateString())->toBe('2026-03-31');
+});
+
+it('returns an unbounded range for the all preset', function (): void {
+    $instance = livewire(LeadOperations::class)->call('setPreset', 'all')->instance();
+
+    expect((new ReflectionMethod($instance, 'range'))->invoke($instance))->toBe([null, null]);
+});
+
+it('clears custom dates when a preset pill is clicked', function (): void {
+    livewire(LeadOperations::class)
+        ->set('dateFrom', '2026-03-01')
+        ->call('setPreset', '7')
+        ->assertSet('dateFrom', null)
+        ->assertSet('dateTo', null)
+        ->assertSet('preset', '7');
+});
+
+it('includes custom dates in the export url', function (): void {
+    $instance = livewire(LeadOperations::class)
+        ->set('dateFrom', '2026-03-01')
+        ->set('dateTo', '2026-03-31')
+        ->instance();
+
+    expect($instance->getExportUrl())
+        ->toContain('dateFrom=2026-03-01')
+        ->toContain('dateTo=2026-03-31');
+});

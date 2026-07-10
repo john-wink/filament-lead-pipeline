@@ -685,5 +685,6 @@ return [
         'export'               => 'Export CSV',
         'cost_per_lead'        => 'Coût par lead',
         'cost_per_acquisition' => 'Coût par acquisition',
+        'all_advisors'         => 'Tous les conseillers',
     ],
 ];

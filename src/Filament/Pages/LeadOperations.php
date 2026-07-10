@@ -19,6 +19,10 @@ class LeadOperations extends Page
 
     public ?string $advisorId = null;
 
+    public ?string $dateFrom = null;
+
+    public ?string $dateTo = null;
+
     protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
 
     protected static string $view = 'lead-pipeline::filament.pages.lead-operations';
@@ -62,12 +66,24 @@ class LeadOperations extends Page
 
     public function setPreset(string $preset): void
     {
-        $this->preset = in_array($preset, ['today', '7', '30', '90'], true) ? $preset : '30';
+        $this->preset   = in_array($preset, ['today', '7', '30', '90', 'all'], true) ? $preset : '30';
+        $this->dateFrom = null;
+        $this->dateTo   = null;
     }
 
     public function setAdvisor(?string $advisorId): void
     {
         $this->advisorId = ('' === $advisorId || 'all' === $advisorId) ? null : $advisorId;
+    }
+
+    public function updatedDateFrom(): void
+    {
+        $this->preset = 'custom';
+    }
+
+    public function updatedDateTo(): void
+    {
+        $this->preset = 'custom';
     }
 
     public function getExportUrl(): string
@@ -76,18 +92,33 @@ class LeadOperations extends Page
             'boardId'   => $this->boardId,
             'preset'    => $this->preset,
             'advisorId' => $this->advisorId,
+            'dateFrom'  => $this->dateFrom,
+            'dateTo'    => $this->dateTo,
         ]));
     }
 
-    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
+    /**
+     * Custom-Datum hat Vorrang vor dem Preset (Muster LeadAnalyticsModal::getDateRange()).
+     * 'all' und unbelegte Custom-Grenzen liefern null — Metriken filtern dann nicht.
+     *
+     * @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable}
+     */
     protected function range(): array
     {
+        if (null !== $this->dateFrom || null !== $this->dateTo) {
+            return [
+                $this->dateFrom ? CarbonImmutable::parse($this->dateFrom)->startOfDay() : null,
+                $this->dateTo ? CarbonImmutable::parse($this->dateTo)->endOfDay() : null,
+            ];
+        }
+
         $now = CarbonImmutable::now();
 
         return match ($this->preset) {
             'today' => [$now->startOfDay(), $now],
             '7'     => [$now->subDays(7), $now],
             '90'    => [$now->subDays(90), $now],
+            'all'   => [null, null],
             default => [$now->subDays(30), $now],
         };
     }
@@ -149,19 +180,44 @@ class LeadOperations extends Page
 
         $board = $this->boardId ? LeadBoard::find($this->boardId) : null;
 
+        // Interim bis Task 4 die Service-Signaturen nullable macht.
+        $rangeFrom = $from ?? CarbonImmutable::parse('1970-01-01');
+        $rangeTo   = $to ?? CarbonImmutable::now();
+
         return [
             'boards' => (function_exists('filament') && filament()->getTenant())
                 ? LeadBoard::visibleToTenant(filament()->getTenant())->pluck('name', LeadBoard::pkColumn())->all()
                 : LeadBoard::query()->pluck('name', LeadBoard::pkColumn())->all(),
-            'response'    => $service->responseStats($leads(), $from, $to),
-            'operations'  => $service->operationsStats($leads()),
-            'stageDwell'  => $service->stageDwell($leads()),
-            'heatmap'     => $service->contactHeatmap($leads(), $from, $to),
-            'velocity'    => $service->pipelineVelocity($leads()),
-            'funnel'      => $board ? $service->funnel($board) : [],
-            'lossReasons' => $service->lossReasons($leads()),
-            'sources'     => $service->sourceEconomics($leads()),
-            'ranking'     => $service->advisorOps($leads(), $from, $to),
+            'advisorOptions' => $this->advisorOptions(),
+            'response'       => $service->responseStats($leads(), $rangeFrom, $rangeTo),
+            'operations'     => $service->operationsStats($leads()),
+            'stageDwell'     => $service->stageDwell($leads()),
+            'heatmap'        => $service->contactHeatmap($leads(), $rangeFrom, $rangeTo),
+            'velocity'       => $service->pipelineVelocity($leads()),
+            'funnel'         => $board ? $service->funnel($board) : [],
+            'lossReasons'    => $service->lossReasons($leads()),
+            'sources'        => $service->sourceEconomics($leads()),
+            'ranking'        => $service->advisorOps($leads(), $rangeFrom, $rangeTo),
         ];
+    }
+
+    /** @return array<string, string> */
+    protected function advisorOptions(): array
+    {
+        $ids = (clone $this->scopedLeads())
+            ->whereNotNull('leads.assigned_to')
+            ->reorder()
+            ->select('leads.assigned_to')
+            ->distinct()
+            ->pluck('assigned_to');
+
+        $userModel = config('lead-pipeline.user_model');
+
+        return $userModel::query()
+            ->whereIn((new $userModel())->getKeyName(), $ids)
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(fn ($u): array => [(string) $u->getKey() => (string) $u->name])
+            ->all();
     }
 }

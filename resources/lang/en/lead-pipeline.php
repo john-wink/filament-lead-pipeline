@@ -698,5 +698,6 @@ return [
         'export'               => 'Export CSV',
         'cost_per_lead'        => 'Cost/Lead',
         'cost_per_acquisition' => 'Cost/Acquisition',
+        'all_advisors'         => 'All advisors',
     ],
 ];

@@ -23,7 +23,7 @@
                  every filter change: a morphed <canvas> that Chart.js has drawn on goes blank and never
                  re-inits, because Alpine's init() only runs on a freshly inserted node. --}}
             <canvas
-                wire:key="ops-speed-chart-{{ $preset }}-{{ $boardId }}"
+                wire:key="ops-speed-chart-{{ $preset }}-{{ $boardId }}-{{ $dateFrom }}-{{ $dateTo }}"
                 x-data="{
                     chart: null,
                     init() {
@@ -52,7 +52,7 @@
         <x-slot name="heading">{{ __('lead-pipeline::lead-pipeline.operations.loss_reasons') }}</x-slot>
         <div style="height: 200px;">
             <canvas
-                wire:key="ops-loss-chart-{{ $preset }}-{{ $boardId }}"
+                wire:key="ops-loss-chart-{{ $preset }}-{{ $boardId }}-{{ $dateFrom }}-{{ $dateTo }}"
                 x-data="{
                     chart: null,
                     init() {

@@ -7,9 +7,22 @@
             @endforeach
         </select>
 
-        @foreach (['today' => __('lead-pipeline::lead-pipeline.analytics.today'), '7' => __('lead-pipeline::lead-pipeline.analytics.days_7'), '30' => __('lead-pipeline::lead-pipeline.analytics.days_30'), '90' => __('lead-pipeline::lead-pipeline.analytics.days_90')] as $key => $label)
+        <select wire:change="setAdvisor($event.target.value)" class="fi-select-input rounded-lg border-gray-300 dark:bg-gray-800">
+            <option value="all">{{ __('lead-pipeline::lead-pipeline.operations.all_advisors') }}</option>
+            @foreach ($advisorOptions as $id => $name)
+                <option value="{{ $id }}" @selected($advisorId === (string) $id)>{{ $name }}</option>
+            @endforeach
+        </select>
+
+        @foreach (['today' => __('lead-pipeline::lead-pipeline.analytics.today'), '7' => __('lead-pipeline::lead-pipeline.analytics.days_7'), '30' => __('lead-pipeline::lead-pipeline.analytics.days_30'), '90' => __('lead-pipeline::lead-pipeline.analytics.days_90'), 'all' => __('lead-pipeline::lead-pipeline.analytics.all')] as $key => $label)
             <x-filament::button size="sm" :color="$preset === $key ? 'primary' : 'gray'" wire:click="setPreset('{{ $key }}')">{{ $label }}</x-filament::button>
         @endforeach
+
+        <div class="flex items-center gap-1 text-sm">
+            <input type="date" wire:model.live="dateFrom" class="fi-input rounded-lg border-gray-300 text-sm dark:bg-gray-800" />
+            <span class="text-gray-400">–</span>
+            <input type="date" wire:model.live="dateTo" class="fi-input rounded-lg border-gray-300 text-sm dark:bg-gray-800" />
+        </div>
 
         <a href="{{ $this->getExportUrl() }}" class="ms-auto">
             <x-filament::button size="sm" icon="heroicon-o-arrow-down-tray" tag="span">{{ __('lead-pipeline::lead-pipeline.operations.export') }}</x-filament::button>
