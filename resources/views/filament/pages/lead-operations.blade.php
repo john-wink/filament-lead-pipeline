@@ -58,5 +58,11 @@
 
     @include('lead-pipeline::filament.pages.lead-operations-detail')
 
-    @livewire('lead-pipeline::advisor-scorecard-panel', ['boardId' => $boardId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo, 'preset' => $preset], key('advisor-panel'))
+    {{-- The key MUST include the filters: Livewire mount props are one-shot, so with a
+         static key the panel would keep the filters from its first mount and compute a
+         reopened scorecard against stale preset/board/date values. A filter-dependent
+         key forces a remount on every filter change (same fix class as the chart
+         wire:keys in lead-operations-detail). The remount resets isOpen=false, which is
+         correct — the overlay blocks filter changes while the panel is open anyway. --}}
+    @livewire('lead-pipeline::advisor-scorecard-panel', ['boardId' => $boardId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo, 'preset' => $preset], key('advisor-panel-' . $preset . '-' . $boardId . '-' . $dateFrom . '-' . $dateTo))
 </x-filament-panels::page>
