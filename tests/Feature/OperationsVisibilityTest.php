@@ -87,6 +87,14 @@ it('rejects a forged client-side advisorId update on the scorecard panel', funct
         ->set('advisorId', (string) $colleague->id);
 })->throws(CannotUpdateLockedPropertyException::class);
 
+it('rejects a forged client-side shown update on the scorecard panel', function (): void {
+    // shown drives advisorProtocol()'s query limit — #[Locked] must reject a client
+    // update that tries to force an arbitrarily high limit; loadMore() is the only
+    // sanctioned way to grow it, and mutates it server-side.
+    Livewire::test(AdvisorScorecardPanel::class, ['preset' => 'all'])
+        ->set('shown', 100_000);
+})->throws(CannotUpdateLockedPropertyException::class);
+
 it('self-heals a foreign advisorId that reached render without a client update', function (): void {
     $advisor   = User::factory()->create(['first_name' => 'Avi', 'last_name' => 'Sor']);
     $colleague = User::factory()->create(['first_name' => 'Fremd', 'last_name' => 'Kollege']);

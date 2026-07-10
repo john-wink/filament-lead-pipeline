@@ -30,6 +30,8 @@ class AdvisorScorecardPanel extends Component
 
     public string $preset = '30';
 
+    /** Nur serverseitig via loadMore()/open() mutiert — #[Locked] lehnt geforgte Client-Updates ab (verhindert beliebig hohe Client-forcierte Limits). */
+    #[Locked]
     public int $shown = 50;
 
     #[On('open-advisor-scorecard')]
