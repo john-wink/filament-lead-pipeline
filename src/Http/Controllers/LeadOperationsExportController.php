@@ -15,8 +15,12 @@ class LeadOperationsExportController
 
     public function __invoke(Request $request, LeadActivityMetricsService $service): StreamedResponse
     {
-        $boardId     = $request->query('boardId');
-        $advisorId   = $request->query('advisorId');
+        $boardId   = $request->query('boardId');
+        $advisorId = $request->query('advisorId');
+        if ( ! $this->isOperationsLeadership($boardId)) {
+            $advisorId = (string) auth()->id();
+        }
+
         [$from, $to] = $this->operationsRange(
             $request->query('dateFrom'),
             $request->query('dateTo'),

@@ -40,8 +40,10 @@ it('opens on the event and shows scorecard plus protocol', function (): void {
 });
 
 it('closes and resets', function (): void {
+    // Self-open (not a foreign id): non-leadership self-access must stay allowed
+    // by the Task 12 guard — this test only verifies close()/reset behaviour.
     Livewire::test(AdvisorScorecardPanel::class, ['preset' => 'all'])
-        ->dispatch('open-advisor-scorecard', advisorId: 'x')
+        ->dispatch('open-advisor-scorecard', advisorId: (string) $this->user->id)
         ->call('close')
         ->assertSet('isOpen', false);
 });

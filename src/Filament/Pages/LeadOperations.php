@@ -113,17 +113,37 @@ class LeadOperations extends Page
     /** @return array<string, mixed> */
     protected function getViewData(): array
     {
+        $isLeadership = $this->isOperationsLeadership($this->boardId);
+        if ( ! $isLeadership) {
+            $this->advisorId = (string) auth()->id();
+        }
+
         $service     = app(LeadActivityMetricsService::class);
         [$from, $to] = $this->range();
         $leads       = fn (): Builder => $this->scopedLeads();
 
         $board = $this->boardId ? LeadBoard::find($this->boardId) : null;
 
+        $matrix = $service->advisorActivityMatrix($leads(), $from, $to);
+        if ( ! $isLeadership) {
+            // Zusätzlicher Gurt für den Board-Zweig: scopedOperationsLeads() schränkt
+            // Nicht-Admins im NO-BOARD-Zweig bereits auf eigene Leads ein, aber
+            // Lead::scopeVisibleTo() (Board-Zweig) gibt bei geteilten Boards
+            // (isSharedWith($tenant)) ALLE Leads frei, unabhängig vom Assignee.
+            // Ohne diesen Filter würde die Matrix bei einem solchen Board fremde
+            // Berater-Zeilen zeigen, obwohl advisorId serverseitig erzwungen ist.
+            $matrix['rows'] = array_values(array_filter(
+                $matrix['rows'],
+                fn (array $row): bool => $row['advisor_id'] === (string) auth()->id(),
+            ));
+        }
+
         return [
             'boards' => (function_exists('filament') && filament()->getTenant())
                 ? LeadBoard::visibleToTenant(filament()->getTenant())->pluck('name', LeadBoard::pkColumn())->all()
                 : LeadBoard::query()->pluck('name', LeadBoard::pkColumn())->all(),
             'advisorOptions' => $this->advisorOptions(),
+            'isLeadership'   => $isLeadership,
             'response'       => $service->responseStats($leads(), $from, $to),
             'operations'     => $service->operationsStats($leads()),
             'stageDwell'     => $service->stageDwell($leads(), $from, $to),
@@ -132,7 +152,7 @@ class LeadOperations extends Page
             'funnel'         => $board ? $service->funnel($board) : [],
             'lossReasons'    => $service->lossReasons($leads(), $from, $to),
             'sources'        => $service->sourceEconomics($leads(), $from, $to),
-            'matrix'         => $service->advisorActivityMatrix($leads(), $from, $to),
+            'matrix'         => $matrix,
         ];
     }
 

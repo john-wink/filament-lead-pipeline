@@ -65,6 +65,26 @@ trait ScopesOperationsLeads
     }
 
     /**
+     * Führung = Admin mindestens eines tenant-sichtbaren Boards (bzw. des gewählten Boards).
+     */
+    protected function isOperationsLeadership(?string $boardId): bool
+    {
+        $user = auth()->user();
+        if (null === $user || ! function_exists('filament') || null === filament()->getTenant()) {
+            return false;
+        }
+
+        $adminBoards = LeadBoard::visibleToTenant(filament()->getTenant())
+            ->when($boardId, fn ($q) => $q->where(LeadBoard::pkColumn(), $boardId))
+            ->whereHas('admins', fn ($q) => $q->where(
+                'lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'),
+                $user->getKey(),
+            ));
+
+        return $adminBoards->exists();
+    }
+
+    /**
      * Custom-Datum hat Vorrang vor dem Preset (Muster LeadAnalyticsModal::getDateRange()).
      * 'all' und unbelegte Custom-Grenzen liefern null — Metriken filtern dann nicht.
      *

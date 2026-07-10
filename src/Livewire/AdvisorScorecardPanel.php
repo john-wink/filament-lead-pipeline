@@ -31,6 +31,10 @@ class AdvisorScorecardPanel extends Component
     #[On('open-advisor-scorecard')]
     public function open(string $advisorId): void
     {
+        if ( ! $this->isOperationsLeadership($this->boardId) && $advisorId !== (string) auth()->id()) {
+            abort(403);
+        }
+
         $this->advisorId = $advisorId;
         $this->shown     = 50;
         $this->isOpen    = true;
