@@ -17,6 +17,11 @@ return [
     | Team/Tenant Configuration
     |--------------------------------------------------------------------------
     | Enable multi-tenancy support. When enabled, boards are scoped to teams.
+    |
+    | 'model' is also used to resolve the tenant on routes that run outside a Filament
+    | panel (e.g. LeadOperationsExportController), where filament()->getTenant() is
+    | null because the panel's own tenancy middleware never ran. Those routes require
+    | this to be set and abort with 403 if it is not.
     */
     'tenancy' => [
         'enabled'     => true,
@@ -43,6 +48,21 @@ return [
         'auto_refresh_interval' => 30,  // Sekunden, 0 = deaktiviert
         'stale_warning_days'    => 7,     // Alter-Badge wird gelb (Tage ohne Aktivität)
         'stale_critical_days'   => 30,    // Alter-Badge wird rot (Tage ohne Aktivität)
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Operations / Mitarbeiter-Auswertung
+    |--------------------------------------------------------------------------
+    */
+    'operations' => [
+        'sla_minutes'   => 60,   // Erstreaktions-SLA in Minuten
+        'score_weights' => [     // Score v2 Teilscore-Gewichte (werden normalisiert)
+            'activity'  => 30,
+            'tempo'     => 25,
+            'result'    => 30,
+            'diligence' => 15,
+        ],
     ],
 
     /*

@@ -84,11 +84,11 @@ it('restricts a non-admin advisor to their own leads across all boards when no b
     $scopedLeads = (new ReflectionMethod($instance, 'scopedLeads'))->invoke($instance);
     expect($scopedLeads->pluck(Lead::pkColumn())->all())->toBe([$ownLead->getKey()]);
 
-    $viewData          = (new ReflectionMethod($instance, 'getViewData'))->invoke($instance);
-    $rankingAdvisorIds = collect($viewData['ranking'])->pluck('advisor_id')->all();
+    $viewData         = (new ReflectionMethod($instance, 'getViewData'))->invoke($instance);
+    $matrixAdvisorIds = collect($viewData['matrix']['rows'])->pluck('advisor_id')->all();
 
-    expect($rankingAdvisorIds)->toBe([(string) $advisor->id])
-        ->and($rankingAdvisorIds)->not->toContain((string) $admin->id);
+    expect($matrixAdvisorIds)->toBe([(string) $advisor->id])
+        ->and($matrixAdvisorIds)->not->toContain((string) $admin->id);
 
     $sourceNames = collect($viewData['sources'])->pluck('source')->all();
     expect($sourceNames)->not->toContain('Colleague-Only-Source');
@@ -143,4 +143,115 @@ it('nests under the Leads navigation item instead of adding a top-level entry', 
         ->toBe(JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getNavigationLabel())
         ->and(LeadOperations::getNavigationGroup())
         ->toBe(JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource::getNavigationGroup());
+});
+
+it('supports the all preset and a custom date range with custom taking precedence', function (): void {
+    $component = livewire(LeadOperations::class)
+        ->call('setPreset', 'all')
+        ->assertSet('preset', 'all');
+
+    $component->set('dateFrom', '2026-03-01')
+        ->assertSet('preset', 'custom')
+        ->set('dateTo', '2026-03-31')
+        ->assertSuccessful();
+
+    $instance    = $component->instance();
+    [$from, $to] = (new ReflectionMethod($instance, 'range'))->invoke($instance);
+
+    expect($from->toDateString())->toBe('2026-03-01')
+        ->and($to->toDateString())->toBe('2026-03-31');
+});
+
+it('returns an unbounded range for the all preset', function (): void {
+    $instance = livewire(LeadOperations::class)->call('setPreset', 'all')->instance();
+
+    expect((new ReflectionMethod($instance, 'range'))->invoke($instance))->toBe([null, null]);
+});
+
+it('clears custom dates when a preset pill is clicked', function (): void {
+    livewire(LeadOperations::class)
+        ->set('dateFrom', '2026-03-01')
+        ->call('setPreset', '7')
+        ->assertSet('dateFrom', null)
+        ->assertSet('dateTo', null)
+        ->assertSet('preset', '7');
+});
+
+it('keeps all advisors selectable after one advisor is chosen', function (): void {
+    $advisorA = User::factory()->create(['first_name' => 'Berater', 'last_name' => 'Alpha']);
+    $advisorB = User::factory()->create(['first_name' => 'Berater', 'last_name' => 'Beta']);
+    $this->team->users()->syncWithoutDetaching([$advisorA->id, $advisorB->id]);
+
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $board->admins()->syncWithoutDetaching([$this->user->id]);
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create();
+
+    Lead::factory()->for($board, 'board')->for($phase, 'phase')->create(['assigned_to' => $advisorA->id]);
+    Lead::factory()->for($board, 'board')->for($phase, 'phase')->create(['assigned_to' => $advisorB->id]);
+
+    livewire(LeadOperations::class)
+        ->call('setBoard', (string) $board->getKey())
+        ->call('setAdvisor', (string) $advisorA->id)
+        ->assertSee('Berater Alpha')
+        ->assertSee('Berater Beta'); // must still be offered in the select
+});
+
+it('renders the advisor matrix with resolved names instead of raw ids', function (): void {
+    // name is a computed accessor (first_name . ' ' . last_name), not a fillable
+    // column — the factory must set the underlying columns, not 'name'.
+    $advisor = User::factory()->create(['first_name' => 'Maria', 'last_name' => 'Muster']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id]);
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+    $board->admins()->syncWithoutDetaching([$this->user->id]);
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create();
+    Lead::factory()->for($phase, 'phase')->for($board, 'board')->create(['assigned_to' => $advisor->id]);
+
+    livewire(LeadOperations::class)
+        ->call('setBoard', (string) $board->getKey())
+        ->assertSee(__('lead-pipeline::lead-pipeline.operations.matrix_title'))
+        ->assertSee('Maria Muster');
+    // No assertDontSee((string) $advisor->id) here: the matrix row's wire:key
+    // ("matrix-row-{advisor_id}") legitimately contains the raw id in markup,
+    // so asserting its absence would collide with that attribute.
+});
+
+it('labels snapshot metrics as as-of-today', function (): void {
+    LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+
+    livewire(LeadOperations::class)
+        ->assertSee(__('lead-pipeline::lead-pipeline.operations.as_of_today'));
+});
+
+it('includes custom dates in the export url', function (): void {
+    $instance = livewire(LeadOperations::class)
+        ->set('dateFrom', '2026-03-01')
+        ->set('dateTo', '2026-03-31')
+        ->instance();
+
+    expect($instance->getExportUrl())
+        ->toContain('dateFrom=2026-03-01')
+        ->toContain('dateTo=2026-03-31');
+});
+
+it('includes the current tenant in the export url so the out-of-panel route can resolve it', function (): void {
+    $instance = livewire(LeadOperations::class)->instance();
+
+    expect($instance->getExportUrl())->toContain('tenant=' . $this->team->getKey());
+});
+
+it('does not throw when dateFrom is unparseable', function (): void {
+    $this->withoutExceptionHandling();
+
+    livewire(LeadOperations::class)
+        ->set('dateFrom', 'garbage')
+        ->assertSuccessful();
+});
+
+it('resets the dangling custom preset back to 30 once both custom dates are cleared', function (): void {
+    livewire(LeadOperations::class)
+        ->set('dateFrom', '2026-03-01')
+        ->assertSet('preset', 'custom')
+        ->set('dateFrom', '')
+        ->assertSet('preset', '30')
+        ->assertSet('dateTo', null);
 });

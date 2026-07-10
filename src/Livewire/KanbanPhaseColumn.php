@@ -107,6 +107,7 @@ class KanbanPhaseColumn extends Component
             'description' => $assigneeName
                 ? __('lead-pipeline::lead-pipeline.actions.assigned_to_name', ['name' => $assigneeName])
                 : __('lead-pipeline::lead-pipeline.actions.assignment_removed'),
+            'properties'  => ['assigned_to' => filled($userId) ? $userId : null],
             'causer_type' => config('lead-pipeline.user_model'),
             'causer_id'   => auth()->id(),
         ]);

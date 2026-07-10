@@ -7,17 +7,23 @@ namespace JohnWink\FilamentLeadPipeline\Filament\Pages;
 use Carbon\CarbonImmutable;
 use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Builder;
-use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Concerns\ScopesOperationsLeads;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
 
 class LeadOperations extends Page
 {
+    use ScopesOperationsLeads;
+
     public ?string $boardId = null;
 
     public string $preset = '30';
 
     public ?string $advisorId = null;
+
+    public ?string $dateFrom = null;
+
+    public ?string $dateTo = null;
 
     protected static ?string $navigationIcon = 'heroicon-o-presentation-chart-line';
 
@@ -62,12 +68,24 @@ class LeadOperations extends Page
 
     public function setPreset(string $preset): void
     {
-        $this->preset = in_array($preset, ['today', '7', '30', '90'], true) ? $preset : '30';
+        $this->preset   = in_array($preset, ['today', '7', '30', '90', 'all'], true) ? $preset : '30';
+        $this->dateFrom = null;
+        $this->dateTo   = null;
     }
 
     public function setAdvisor(?string $advisorId): void
     {
         $this->advisorId = ('' === $advisorId || 'all' === $advisorId) ? null : $advisorId;
+    }
+
+    public function updatedDateFrom(): void
+    {
+        $this->syncPresetWithCustomDates();
+    }
+
+    public function updatedDateTo(): void
+    {
+        $this->syncPresetWithCustomDates();
     }
 
     public function getExportUrl(): string
@@ -76,92 +94,92 @@ class LeadOperations extends Page
             'boardId'   => $this->boardId,
             'preset'    => $this->preset,
             'advisorId' => $this->advisorId,
+            'dateFrom'  => $this->dateFrom,
+            'dateTo'    => $this->dateTo,
+            'tenant'    => filament()->getTenant()?->getKey(),
         ]));
     }
 
-    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
+    /**
+     * 'custom' only applies while at least one custom bound is set — otherwise the pill
+     * row would be left with no highlighted preset while silently using the 30-day
+     * default, which reads as a dangling/undefined state to the user.
+     */
+    protected function syncPresetWithCustomDates(): void
+    {
+        $this->preset = (blank($this->dateFrom) && blank($this->dateTo)) ? '30' : 'custom';
+    }
+
+    /** @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable} */
     protected function range(): array
     {
-        $now = CarbonImmutable::now();
-
-        return match ($this->preset) {
-            'today' => [$now->startOfDay(), $now],
-            '7'     => [$now->subDays(7), $now],
-            '90'    => [$now->subDays(90), $now],
-            default => [$now->subDays(30), $now],
-        };
+        return $this->operationsRange($this->dateFrom, $this->dateTo, $this->preset);
     }
 
     protected function scopedLeads(): Builder
     {
-        $query = Lead::query();
-        $user  = auth()->user();
-
-        if ($this->boardId) {
-            $board = LeadBoard::find($this->boardId);
-            if ($board && ! $board->isAccessibleByTenant(filament()->getTenant())) {
-                abort(403);
-            }
-
-            // Column names are qualified with the leads table: some service methods
-            // (e.g. sourceEconomics) join lead_sources, which has its own
-            // lead_board_uuid column — an unqualified where() here would become
-            // ambiguous once that join is applied.
-            $query->where('leads.' . Lead::fkColumn('lead_board'), $this->boardId);
-
-            if ($board && $user) {
-                $query->visibleTo($user, $board);
-            }
-        } elseif (function_exists('filament')) {
-            $tenantId = filament()->getTenant()?->getKey();
-
-            if ($tenantId && $user) {
-                // Mirrors AnalyticsExportController::baseQuery(): without a selected
-                // board, a non-board-admin must not see leads across the whole
-                // tenant — only their own, across all tenant-visible boards.
-                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
-                    ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
-                    ->pluck(LeadBoard::pkColumn());
-
-                if ($adminBoardIds->isEmpty()) {
-                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
-                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
-                        ->where('leads.assigned_to', $user->getKey());
-                } else {
-                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $adminBoardIds);
-                }
-            }
-        }
-
-        if (null !== $this->advisorId) {
-            $query->where('leads.assigned_to', $this->advisorId);
-        }
-
-        return $query;
+        return $this->scopedOperationsLeads($this->boardId, $this->advisorId);
     }
 
     /** @return array<string, mixed> */
     protected function getViewData(): array
     {
+        $isLeadership = $this->isOperationsLeadership($this->boardId);
+        if ( ! $isLeadership) {
+            $this->advisorId = (string) auth()->id();
+        }
+
         $service     = app(LeadActivityMetricsService::class);
         [$from, $to] = $this->range();
         $leads       = fn (): Builder => $this->scopedLeads();
 
         $board = $this->boardId ? LeadBoard::find($this->boardId) : null;
 
+        // See ScopesOperationsLeads::filterMatrixRowsForNonLeadership() for why this is
+        // needed in addition to the server-enforced advisorId — shared with the export
+        // controller so the two surfaces cannot drift.
+        $matrix = $this->filterMatrixRowsForNonLeadership(
+            $service->advisorActivityMatrix($leads(), $from, $to),
+            $this->boardId,
+        );
+
         return [
             'boards' => (function_exists('filament') && filament()->getTenant())
                 ? LeadBoard::visibleToTenant(filament()->getTenant())->pluck('name', LeadBoard::pkColumn())->all()
                 : LeadBoard::query()->pluck('name', LeadBoard::pkColumn())->all(),
-            'response'    => $service->responseStats($leads(), $from, $to),
-            'operations'  => $service->operationsStats($leads()),
-            'stageDwell'  => $service->stageDwell($leads()),
-            'heatmap'     => $service->contactHeatmap($leads(), $from, $to),
-            'velocity'    => $service->pipelineVelocity($leads()),
-            'funnel'      => $board ? $service->funnel($board) : [],
-            'lossReasons' => $service->lossReasons($leads()),
-            'sources'     => $service->sourceEconomics($leads()),
-            'ranking'     => $service->advisorOps($leads(), $from, $to),
+            'advisorOptions' => $this->advisorOptions(),
+            'isLeadership'   => $isLeadership,
+            'response'       => $service->responseStats($leads(), $from, $to),
+            'operations'     => $service->operationsStats($leads()),
+            'stageDwell'     => $service->stageDwell($leads(), $from, $to),
+            'heatmap'        => $service->contactHeatmap($leads(), $from, $to),
+            'velocity'       => $service->pipelineVelocity($leads()),
+            'funnel'         => $board ? $service->funnel($board) : [],
+            'lossReasons'    => $service->lossReasons($leads(), $from, $to),
+            'sources'        => $service->sourceEconomics($leads(), $from, $to),
+            'matrix'         => $matrix,
         ];
+    }
+
+    /** @return array<string, string> */
+    protected function advisorOptions(): array
+    {
+        // Options must ignore the current advisor selection, otherwise the
+        // select collapses to the selected advisor and blocks switching A→B.
+        $ids = $this->scopedOperationsLeads($this->boardId, null)
+            ->whereNotNull('leads.assigned_to')
+            ->reorder()
+            ->select('leads.assigned_to')
+            ->distinct()
+            ->pluck('assigned_to');
+
+        $userModel = config('lead-pipeline.user_model');
+
+        return $userModel::query()
+            ->whereIn((new $userModel())->getKeyName(), $ids)
+            ->orderBy('name')
+            ->get()
+            ->mapWithKeys(fn ($u): array => [(string) $u->getKey() => (string) $u->name])
+            ->all();
     }
 }

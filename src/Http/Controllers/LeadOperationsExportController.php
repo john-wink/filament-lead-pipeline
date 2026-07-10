@@ -4,43 +4,87 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Http\Controllers;
 
-use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
+use Filament\Facades\Filament;
+use Filament\Models\Contracts\HasTenants;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
-use JohnWink\FilamentLeadPipeline\Models\Lead;
-use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use JohnWink\FilamentLeadPipeline\Concerns\ScopesOperationsLeads;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeadOperationsExportController
 {
+    use ScopesOperationsLeads;
+
     public function __invoke(Request $request, LeadActivityMetricsService $service): StreamedResponse
     {
-        $boardId     = $request->query('boardId');
-        $advisorId   = $request->query('advisorId');
-        [$from, $to] = $this->range((string) $request->query('preset', '30'));
+        // Outside a panel request Filament's own tenant middleware never runs, so
+        // filament()->getTenant() is null here by default — resolve and validate the
+        // tenant ourselves BEFORE any scoping/leadership check, and fail closed if we
+        // can't (see ScopesOperationsLeads::scopedOperationsLeads()'s no-board branch,
+        // which would otherwise fall open with a null tenant).
+        Filament::setTenant($this->resolveExportTenant($request));
 
-        $leads = $this->scopedLeads($boardId, $advisorId);
+        $boardId      = $request->query('boardId');
+        $advisorId    = $request->query('advisorId');
+        $isLeadership = $this->isOperationsLeadership($boardId);
+        if ( ! $isLeadership) {
+            $advisorId = (string) auth()->id();
+        }
 
-        $ranking = $service->advisorOps((clone $leads), $from, $to);
-        $sources = $service->sourceEconomics((clone $leads));
+        [$from, $to] = $this->operationsRange(
+            $request->query('dateFrom'),
+            $request->query('dateTo'),
+            (string) $request->query('preset', '30'),
+        );
+
+        $leads = $this->scopedOperationsLeads($boardId, $advisorId);
+
+        // withDeltas: false — the CSV has no delta columns, so skip computing them.
+        $matrix = $this->filterMatrixRowsForNonLeadership(
+            $service->advisorActivityMatrix((clone $leads), $from, $to, withDeltas: false),
+            $boardId,
+        );
+        $sources = $service->sourceEconomics((clone $leads), $from, $to);
 
         $filename = 'lead-ops-' . now()->format('Y-m-d') . '.csv';
 
-        return response()->streamDownload(function () use ($ranking, $sources): void {
+        return response()->streamDownload(function () use ($matrix, $sources): void {
             $handle = fopen('php://output', 'w');
             fwrite($handle, chr(0xEF) . chr(0xBB) . chr(0xBF));
 
-            fputcsv($handle, ['=== ' . __('lead-pipeline::lead-pipeline.operations.ops_ranking') . ' ==='], ';');
-            fputcsv($handle, ['Berater', 'Ops-Score', 'SLA %', 'Ø Reaktion (min)', 'Kontaktversuche', 'Gewonnen'], ';');
-            foreach ($ranking as $row) {
+            fputcsv($handle, ['=== ' . __('lead-pipeline::lead-pipeline.operations.matrix_title') . ' ==='], ';');
+            fputcsv($handle, [
+                __('lead-pipeline::lead-pipeline.operations.matrix_advisor'),
+                __('lead-pipeline::lead-pipeline.operations.calls'),
+                __('lead-pipeline::lead-pipeline.operations.emails'),
+                __('lead-pipeline::lead-pipeline.operations.notes'),
+                __('lead-pipeline::lead-pipeline.operations.moves'),
+                __('lead-pipeline::lead-pipeline.operations.first_contacts'),
+                __('lead-pipeline::lead-pipeline.operations.assigned_new'),
+                __('lead-pipeline::lead-pipeline.operations.won'),
+                __('lead-pipeline::lead-pipeline.operations.lost'),
+                'Conversion %', 'Ø Reaktion (min)', 'SLA %',
+                __('lead-pipeline::lead-pipeline.operations.activities_per_lead'),
+                __('lead-pipeline::lead-pipeline.operations.score'),
+                __('lead-pipeline::lead-pipeline.operations.score_activity'),
+                __('lead-pipeline::lead-pipeline.operations.score_tempo'),
+                __('lead-pipeline::lead-pipeline.operations.score_result'),
+                __('lead-pipeline::lead-pipeline.operations.score_diligence'),
+            ], ';');
+            foreach ($matrix['rows'] as $row) {
                 fputcsv($handle, [
-                    $row['advisor_id'] ?? '—',
-                    number_format($row['ops_score'], 1, ',', '.'),
-                    number_format($row['sla_pct'], 1, ',', '.'),
+                    $row['advisor_name'], $row['calls'], $row['emails'], $row['notes'], $row['moves'],
+                    $row['first_contacts'], $row['assigned_new'], $row['won'], $row['lost'],
+                    number_format($row['conversion'], 1, ',', '.'),
                     null === $row['avg_response_minutes'] ? '' : number_format($row['avg_response_minutes'], 1, ',', '.'),
-                    $row['contact_attempts'],
-                    $row['won'],
+                    number_format($row['sla_pct'], 1, ',', '.'),
+                    null === $row['activities_per_lead'] ? '' : number_format($row['activities_per_lead'], 2, ',', '.'),
+                    number_format($row['scores']['total'], 1, ',', '.'),
+                    number_format($row['scores']['activity'], 1, ',', '.'),
+                    number_format($row['scores']['tempo'], 1, ',', '.'),
+                    number_format($row['scores']['result'], 1, ',', '.'),
+                    number_format($row['scores']['diligence'], 1, ',', '.'),
                 ], ';');
             }
             fputcsv($handle, [], ';');
@@ -71,64 +115,43 @@ class LeadOperationsExportController
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
-    protected function scopedLeads(?string $boardId, ?string $advisorId): Builder
+    /**
+     * Fail-closed tenant resolution for this out-of-panel route:
+     *  - If Filament already has a tenant (an actual in-panel request, or a test that
+     *    called Filament::setTenant() itself), trust it — it went through the panel's
+     *    own tenancy middleware already.
+     *  - Otherwise this is a bare `tenant=` query param straight off the export link
+     *    (see LeadOperations::getExportUrl()): resolve it via
+     *    config('lead-pipeline.tenancy.model') and require the authenticated user to
+     *    implement Filament's own HasTenants contract and pass canAccessTenant() —
+     *    the same check Filament's tenant middleware would have run.
+     *  - Anything that can't be resolved or verified aborts 403 before any leadership
+     *    check or lead scoping happens.
+     */
+    protected function resolveExportTenant(Request $request): Model
     {
-        $leads = Lead::query();
-        $user  = auth()->user();
-
-        if ($boardId) {
-            $board = LeadBoard::find($boardId);
-            if ($board && ! $board->isAccessibleByTenant(filament()->getTenant())) {
-                abort(403);
-            }
-
-            // Column names are qualified with the leads table: sourceEconomics()
-            // joins lead_sources, which has its own lead_board_uuid column — an
-            // unqualified where() here would become ambiguous once that join is
-            // applied. Mirrors LeadOperations::scopedLeads().
-            $leads->where('leads.' . Lead::fkColumn('lead_board'), $boardId);
-
-            if ($board && $user) {
-                $leads->visibleTo($user, $board);
-            }
-        } elseif (function_exists('filament')) {
-            $tenantId = filament()->getTenant()?->getKey();
-
-            if ($tenantId && $user) {
-                // Mirrors AnalyticsExportController::baseQuery(): without a selected
-                // board, a non-board-admin must not see leads across the whole
-                // tenant — only their own, across all tenant-visible boards.
-                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
-                    ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
-                    ->pluck(LeadBoard::pkColumn());
-
-                if ($adminBoardIds->isEmpty()) {
-                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
-                    $leads->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
-                        ->where('leads.assigned_to', $user->getKey());
-                } else {
-                    $leads->whereIn('leads.' . Lead::fkColumn('lead_board'), $adminBoardIds);
-                }
-            }
+        if ($tenant = filament()->getTenant()) {
+            return $tenant;
         }
 
-        if (filled($advisorId)) {
-            $leads->where('leads.assigned_to', $advisorId);
+        $user = auth()->user();
+        if ( ! $user instanceof HasTenants) {
+            abort(403);
         }
 
-        return $leads;
-    }
+        $tenantModelClass = config('lead-pipeline.tenancy.model');
+        $tenantKey        = $request->query('tenant');
 
-    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
-    private function range(string $preset): array
-    {
-        $now = CarbonImmutable::now();
+        if ( ! $tenantModelClass || ! filled($tenantKey)) {
+            abort(403);
+        }
 
-        return match ($preset) {
-            'today' => [$now->startOfDay(), $now],
-            '7'     => [$now->subDays(7), $now],
-            '90'    => [$now->subDays(90), $now],
-            default => [$now->subDays(30), $now],
-        };
+        $tenant = $tenantModelClass::query()->find($tenantKey);
+
+        if ( ! $tenant instanceof Model || ! $user->canAccessTenant($tenant)) {
+            abort(403);
+        }
+
+        return $tenant;
     }
 }
