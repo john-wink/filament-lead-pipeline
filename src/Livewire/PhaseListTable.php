@@ -138,6 +138,7 @@ class PhaseListTable extends Component implements HasForms, HasTable
                         $record->activities()->create([
                             'type'        => LeadActivityTypeEnum::Assignment->value,
                             'description' => __('lead-pipeline::lead-pipeline.actions.assigned_to_name', ['name' => $assigneeName]),
+                            'properties'  => ['assigned_to' => filled($data['assigned_to']) ? $data['assigned_to'] : null],
                             'causer_type' => config('lead-pipeline.user_model'),
                             'causer_id'   => auth()->id(),
                         ]);
@@ -193,6 +194,7 @@ class PhaseListTable extends Component implements HasForms, HasTable
                             $record->activities()->create([
                                 'type'        => LeadActivityTypeEnum::Assignment->value,
                                 'description' => __('lead-pipeline::lead-pipeline.actions.assigned_to_name', ['name' => $assigneeName]),
+                                'properties'  => ['assigned_to' => filled($data['assigned_to']) ? $data['assigned_to'] : null],
                                 'causer_type' => config('lead-pipeline.user_model'),
                                 'causer_id'   => auth()->id(),
                             ]);
