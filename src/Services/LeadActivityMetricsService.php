@@ -438,20 +438,31 @@ class LeadActivityMetricsService
      * Antwort im Fenster (`avg_response_minutes` ≠ null) — Nicht-Responder
      * verwässern den Team-SLA nicht.
      *
+     * Score v2 (`scores`, siehe `attachScores()`) und Deltas: `delta_score`/
+     * `delta_won` vergleichen mit dem gleich langen Vorfenster (nur wenn
+     * `$from` UND `$to` gesetzt sind — sonst `null`). Das Vorfenster wird
+     * selbst OHNE weitere Deltas berechnet (`withDeltas: false`), um die
+     * Rekursion auf eine Ebene zu begrenzen. Rows werden danach nach
+     * `scores.total` absteigend sortiert; `team.score_avg` ist der
+     * ungewichtete Durchschnitt der Row-Totals.
+     *
      * @return array{
      *   rows: list<array{
      *     advisor_id: string, advisor_name: string,
      *     calls: int, emails: int, notes: int, moves: int,
      *     first_contacts: int, assigned_new: int, won: int, lost: int,
      *     conversion: float, avg_response_minutes: ?float, sla_pct: float,
-     *     activities_per_lead: ?float
+     *     activities_per_lead: ?float,
+     *     scores: array{activity: float, tempo: float, result: float, diligence: float, total: float},
+     *     delta_score: ?float, delta_won: ?int
      *   }>,
      *   team: array{calls: int, emails: int, notes: int, moves: int, first_contacts: int,
      *     assigned_new: int, won: int, lost: int, conversion: float,
-     *     avg_response_minutes: ?float, sla_pct: float, activities_per_lead: ?float}
+     *     avg_response_minutes: ?float, sla_pct: float, activities_per_lead: ?float,
+     *     score_avg: float}
      * }
      */
-    public function advisorActivityMatrix(Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to): array
+    public function advisorActivityMatrix(Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to, bool $withDeltas = true): array
     {
         $leadFk  = Lead::fkColumn('lead');
         $leadIds = (clone $leads)->pluck('leads.' . Lead::pkColumn());
@@ -593,7 +604,112 @@ class LeadActivityMetricsService
             ];
         })->values()->all();
 
-        return ['rows' => $rows, 'team' => $this->teamAggregate($rows)];
+        $rows = $this->attachScores($rows, $leads);
+
+        if ($withDeltas && null !== $from && null !== $to) {
+            $spanSeconds = $to->getTimestamp() - $from->getTimestamp();
+            $previous    = $this->advisorActivityMatrix(
+                clone $leads,
+                $from->subSeconds($spanSeconds),
+                $from,
+                withDeltas: false,
+            );
+            $prevRows = collect($previous['rows'])->keyBy('advisor_id');
+
+            $rows = array_map(function (array $row) use ($prevRows): array {
+                $prev               = $prevRows->get($row['advisor_id']);
+                $row['delta_score'] = null === $prev ? null : round($row['scores']['total'] - $prev['scores']['total'], 1);
+                $row['delta_won']   = null === $prev ? null : $row['won'] - $prev['won'];
+
+                return $row;
+            }, $rows);
+        } else {
+            $rows = array_map(fn (array $row): array => $row + ['delta_score' => null, 'delta_won' => null], $rows);
+        }
+
+        usort($rows, fn (array $a, array $b): int => $b['scores']['total'] <=> $a['scores']['total']);
+
+        $team              = $this->teamAggregate($rows);
+        $team['score_avg'] = [] === $rows
+            ? 0.0
+            : round(array_sum(array_map(fn (array $r): float => $r['scores']['total'], $rows)) / count($rows), 1);
+
+        return ['rows' => $rows, 'team' => $team];
+    }
+
+    /**
+     * Score v2: vier erklärbare Teilscores (0–100) + gewichtete Summe.
+     *
+     * - `activity` = `min(100, apl / (2 × teamMedianApl) × 100)`; ist der
+     *   Team-Median ≤ 0, gilt `apl > 0 ? 100 : 0`. Der Median wird über alle
+     *   Rows mit nicht-null `activities_per_lead` gebildet.
+     * - `tempo` = `0.6 × sla_pct + 40 × responseScore`, mit
+     *   `responseScore = avg_response_minutes === null ? 0 : max(0, 1 − min(avg/1440, 1))`.
+     * - `result` = `0.6 × conversion + 0.4 × min(100, wonShare × 100)`, mit
+     *   `wonShare = teamWon > 0 ? won / teamWon : 0`.
+     * - `diligence` = `max(0, 100 − 50×overdueRatio − 30×untouchedRatio − 0.2×(100 − nextStepPct))`,
+     *   mit Ratios aus einem Snapshot von `operationsStats()`, gescoped auf
+     *   den Berater: `overdueRatio = overdue_followups / max(1, aktiveZugewiesene)`,
+     *   `untouchedRatio = untouched / max(1, aktiveZugewiesene)`,
+     *   `nextStepPct = next_step_rate`.
+     * - `total` = gewichtete Summe der vier Teilscores ÷ Gewichtssumme;
+     *   Gewichte aus `config('lead-pipeline.operations.score_weights')`.
+     *
+     * Alle Werte werden auf eine Nachkommastelle gerundet.
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function attachScores(array $rows, Builder $leads): array
+    {
+        $weights   = (array) config('lead-pipeline.operations.score_weights', ['activity' => 30, 'tempo' => 25, 'result' => 30, 'diligence' => 15]);
+        $weightSum = max(1, array_sum($weights));
+
+        $aplValues = array_values(array_filter(array_column($rows, 'activities_per_lead'), fn ($v): bool => null !== $v));
+        sort($aplValues);
+        $median  = [] === $aplValues ? 0.0 : (float) $aplValues[(int) floor((count($aplValues) - 1) / 2)];
+        $teamWon = (int) array_sum(array_column($rows, 'won'));
+
+        return array_map(function (array $row) use ($weights, $weightSum, $median, $teamWon, $leads): array {
+            $apl      = $row['activities_per_lead'];
+            $activity = null === $apl || $apl <= 0
+                ? 0.0
+                : ($median <= 0 ? 100.0 : min(100.0, round($apl / (2 * $median) * 100, 1)));
+
+            $responseScore = null === $row['avg_response_minutes']
+                ? 0.0
+                : max(0.0, 1 - min($row['avg_response_minutes'] / 1440, 1.0));
+            $tempo = round(0.6 * $row['sla_pct'] + 40 * $responseScore, 1);
+
+            $wonShare = $teamWon > 0 ? $row['won'] / $teamWon : 0.0;
+            $result   = round(0.6 * $row['conversion'] + 0.4 * min(100.0, $wonShare * 100), 1);
+
+            $ops            = $this->operationsStats((clone $leads)->where('leads.assigned_to', $row['advisor_id']));
+            $activeAssigned = max(1, (clone $leads)->where('leads.assigned_to', $row['advisor_id'])->where('status', LeadStatusEnum::Active)->count());
+            $diligence      = round(max(
+                0.0,
+                100
+                - 50 * ($ops['overdue_followups'] / $activeAssigned)
+                - 30 * ($ops['untouched'] / $activeAssigned)
+                - 0.2 * (100 - $ops['next_step_rate']),
+            ), 1);
+
+            $total = round(
+                ($activity * $weights['activity'] + $tempo * $weights['tempo']
+                    + $result * $weights['result'] + $diligence * $weights['diligence']) / $weightSum,
+                1,
+            );
+
+            $row['scores'] = [
+                'activity'  => $activity,
+                'tempo'     => $tempo,
+                'result'    => $result,
+                'diligence' => $diligence,
+                'total'     => $total,
+            ];
+
+            return $row;
+        }, $rows);
     }
 
     /** @param list<array<string, mixed>> $rows */
