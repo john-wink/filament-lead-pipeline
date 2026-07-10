@@ -180,24 +180,20 @@ class LeadOperations extends Page
 
         $board = $this->boardId ? LeadBoard::find($this->boardId) : null;
 
-        // Interim bis Task 4 die Service-Signaturen nullable macht.
-        $rangeFrom = $from ?? CarbonImmutable::parse('1970-01-01');
-        $rangeTo   = $to ?? CarbonImmutable::now();
-
         return [
             'boards' => (function_exists('filament') && filament()->getTenant())
                 ? LeadBoard::visibleToTenant(filament()->getTenant())->pluck('name', LeadBoard::pkColumn())->all()
                 : LeadBoard::query()->pluck('name', LeadBoard::pkColumn())->all(),
             'advisorOptions' => $this->advisorOptions(),
-            'response'       => $service->responseStats($leads(), $rangeFrom, $rangeTo),
+            'response'       => $service->responseStats($leads(), $from, $to),
             'operations'     => $service->operationsStats($leads()),
-            'stageDwell'     => $service->stageDwell($leads()),
-            'heatmap'        => $service->contactHeatmap($leads(), $rangeFrom, $rangeTo),
+            'stageDwell'     => $service->stageDwell($leads(), $from, $to),
+            'heatmap'        => $service->contactHeatmap($leads(), $from, $to),
             'velocity'       => $service->pipelineVelocity($leads()),
             'funnel'         => $board ? $service->funnel($board) : [],
-            'lossReasons'    => $service->lossReasons($leads()),
-            'sources'        => $service->sourceEconomics($leads()),
-            'ranking'        => $service->advisorOps($leads(), $rangeFrom, $rangeTo),
+            'lossReasons'    => $service->lossReasons($leads(), $from, $to),
+            'sources'        => $service->sourceEconomics($leads(), $from, $to),
+            'ranking'        => $service->advisorOps($leads(), $from, $to),
         ];
     }
 

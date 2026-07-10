@@ -77,6 +77,19 @@ it('treats a backdated first_response_at by magnitude, never as negative', funct
         ->and($stats['avg_minutes'])->toBe(90.0);
 });
 
+it('treats null response-stats bounds as unbounded', function (): void {
+    CarbonImmutable::setTestNow('2026-06-15 12:00:00');
+    Lead::factory()->create([
+        'created_at'        => CarbonImmutable::parse('2020-01-01'),
+        'first_response_at' => CarbonImmutable::parse('2020-01-01 00:30:00'),
+    ]);
+
+    $stats = app(LeadActivityMetricsService::class)->responseStats(scoped(), null, null);
+
+    expect($stats['total'])->toBe(1)
+        ->and($stats['buckets']['under_1h'])->toBe(1);
+});
+
 it('computes follow-up, untouched and contact-attempt stats (snapshot)', function (): void {
     $now = CarbonImmutable::parse('2026-03-15 12:00:00');
     CarbonImmutable::setTestNow($now);
@@ -116,6 +129,29 @@ it('aggregates loss reasons descending', function (): void {
         ->and(collect($reasons)->firstWhere('reason', null))->toBeNull(); // nulls excluded
 });
 
+it('windows loss reasons to leads moved into a lost phase within the range', function (): void {
+    CarbonImmutable::setTestNow('2026-06-15 12:00:00');
+    $board = LeadBoard::factory()->create();
+    $lost  = LeadPhase::factory()->for($board, 'board')->create(['type' => LeadPhaseTypeEnum::Lost]);
+
+    $inRange = Lead::factory()->for($board, 'board')->for($lost, 'phase')
+        ->create(['status' => LeadStatusEnum::Lost, 'lost_reason' => 'Preis']);
+    movedActivity($inRange, ['new_phase' => $lost->getKey()], CarbonImmutable::parse('2026-06-10'));
+
+    $outOfRange = Lead::factory()->for($board, 'board')->for($lost, 'phase')
+        ->create(['status' => LeadStatusEnum::Lost, 'lost_reason' => 'Kein Bedarf']);
+    movedActivity($outOfRange, ['new_phase' => $lost->getKey()], CarbonImmutable::parse('2026-01-10'));
+
+    $svc = app(LeadActivityMetricsService::class);
+
+    $windowed = $svc->lossReasons(scoped(), CarbonImmutable::parse('2026-06-01'), CarbonImmutable::parse('2026-06-30'));
+    expect(collect($windowed)->pluck('reason')->all())->toBe(['Preis']);
+
+    // Unbounded ('Gesamt') zählt beide.
+    expect(collect($svc->lossReasons(scoped()))->pluck('reason')->sort()->values()->all())
+        ->toBe(['Kein Bedarf', 'Preis']);
+});
+
 it('builds a funnel with drop-off per phase', function (): void {
     $board = LeadBoard::factory()->create();
     $p1    = LeadPhase::factory()->create([LeadPhase::fkColumn('lead_board') => $board->getKey(), 'sort' => 1, 'name' => 'Anfrage']);
@@ -148,6 +184,21 @@ it('computes average dwell time per phase from moved activities', function (): v
     $byPhase = collect($dwell)->keyBy('phase_id');
 
     expect($byPhase['phase-a']['avg_days'])->toBe(4.0); // 10d ago → 6d ago
+});
+
+it('windows stage dwell to moves inside the range', function (): void {
+    $board  = LeadBoard::factory()->create();
+    $phaseA = LeadPhase::factory()->for($board, 'board')->create(['name' => 'Alt']);
+    $phaseB = LeadPhase::factory()->for($board, 'board')->create(['name' => 'Neu']);
+    $lead   = Lead::factory()->for($board, 'board')->for($phaseB, 'phase')->create();
+
+    movedActivity($lead, ['new_phase' => $phaseA->getKey()], CarbonImmutable::parse('2026-01-01'));
+    movedActivity($lead, ['new_phase' => $phaseB->getKey()], CarbonImmutable::parse('2026-01-05'));
+
+    $windowed = app(LeadActivityMetricsService::class)
+        ->stageDwell(scoped(), CarbonImmutable::parse('2026-06-01'), CarbonImmutable::parse('2026-06-30'));
+
+    expect($windowed)->toBe([]);
 });
 
 it('builds a 6x6 contact-time heatmap', function (): void {

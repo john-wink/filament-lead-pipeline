@@ -8,6 +8,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
@@ -24,11 +25,12 @@ class LeadActivityMetricsService
      *     sla_pct: float
      * }
      */
-    public function responseStats(Builder $leads, CarbonImmutable $from, CarbonImmutable $to, ?int $slaMinutes = null): array
+    public function responseStats(Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to, ?int $slaMinutes = null): array
     {
         $slaMinutes ??= (int) config('lead-pipeline.operations.sla_minutes', 60);
         $rows = (clone $leads)
-            ->whereBetween('created_at', [$from, $to])
+            ->when($from, fn (Builder $q): Builder => $q->where('leads.created_at', '>=', $from))
+            ->when($to, fn (Builder $q): Builder => $q->where('leads.created_at', '<=', $to))
             ->get(['created_at', 'first_response_at']);
 
         $total     = $rows->count();
@@ -114,13 +116,15 @@ class LeadActivityMetricsService
      *
      * @return list<array{phase_id: string, label: string, avg_days: float, overaged_pct: float}>
      */
-    public function stageDwell(Builder $leads): array
+    public function stageDwell(Builder $leads, ?CarbonImmutable $from = null, ?CarbonImmutable $to = null): array
     {
         $leadIds = (clone $leads)->pluck(Lead::pkColumn());
 
         $moves = LeadActivity::query()
             ->whereIn(Lead::fkColumn('lead'), $leadIds)
             ->where('type', LeadActivityTypeEnum::Moved->value)
+            ->when($from, fn (Builder $q): Builder => $q->where('created_at', '>=', $from))
+            ->when($to, fn (Builder $q): Builder => $q->where('created_at', '<=', $to))
             ->orderBy(Lead::fkColumn('lead'))
             ->orderBy('created_at')
             ->get([Lead::fkColumn('lead'), 'properties', 'created_at']);
@@ -196,15 +200,29 @@ class LeadActivityMetricsService
 
     /**
      * Verlustgründe gruppiert nach Häufigkeit, absteigend. Leere/fehlende Gründe
-     * werden ausgeschlossen, da sie keine auswertbare Information liefern.
+     * werden ausgeschlossen, da sie keine auswertbare Information liefern. Bei
+     * gesetzten Bounds werden nur Leads berücksichtigt, die IM Fenster per
+     * Moved-Activity in eine Lost-Typ-Phase geschoben wurden.
      *
      * @return list<array{reason: string, count: int}>
      */
-    public function lossReasons(Builder $leads): array
+    public function lossReasons(Builder $leads, ?CarbonImmutable $from = null, ?CarbonImmutable $to = null): array
     {
-        return (clone $leads)
+        $query = (clone $leads)
             ->whereNotNull('lost_reason')
-            ->where('lost_reason', '!=', '')
+            ->where('lost_reason', '!=', '');
+
+        if (null !== $from || null !== $to) {
+            $lostPhaseIds = $this->phaseIdsOfType($leads, LeadPhaseTypeEnum::Lost);
+            $query->whereHas('activities', function (Builder $q) use ($lostPhaseIds, $from, $to): void {
+                $q->where('type', LeadActivityTypeEnum::Moved->value)
+                    ->whereIn('properties->new_phase', $lostPhaseIds)
+                    ->when($from, fn (Builder $qq): Builder => $qq->where('created_at', '>=', $from))
+                    ->when($to, fn (Builder $qq): Builder => $qq->where('created_at', '<=', $to));
+            });
+        }
+
+        return $query
             ->selectRaw('lost_reason, COUNT(*) as cnt')
             ->groupBy('lost_reason')
             ->orderByDesc('cnt')
@@ -219,7 +237,7 @@ class LeadActivityMetricsService
      *
      * @return array{slots: list<string>, days: list<string>, matrix: list<list<int>>}
      */
-    public function contactHeatmap(Builder $leads, CarbonImmutable $from, CarbonImmutable $to): array
+    public function contactHeatmap(Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to): array
     {
         $slots  = ['8–10', '10–12', '12–14', '14–16', '16–18', '18–20'];
         $days   = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
@@ -229,7 +247,8 @@ class LeadActivityMetricsService
         $activities = LeadActivity::query()
             ->whereIn(Lead::fkColumn('lead'), $leadIds)
             ->whereIn('type', [LeadActivityTypeEnum::Call->value, LeadActivityTypeEnum::Email->value])
-            ->whereBetween('created_at', [$from, $to])
+            ->when($from, fn (Builder $q): Builder => $q->where('created_at', '>=', $from))
+            ->when($to, fn (Builder $q): Builder => $q->where('created_at', '<=', $to))
             ->get(['created_at']);
 
         foreach ($activities as $activity) {
@@ -347,7 +366,7 @@ class LeadActivityMetricsService
      *     contact_attempts: int, won: int, ops_score: float
      * }>
      */
-    public function advisorOps(Builder $leads, CarbonImmutable $from, CarbonImmutable $to, ?int $slaMinutes = null): array
+    public function advisorOps(Builder $leads, ?CarbonImmutable $from, ?CarbonImmutable $to, ?int $slaMinutes = null): array
     {
         $slaMinutes ??= (int) config('lead-pipeline.operations.sla_minutes', 60);
         $advisorIds = (clone $leads)->whereNotNull('assigned_to')->distinct()->pluck('assigned_to');
@@ -389,6 +408,22 @@ class LeadActivityMetricsService
         usort($rows, fn (array $a, array $b): int => $b['ops_score'] <=> $a['ops_score']);
 
         return $rows;
+    }
+
+    /** @return list<int|string> Phase-PKs des Typs auf den Boards der gescopten Leads */
+    private function phaseIdsOfType(Builder $leads, LeadPhaseTypeEnum $type): array
+    {
+        $boardIds = (clone $leads)
+            ->reorder()
+            ->select('leads.' . Lead::fkColumn('lead_board'))
+            ->distinct()
+            ->pluck(Lead::fkColumn('lead_board'));
+
+        return LeadPhase::query()
+            ->whereIn(Lead::fkColumn('lead_board'), $boardIds)
+            ->where('type', $type->value)
+            ->pluck(LeadPhase::pkColumn())
+            ->all();
     }
 
     /**

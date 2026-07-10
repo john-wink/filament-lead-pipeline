@@ -18,12 +18,12 @@ class LeadOperationsExportController
     {
         $boardId     = $request->query('boardId');
         $advisorId   = $request->query('advisorId');
-        [$from, $to] = $this->range((string) $request->query('preset', '30'));
+        [$from, $to] = $this->range($request);
 
         $leads = $this->scopedLeads($boardId, $advisorId);
 
         $ranking = $service->advisorOps((clone $leads), $from, $to);
-        $sources = $service->sourceEconomics((clone $leads));
+        $sources = $service->sourceEconomics((clone $leads), $from, $to);
 
         $filename = 'lead-ops-' . now()->format('Y-m-d') . '.csv';
 
@@ -119,15 +119,26 @@ class LeadOperationsExportController
         return $leads;
     }
 
-    /** @return array{0: CarbonImmutable, 1: CarbonImmutable} */
-    private function range(string $preset): array
+    /** @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable} */
+    private function range(Request $request): array
     {
+        $dateFrom = $request->query('dateFrom');
+        $dateTo   = $request->query('dateTo');
+
+        if (filled($dateFrom) || filled($dateTo)) {
+            return [
+                filled($dateFrom) ? CarbonImmutable::parse((string) $dateFrom)->startOfDay() : null,
+                filled($dateTo) ? CarbonImmutable::parse((string) $dateTo)->endOfDay() : null,
+            ];
+        }
+
         $now = CarbonImmutable::now();
 
-        return match ($preset) {
+        return match ((string) $request->query('preset', '30')) {
             'today' => [$now->startOfDay(), $now],
             '7'     => [$now->subDays(7), $now],
             '90'    => [$now->subDays(90), $now],
+            'all'   => [null, null],
             default => [$now->subDays(30), $now],
         };
     }
