@@ -7,12 +7,14 @@ namespace JohnWink\FilamentLeadPipeline\Filament\Pages;
 use Carbon\CarbonImmutable;
 use Filament\Pages\Page;
 use Illuminate\Database\Eloquent\Builder;
-use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Concerns\ScopesOperationsLeads;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
 
 class LeadOperations extends Page
 {
+    use ScopesOperationsLeads;
+
     public ?string $boardId = null;
 
     public string $preset = '30';
@@ -97,78 +99,15 @@ class LeadOperations extends Page
         ]));
     }
 
-    /**
-     * Custom-Datum hat Vorrang vor dem Preset (Muster LeadAnalyticsModal::getDateRange()).
-     * 'all' und unbelegte Custom-Grenzen liefern null — Metriken filtern dann nicht.
-     *
-     * @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable}
-     */
+    /** @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable} */
     protected function range(): array
     {
-        if (null !== $this->dateFrom || null !== $this->dateTo) {
-            return [
-                $this->dateFrom ? CarbonImmutable::parse($this->dateFrom)->startOfDay() : null,
-                $this->dateTo ? CarbonImmutable::parse($this->dateTo)->endOfDay() : null,
-            ];
-        }
-
-        $now = CarbonImmutable::now();
-
-        return match ($this->preset) {
-            'today' => [$now->startOfDay(), $now],
-            '7'     => [$now->subDays(7), $now],
-            '90'    => [$now->subDays(90), $now],
-            'all'   => [null, null],
-            default => [$now->subDays(30), $now],
-        };
+        return $this->operationsRange($this->dateFrom, $this->dateTo, $this->preset);
     }
 
     protected function scopedLeads(): Builder
     {
-        $query = Lead::query();
-        $user  = auth()->user();
-
-        if ($this->boardId) {
-            $board = LeadBoard::find($this->boardId);
-            if ($board && ! $board->isAccessibleByTenant(filament()->getTenant())) {
-                abort(403);
-            }
-
-            // Column names are qualified with the leads table: some service methods
-            // (e.g. sourceEconomics) join lead_sources, which has its own
-            // lead_board_uuid column — an unqualified where() here would become
-            // ambiguous once that join is applied.
-            $query->where('leads.' . Lead::fkColumn('lead_board'), $this->boardId);
-
-            if ($board && $user) {
-                $query->visibleTo($user, $board);
-            }
-        } elseif (function_exists('filament')) {
-            $tenantId = filament()->getTenant()?->getKey();
-
-            if ($tenantId && $user) {
-                // Mirrors AnalyticsExportController::baseQuery(): without a selected
-                // board, a non-board-admin must not see leads across the whole
-                // tenant — only their own, across all tenant-visible boards.
-                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
-                    ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
-                    ->pluck(LeadBoard::pkColumn());
-
-                if ($adminBoardIds->isEmpty()) {
-                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
-                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
-                        ->where('leads.assigned_to', $user->getKey());
-                } else {
-                    $query->whereIn('leads.' . Lead::fkColumn('lead_board'), $adminBoardIds);
-                }
-            }
-        }
-
-        if (null !== $this->advisorId) {
-            $query->where('leads.assigned_to', $this->advisorId);
-        }
-
-        return $query;
+        return $this->scopedOperationsLeads($this->boardId, $this->advisorId);
     }
 
     /** @return array<string, mixed> */
@@ -202,19 +141,12 @@ class LeadOperations extends Page
     {
         // Options must ignore the current advisor selection, otherwise the
         // select collapses to the selected advisor and blocks switching A→B.
-        $previous        = $this->advisorId;
-        $this->advisorId = null;
-
-        try {
-            $ids = (clone $this->scopedLeads())
-                ->whereNotNull('leads.assigned_to')
-                ->reorder()
-                ->select('leads.assigned_to')
-                ->distinct()
-                ->pluck('assigned_to');
-        } finally {
-            $this->advisorId = $previous;
-        }
+        $ids = $this->scopedOperationsLeads($this->boardId, null)
+            ->whereNotNull('leads.assigned_to')
+            ->reorder()
+            ->select('leads.assigned_to')
+            ->distinct()
+            ->pluck('assigned_to');
 
         $userModel = config('lead-pipeline.user_model');
 

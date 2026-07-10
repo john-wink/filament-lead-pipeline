@@ -57,4 +57,6 @@
     </div>
 
     @include('lead-pipeline::filament.pages.lead-operations-detail')
+
+    @livewire('lead-pipeline::advisor-scorecard-panel', ['boardId' => $boardId, 'dateFrom' => $dateFrom, 'dateTo' => $dateTo, 'preset' => $preset], key('advisor-panel'))
 </x-filament-panels::page>

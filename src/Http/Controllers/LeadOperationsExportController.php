@@ -4,23 +4,26 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Http\Controllers;
 
-use Carbon\CarbonImmutable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
-use JohnWink\FilamentLeadPipeline\Models\Lead;
-use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
+use JohnWink\FilamentLeadPipeline\Concerns\ScopesOperationsLeads;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeadOperationsExportController
 {
+    use ScopesOperationsLeads;
+
     public function __invoke(Request $request, LeadActivityMetricsService $service): StreamedResponse
     {
         $boardId     = $request->query('boardId');
         $advisorId   = $request->query('advisorId');
-        [$from, $to] = $this->range($request);
+        [$from, $to] = $this->operationsRange(
+            $request->query('dateFrom'),
+            $request->query('dateTo'),
+            (string) $request->query('preset', '30'),
+        );
 
-        $leads = $this->scopedLeads($boardId, $advisorId);
+        $leads = $this->scopedOperationsLeads($boardId, $advisorId);
 
         $ranking = $service->advisorOps((clone $leads), $from, $to);
         $sources = $service->sourceEconomics((clone $leads), $from, $to);
@@ -69,77 +72,5 @@ class LeadOperationsExportController
 
             fclose($handle);
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
-    }
-
-    protected function scopedLeads(?string $boardId, ?string $advisorId): Builder
-    {
-        $leads = Lead::query();
-        $user  = auth()->user();
-
-        if ($boardId) {
-            $board = LeadBoard::find($boardId);
-            if ($board && ! $board->isAccessibleByTenant(filament()->getTenant())) {
-                abort(403);
-            }
-
-            // Column names are qualified with the leads table: sourceEconomics()
-            // joins lead_sources, which has its own lead_board_uuid column — an
-            // unqualified where() here would become ambiguous once that join is
-            // applied. Mirrors LeadOperations::scopedLeads().
-            $leads->where('leads.' . Lead::fkColumn('lead_board'), $boardId);
-
-            if ($board && $user) {
-                $leads->visibleTo($user, $board);
-            }
-        } elseif (function_exists('filament')) {
-            $tenantId = filament()->getTenant()?->getKey();
-
-            if ($tenantId && $user) {
-                // Mirrors AnalyticsExportController::baseQuery(): without a selected
-                // board, a non-board-admin must not see leads across the whole
-                // tenant — only their own, across all tenant-visible boards.
-                $adminBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())
-                    ->whereHas('admins', fn ($q) => $q->where('lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'), $user->getKey()))
-                    ->pluck(LeadBoard::pkColumn());
-
-                if ($adminBoardIds->isEmpty()) {
-                    $allBoardIds = LeadBoard::visibleToTenant(filament()->getTenant())->pluck(LeadBoard::pkColumn());
-                    $leads->whereIn('leads.' . Lead::fkColumn('lead_board'), $allBoardIds)
-                        ->where('leads.assigned_to', $user->getKey());
-                } else {
-                    $leads->whereIn('leads.' . Lead::fkColumn('lead_board'), $adminBoardIds);
-                }
-            }
-        }
-
-        if (filled($advisorId)) {
-            $leads->where('leads.assigned_to', $advisorId);
-        }
-
-        return $leads;
-    }
-
-    /** @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable} */
-    private function range(Request $request): array
-    {
-        $dateFrom = $request->query('dateFrom');
-        $dateTo   = $request->query('dateTo');
-
-        if (filled($dateFrom) || filled($dateTo)) {
-            return [
-                filled($dateFrom) ? CarbonImmutable::parse((string) $dateFrom)->startOfDay() : null,
-                filled($dateTo) ? CarbonImmutable::parse((string) $dateTo)->endOfDay() : null,
-            ];
-        }
-
-        $now = CarbonImmutable::now();
-
-        return match ((string) $request->query('preset', '30')) {
-            'today' => [$now->startOfDay(), $now],
-            '7'     => [$now->subDays(7), $now],
-            '90'    => [$now->subDays(90), $now],
-            'all'   => [null, null],
-            default => [$now->subDays(30), $now],
-        };
     }
 }

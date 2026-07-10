@@ -186,5 +186,6 @@ class FilamentLeadPipelineServiceProvider extends PackageServiceProvider
         Livewire::component('lead-pipeline::funnel-builder', \JohnWink\FilamentLeadPipeline\Livewire\FunnelBuilder::class);
         Livewire::component('lead-pipeline::phase-list-table', \JohnWink\FilamentLeadPipeline\Livewire\PhaseListTable::class);
         Livewire::component('lead-pipeline::lead-analytics-modal', \JohnWink\FilamentLeadPipeline\Livewire\LeadAnalyticsModal::class);
+        Livewire::component('lead-pipeline::advisor-scorecard-panel', \JohnWink\FilamentLeadPipeline\Livewire\AdvisorScorecardPanel::class);
     }
 }
