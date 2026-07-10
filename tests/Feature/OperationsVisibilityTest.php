@@ -9,6 +9,7 @@ use JohnWink\FilamentLeadPipeline\Livewire\AdvisorScorecardPanel;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
+use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 
 use function Pest\Livewire\livewire;
@@ -52,6 +53,61 @@ it('rejects a foreign advisor id on the scorecard panel for non-leadership', fun
     Livewire::test(AdvisorScorecardPanel::class, ['preset' => 'all'])
         ->dispatch('open-advisor-scorecard', advisorId: (string) $colleague->id)
         ->assertForbidden();
+});
+
+it('allows a non-leadership advisor to open their own scorecard', function (): void {
+    $advisor = User::factory()->create(['first_name' => 'Eigen', 'last_name' => 'Zugriff']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id]);
+
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]); // advisor ist KEIN Board-Admin
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create();
+    Lead::factory()->for($board, 'board')->for($phase, 'phase')->create(['assigned_to' => $advisor->id]);
+
+    $this->actingAs($advisor);
+    filament()->setTenant($this->team);
+
+    Livewire::test(AdvisorScorecardPanel::class, ['preset' => 'all'])
+        ->dispatch('open-advisor-scorecard', advisorId: (string) $advisor->id)
+        ->assertSet('isOpen', true)
+        ->assertSee('Eigen Zugriff');
+});
+
+it('rejects a forged client-side advisorId update on the scorecard panel', function (): void {
+    $advisor   = User::factory()->create(['first_name' => 'Avi', 'last_name' => 'Sor']);
+    $colleague = User::factory()->create(['first_name' => 'Fremd', 'last_name' => 'Kollege']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id, $colleague->id]);
+    LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);
+
+    $this->actingAs($advisor);
+    filament()->setTenant($this->team);
+
+    // Simuliert ein geforgtes Property-Update-Commit, das open() komplett
+    // umgeht — #[Locked] muss das Client-Update hart ablehnen.
+    Livewire::test(AdvisorScorecardPanel::class, ['preset' => 'all'])
+        ->set('advisorId', (string) $colleague->id);
+})->throws(CannotUpdateLockedPropertyException::class);
+
+it('self-heals a foreign advisorId that reached render without a client update', function (): void {
+    $advisor   = User::factory()->create(['first_name' => 'Avi', 'last_name' => 'Sor']);
+    $colleague = User::factory()->create(['first_name' => 'Fremd', 'last_name' => 'Kollege']);
+    $this->team->users()->syncWithoutDetaching([$advisor->id, $colleague->id]);
+
+    $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]); // advisor ist KEIN Board-Admin
+    $phase = LeadPhase::factory()->for($board, 'board')->open()->create();
+    Lead::factory()->for($board, 'board')->for($phase, 'phase')->create(['assigned_to' => $colleague->id]);
+
+    $this->actingAs($advisor);
+    filament()->setTenant($this->team);
+
+    // Mount-Zuweisungen sind serverseitig (#[Locked] blockt nur Client-Updates)
+    // — der Self-Scope in render() muss die fremde Id trotzdem auf self zurücksetzen.
+    Livewire::test(AdvisorScorecardPanel::class, [
+        'preset'    => 'all',
+        'advisorId' => (string) $colleague->id,
+        'isOpen'    => true,
+    ])
+        ->assertSet('advisorId', (string) $advisor->id)
+        ->assertDontSee('Fremd Kollege');
 });
 
 it('keeps leadership unrestricted', function (): void {

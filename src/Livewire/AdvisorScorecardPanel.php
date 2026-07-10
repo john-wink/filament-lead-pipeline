@@ -7,6 +7,7 @@ namespace JohnWink\FilamentLeadPipeline\Livewire;
 use Illuminate\View\View;
 use JohnWink\FilamentLeadPipeline\Concerns\ScopesOperationsLeads;
 use JohnWink\FilamentLeadPipeline\Services\LeadActivityMetricsService;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -14,8 +15,11 @@ class AdvisorScorecardPanel extends Component
 {
     use ScopesOperationsLeads;
 
+    /** Nur serverseitig via open()/close() mutiert — nie per wire:model. #[Locked] lehnt geforgte Client-Updates ab. */
+    #[Locked]
     public bool $isOpen = false;
 
+    #[Locked]
     public ?string $advisorId = null;
 
     public ?string $boardId = null;
@@ -53,6 +57,15 @@ class AdvisorScorecardPanel extends Component
 
     public function render(): View
     {
+        // Defense-in-depth zusätzlich zu #[Locked] und dem open()-Guard: erreicht
+        // eine fremde advisorId render() trotzdem (z. B. via serverseitiger
+        // Mount-Zuweisung), wird sie auf self zurückgesetzt statt zu werfen —
+        // render() darf nie abbrechen müssen; Self-Heal wie im Page-Muster
+        // (LeadOperations::getViewData()).
+        if (null !== $this->advisorId && ! $this->isOperationsLeadership($this->boardId) && $this->advisorId !== (string) auth()->id()) {
+            $this->advisorId = (string) auth()->id();
+        }
+
         $card     = null;
         $protocol = ['days' => [], 'total' => 0, 'has_more' => false];
 

@@ -126,12 +126,14 @@ class LeadOperations extends Page
 
         $matrix = $service->advisorActivityMatrix($leads(), $from, $to);
         if ( ! $isLeadership) {
-            // Zusätzlicher Gurt für den Board-Zweig: scopedOperationsLeads() schränkt
-            // Nicht-Admins im NO-BOARD-Zweig bereits auf eigene Leads ein, aber
-            // Lead::scopeVisibleTo() (Board-Zweig) gibt bei geteilten Boards
-            // (isSharedWith($tenant)) ALLE Leads frei, unabhängig vom Assignee.
-            // Ohne diesen Filter würde die Matrix bei einem solchen Board fremde
-            // Berater-Zeilen zeigen, obwohl advisorId serverseitig erzwungen ist.
+            // Zusätzlicher Gurt trotz serverseitig erzwungener advisorId: der
+            // eigentliche Leak-Vektor ist, dass advisorActivityMatrix() die
+            // Aktivitäts-Zählungen nach causer_id gruppiert — ein Kollege, der
+            // auf einem MEINER Leads eine Notiz/einen Anruf loggt, erschiene
+            // sonst als eigene fremde Zeile. (Sekundär deckt der Filter auch den
+            // Board-Zweig ab, in dem Lead::scopeVisibleTo() bei mit dem Tenant
+            // geteilten Boards alle Leads unabhängig vom Assignee freigibt.)
+            // Nur die eigene Zeile bleibt; das Team-Aggregat bleibt als Vergleich.
             $matrix['rows'] = array_values(array_filter(
                 $matrix['rows'],
                 fn (array $row): bool => $row['advisor_id'] === (string) auth()->id(),

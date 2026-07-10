@@ -75,7 +75,7 @@ trait ScopesOperationsLeads
         }
 
         $adminBoards = LeadBoard::visibleToTenant(filament()->getTenant())
-            ->when($boardId, fn ($q) => $q->where(LeadBoard::pkColumn(), $boardId))
+            ->when(null !== $boardId, fn ($q) => $q->where(LeadBoard::pkColumn(), $boardId))
             ->whereHas('admins', fn ($q) => $q->where(
                 'lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'),
                 $user->getKey(),

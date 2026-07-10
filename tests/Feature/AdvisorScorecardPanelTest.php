@@ -44,6 +44,7 @@ it('closes and resets', function (): void {
     // by the Task 12 guard — this test only verifies close()/reset behaviour.
     Livewire::test(AdvisorScorecardPanel::class, ['preset' => 'all'])
         ->dispatch('open-advisor-scorecard', advisorId: (string) $this->user->id)
+        ->assertSet('isOpen', true)
         ->call('close')
         ->assertSet('isOpen', false);
 });
