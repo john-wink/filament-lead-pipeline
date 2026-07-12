@@ -42,6 +42,10 @@ class FakeIntegration implements LeadIntegrationContract
 
     public function settingsComponent(): string
     {
+        if (config('lead-pipeline.testing.fake_integration_settings_component_throws', false)) {
+            throw new RuntimeException('Fake-Integration-Settings-Component-Aufloesung fehlgeschlagen');
+        }
+
         return FakeIntegrationSettings::class;
     }
 

@@ -379,17 +379,23 @@ class FilamentLeadPipelinePlugin implements Plugin
 
     public function register(Panel $panel): void
     {
+        $pages = [
+            Filament\Pages\KanbanBoard::class,
+            Filament\Pages\SourceManagement::class,
+            Filament\Pages\WebhookLogs::class,
+            Filament\Pages\LeadOperations::class,
+        ];
+
+        if ([] !== $this->integrations) {
+            $pages[] = Filament\Pages\IntegrationsPage::class;
+        }
+
         $panel
             ->resources([
                 Filament\Resources\LeadBoardResource::class,
                 Filament\Resources\LeadReportResource::class,
             ])
-            ->pages([
-                Filament\Pages\KanbanBoard::class,
-                Filament\Pages\SourceManagement::class,
-                Filament\Pages\WebhookLogs::class,
-                Filament\Pages\LeadOperations::class,
-            ])
+            ->pages($pages)
             ->widgets([
                 Filament\Widgets\LeadStatsWidget::class,
             ]);
