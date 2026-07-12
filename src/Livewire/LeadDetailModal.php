@@ -8,6 +8,8 @@ use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use JohnWink\FilamentLeadPipeline\Contracts\LeadIntegrationContract;
+use JohnWink\FilamentLeadPipeline\DTOs\IntegrationActionData;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
@@ -56,6 +58,9 @@ class LeadDetailModal extends Component
 
     /** Request-Cache der Board-Phasen — das Blade fragt sie mehrfach ab. */
     private ?Collection $boardPhasesCache = null;
+
+    /** Request-Cache der aktivierten Integrationen inkl. Modal-Actions — das Blade fragt sie mehrfach ab. */
+    private ?array $integrationModalActionsCache = null;
 
     #[On('open-lead-detail')]
     public function openModal(string $leadId): void
@@ -501,6 +506,98 @@ class LeadDetailModal extends Component
         } catch (Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Für den aktuellen Tenant aktivierte Integrationen mit ihren Modal-Actions
+     * für den aktuellen Lead, keyed nach key(). Pro Integration ISOLIERT per
+     * try/catch berechnet (isActivatedFor() UND leadModalActions()) — ein
+     * Throw in einer Integration überspringt nur diese Integration statt das
+     * ganze Modal crashen zu lassen. Nur Integrationen mit nicht-leerer
+     * Action-Liste sind enthalten. Ohne Tenant, Lead oder Panel-Kontext
+     * bewusst leer (fail-closed).
+     *
+     * @return array<string, array{integration: LeadIntegrationContract, actions: list<IntegrationActionData>}>
+     */
+    public function integrationModalActions(): array
+    {
+        if (null !== $this->integrationModalActionsCache) {
+            return $this->integrationModalActionsCache;
+        }
+
+        $result = [];
+        $tenant = filament()->getTenant();
+
+        if (null !== $this->lead && null !== $tenant) {
+            try {
+                $integrations = FilamentLeadPipelinePlugin::get()->getIntegrations();
+            } catch (Throwable) {
+                $integrations = [];
+            }
+
+            foreach ($integrations as $key => $integration) {
+                try {
+                    if ( ! $integration->isActivatedFor($tenant)) {
+                        continue;
+                    }
+
+                    $actions = $integration->leadModalActions($this->lead);
+                } catch (Throwable) {
+                    continue;
+                }
+
+                if ([] === $actions) {
+                    continue;
+                }
+
+                $result[$key] = ['integration' => $integration, 'actions' => $actions];
+            }
+        }
+
+        return $this->integrationModalActionsCache = $result;
+    }
+
+    public function runIntegrationAction(string $integrationKey, string $actionKey): void
+    {
+        if ( ! $this->lead) {
+            return;
+        }
+
+        $this->authorizeAccess();
+
+        $entry = $this->integrationModalActions()[$integrationKey] ?? null;
+
+        $offeredActionKeys = null !== $entry
+            ? array_map(static fn (IntegrationActionData $action): string => $action->key, $entry['actions'])
+            : [];
+
+        if (null === $entry || ! in_array($actionKey, $offeredActionKeys, true)) {
+            \Filament\Notifications\Notification::make()
+                ->title(__('lead-pipeline::lead-pipeline.integrations.action_failed'))
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        try {
+            $entry['integration']->handleLeadAction($actionKey, $this->lead);
+        } catch (Throwable $exception) {
+            \Filament\Notifications\Notification::make()
+                ->title(__('lead-pipeline::lead-pipeline.integrations.action_failed'))
+                ->body($exception->getMessage())
+                ->danger()
+                ->send();
+
+            return;
+        }
+
+        $this->reloadActivities();
+
+        \Filament\Notifications\Notification::make()
+            ->title(__('lead-pipeline::lead-pipeline.integrations.action_success'))
+            ->success()
+            ->send();
     }
 
     public function changePhase(string $phaseId): void

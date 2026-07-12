@@ -33,6 +33,10 @@ class FakeIntegration implements LeadIntegrationContract
 
     public function isActivatedFor(Model $tenant): bool
     {
+        if (config('lead-pipeline.testing.fake_integration_activation_throws', false)) {
+            throw new RuntimeException('Fake-Integration-Aktivierungspruefung fehlgeschlagen');
+        }
+
         return (bool) config('lead-pipeline.testing.fake_integration_active', false);
     }
 
@@ -50,6 +54,14 @@ class FakeIntegration implements LeadIntegrationContract
     /** @return array<int, IntegrationActionData> */
     public function leadModalActions(Lead $lead): array
     {
+        if (config('lead-pipeline.testing.fake_integration_actions_throws', false)) {
+            throw new RuntimeException('Fake-Integration-Actions-Berechnung fehlgeschlagen');
+        }
+
+        if (config('lead-pipeline.testing.fake_integration_no_actions', false)) {
+            return [];
+        }
+
         $requiresConfirmation = (bool) config('lead-pipeline.testing.fake_integration_confirm', false);
 
         return [

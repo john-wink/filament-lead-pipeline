@@ -362,6 +362,25 @@
                     @endif
                 </div>
 
+                {{-- Integration Actions --}}
+                @if($this->integrationModalActions() !== [])
+                    <div class="flex flex-wrap gap-2">
+                        @foreach($this->integrationModalActions() as $integrationEntry)
+                            @foreach($integrationEntry['actions'] as $integrationAction)
+                                <button
+                                    wire:click="runIntegrationAction('{{ $integrationEntry['integration']->key() }}', '{{ $integrationAction->key }}')"
+                                    @if($integrationAction->requiresConfirmation)
+                                        wire:confirm="{{ $integrationAction->confirmText ?? __('lead-pipeline::lead-pipeline.integrations.confirm_action') }}"
+                                    @endif
+                                    class="{{ $integrationAction->buttonClasses() }}">
+                                    <x-dynamic-component :component="$integrationAction->icon" class="h-4 w-4" />
+                                    {{ $integrationAction->label }}
+                                </button>
+                            @endforeach
+                        @endforeach
+                    </div>
+                @endif
+
                 @if($lead->board?->transferEnabled() && ! $lead->isTransferred())
                     <div class="flex gap-2">
                         <button wire:click="openTransferForm"
