@@ -79,6 +79,10 @@ class FakeIntegration implements LeadIntegrationContract
 
     public function renderActivity(LeadActivity $activity): ?View
     {
+        if (config('lead-pipeline.testing.fake_integration_render_throws', false)) {
+            throw new RuntimeException('Fake render failure');
+        }
+
         if ( ! config('lead-pipeline.testing.fake_integration_renders', true)) {
             return null;
         }

@@ -563,7 +563,7 @@
                                             'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Moved,
                                             'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Updated,
                                             'bg-yellow-100 text-yellow-600 dark:bg-yellow-900 dark:text-yellow-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Converted,
-                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Note,
+                                            'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400' => in_array($activity->type, [\JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Note, \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Integration], true),
                                             'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Call,
                                             'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Email,
                                             'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400' => $activity->type === \JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum::Assignment,
@@ -575,6 +575,15 @@
                                             <div class="mt-1 h-full w-px bg-gray-200 dark:bg-gray-700"></div>
                                         @endif
                                     </div>
+                                    @if($integrationActivityView = $this->integrationActivityView($activity))
+                                        <div class="flex-1 pb-3">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ $activity->type->getLabel() }}</span>
+                                                <span class="text-xs text-gray-400 dark:text-gray-500">{{ $activity->created_at->diffForHumans() }}</span>
+                                            </div>
+                                            {{ $integrationActivityView }}
+                                        </div>
+                                    @else
                                     <div class="flex-1 pb-3">
                                         <div class="flex items-center gap-2">
                                             <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ $activity->type->getLabel() }}</span>
@@ -585,6 +594,7 @@
                                             <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">von {{ $activity->causer->name ?? 'System' }}</p>
                                         @endif
                                     </div>
+                                    @endif
                                 </div>
                             @endforeach
 

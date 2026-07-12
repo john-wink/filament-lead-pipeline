@@ -12,7 +12,9 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Exceptions\LeadAlreadyTransferredException;
+use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Models\LeadActivity;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldValue;
@@ -474,6 +476,30 @@ class LeadDetailModal extends Component
             && ! $this->lead->isTransferred()
         ) {
             $this->openTransferForm();
+        }
+    }
+
+    /**
+     * Integrations-Darstellung eines Timeline-Eintrags — null fällt auf
+     * die generische Darstellung zurück (fail-closed bei fehlendem Panel,
+     * unbekanntem Key oder Fehlern im renderActivity der Integration).
+     */
+    public function integrationActivityView(LeadActivity $activity): ?View
+    {
+        if (LeadActivityTypeEnum::Integration !== $activity->type) {
+            return null;
+        }
+
+        $key = $activity->properties['integration'] ?? null;
+
+        if ( ! is_string($key) || '' === $key) {
+            return null;
+        }
+
+        try {
+            return FilamentLeadPipelinePlugin::get()->getIntegration($key)?->renderActivity($activity);
+        } catch (Throwable) {
+            return null;
         }
     }
 
