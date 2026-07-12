@@ -382,9 +382,16 @@ it('logs the disqualification reason as an Updated activity', function (): void 
         ->dispatch('open-lead-detail', leadId: $lead->getKey())
         ->call('markAsDisqualified', 'Budget zu gering');
 
-    $activity = $lead->activities()->latest('id')->first();
+    // markAsDisqualified() logs the reason as an Updated activity and then moves the lead
+    // into the (Observer-enforced) Disqualified phase via moveToPhase(), which logs its own
+    // Moved activity afterwards — so the Updated activity is not necessarily the latest row.
+    $activity = $lead->activities()
+        ->where('type', LeadActivityTypeEnum::Updated->value)
+        ->latest('id')
+        ->first();
 
-    expect($activity->type)->toBe(LeadActivityTypeEnum::Updated)
+    expect($activity)->not->toBeNull()
+        ->and($activity->type)->toBe(LeadActivityTypeEnum::Updated)
         ->and($activity->description)->toContain('Budget zu gering');
 });
 
