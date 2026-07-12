@@ -51,6 +51,12 @@ class FilamentLeadPipelinePlugin implements Plugin
     /** @var array<int, Closure> */
     protected array $boardFormExtensions = [];
 
+    /** @var array<int, class-string<Contracts\LeadIntegrationContract>> */
+    protected array $integrations = [];
+
+    /** @var array<string, Contracts\LeadIntegrationContract>|null */
+    protected ?array $resolvedIntegrations = null;
+
     public static function make(): static
     {
         return app(static::class);
@@ -312,6 +318,44 @@ class FilamentLeadPipelinePlugin implements Plugin
     public function getStatsAggregator(): ?StatsAggregatorContract
     {
         return $this->statsAggregator;
+    }
+
+    /**
+     * Register integration classes that plug into the lead pipeline
+     * (integrations page, lead modal actions, activity rendering).
+     *
+     * @param  array<int, class-string<Contracts\LeadIntegrationContract>>  $integrations
+     */
+    public function integrations(array $integrations): static
+    {
+        $this->integrations         = array_values($integrations);
+        $this->resolvedIntegrations = null;
+
+        return $this;
+    }
+
+    /** @return array<string, Contracts\LeadIntegrationContract> */
+    public function getIntegrations(): array
+    {
+        if (null === $this->resolvedIntegrations) {
+            $resolved = [];
+
+            foreach ($this->integrations as $class) {
+                /** @var Contracts\LeadIntegrationContract $integration */
+                $integration = app($class);
+
+                $resolved[$integration->key()] = $integration;
+            }
+
+            $this->resolvedIntegrations = $resolved;
+        }
+
+        return $this->resolvedIntegrations;
+    }
+
+    public function getIntegration(string $key): ?Contracts\LeadIntegrationContract
+    {
+        return $this->getIntegrations()[$key] ?? null;
     }
 
     /**

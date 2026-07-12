@@ -10,6 +10,7 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Panel;
 use Filament\PanelProvider;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
+use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Integrations\FakeIntegration;
 use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Models\Team;
 
 class AdminPanelProvider extends PanelProvider
@@ -21,7 +22,10 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->tenant(Team::class)
-            ->plugin(FilamentLeadPipelinePlugin::make())
+            ->plugin(
+                FilamentLeadPipelinePlugin::make()
+                    ->integrations([FakeIntegration::class]),
+            )
             ->middleware([
                 DispatchServingFilamentEvent::class,
                 DisableBladeIconComponents::class,
