@@ -18,6 +18,12 @@ use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
  * contribute a settings component on the integrations page, optional
  * board form components, actions in the lead detail modal and custom
  * rendering for Integration-type activities in the timeline.
+ *
+ * The constructor, key(), label() and icon() form the trusted identity of
+ * an integration: they must be side-effect-free and must never throw —
+ * they run unguarded during registry resolution and in list renders. All
+ * other methods are called fail-closed (a throw disables the integration
+ * for that render instead of breaking the page).
  */
 interface LeadIntegrationContract
 {
@@ -54,8 +60,13 @@ interface LeadIntegrationContract
     public function handleLeadAction(string $actionKey, Lead $lead): void;
 
     /**
-     * Custom rendering for an Integration-type activity;
-     * null falls back to the generic timeline entry.
+     * Custom timeline rendering for an Integration-type activity, or null
+     * to fall back to the generic entry.
+     *
+     * Note: this runs even for tenants where isActivatedFor() is false, so
+     * historical activities keep their rich rendering after deactivation.
+     * Render from the activity's stored properties only - never from live
+     * connection state.
      */
     public function renderActivity(LeadActivity $activity): ?View;
 }
