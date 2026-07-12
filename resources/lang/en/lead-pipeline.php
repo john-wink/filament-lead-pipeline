@@ -366,6 +366,7 @@ return [
         'transferred'             => 'Transferred',
         'transferred_from'        => 'Transferred from %s',
         'transferred_to'          => 'Transferred to %s',
+        'integration'             => 'Integration',
     ],
     'status' => [
         'active'       => 'Active',
@@ -724,5 +725,13 @@ return [
         'load_more'            => 'Load more',
         'no_activities'        => 'No activities in period',
         'open_scorecard'       => 'Open scorecard',
+    ],
+    'integrations' => [
+        'title'          => 'Integrations',
+        'active'         => 'Active',
+        'inactive'       => 'Inactive',
+        'action_success' => 'Action executed',
+        'action_failed'  => 'Action failed',
+        'confirm_action' => 'Really run this action?',
     ],
 ];

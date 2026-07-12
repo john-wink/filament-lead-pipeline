@@ -360,6 +360,7 @@ return [
         'transferred'             => 'Transféré',
         'transferred_from'        => 'Transféré depuis %s',
         'transferred_to'          => 'Transféré vers %s',
+        'integration'             => 'Intégration',
     ],
     'status' => [
         'active'    => 'Actif',
@@ -711,5 +712,13 @@ return [
         'load_more'            => 'Charger plus',
         'no_activities'        => 'Aucune activité dans la période',
         'open_scorecard'       => 'Ouvrir la scorecard',
+    ],
+    'integrations' => [
+        'title'          => 'Intégrations',
+        'active'         => 'Active',
+        'inactive'       => 'Inactive',
+        'action_success' => 'Action exécutée',
+        'action_failed'  => 'Action échouée',
+        'confirm_action' => 'Vraiment exécuter cette action ?',
     ],
 ];

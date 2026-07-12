@@ -366,6 +366,7 @@ return [
         'transferred'             => 'Übergeben',
         'transferred_from'        => 'Übergeben aus %s',
         'transferred_to'          => 'Übergeben an %s',
+        'integration'             => 'Integration',
     ],
     'status' => [
         'active'       => 'Aktiv',
@@ -730,5 +731,13 @@ return [
         'load_more'            => 'Mehr laden',
         'no_activities'        => 'Keine Aktivitäten im Zeitraum',
         'open_scorecard'       => 'Scorecard öffnen',
+    ],
+    'integrations' => [
+        'title'          => 'Integrationen',
+        'active'         => 'Aktiv',
+        'inactive'       => 'Inaktiv',
+        'action_success' => 'Aktion ausgeführt',
+        'action_failed'  => 'Aktion fehlgeschlagen',
+        'confirm_action' => 'Aktion wirklich ausführen?',
     ],
 ];

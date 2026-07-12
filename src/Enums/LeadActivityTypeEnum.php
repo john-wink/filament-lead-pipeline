@@ -20,6 +20,7 @@ enum LeadActivityTypeEnum: string implements HasColor, HasIcon, HasLabel
     case Assignment  = 'assignment';
     case FollowUp    = 'follow_up';
     case Transferred = 'transferred';
+    case Integration = 'integration';
 
     public function getLabel(): string
     {
@@ -34,6 +35,7 @@ enum LeadActivityTypeEnum: string implements HasColor, HasIcon, HasLabel
             self::Assignment  => __('lead-pipeline::lead-pipeline.activity.assignment'),
             self::FollowUp    => __('lead-pipeline::lead-pipeline.activity.follow_up'),
             self::Transferred => __('lead-pipeline::lead-pipeline.activity.transferred'),
+            self::Integration => __('lead-pipeline::lead-pipeline.activity.integration'),
         };
     }
 
@@ -50,6 +52,7 @@ enum LeadActivityTypeEnum: string implements HasColor, HasIcon, HasLabel
             self::Assignment  => 'primary',
             self::FollowUp    => 'warning',
             self::Transferred => 'info',
+            self::Integration => 'info',
         };
     }
 
@@ -66,6 +69,7 @@ enum LeadActivityTypeEnum: string implements HasColor, HasIcon, HasLabel
             self::Assignment  => 'heroicon-o-user-plus',
             self::FollowUp    => 'heroicon-o-bell-alert',
             self::Transferred => 'heroicon-o-arrow-right-circle',
+            self::Integration => 'heroicon-o-puzzle-piece',
         };
     }
 }
