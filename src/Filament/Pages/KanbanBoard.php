@@ -8,6 +8,7 @@ use Filament\Pages\Page;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Collection;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadOriginEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseDisplayTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
@@ -333,7 +334,7 @@ class KanbanBoard extends Page
             'causer_id'   => auth()->id(),
         ]);
 
-        LeadCreated::dispatch($lead);
+        LeadCreated::dispatch($lead, LeadOriginEnum::Manual);
 
         $this->showCreateModal = false;
         $this->dispatch('phase-updated', phaseId: $phaseId);

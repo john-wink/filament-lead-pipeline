@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Livewire;
 
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadOriginEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
@@ -156,7 +157,7 @@ class FunnelWizard extends Component
 
         $this->funnel->incrementSubmissions();
 
-        LeadCreated::dispatch($lead);
+        LeadCreated::dispatch($lead, LeadOriginEnum::Manual);
 
         $this->submitted = true;
     }

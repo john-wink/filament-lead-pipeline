@@ -15,6 +15,7 @@ use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Drivers\MetaDriver;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadOriginEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
@@ -272,7 +273,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                         'properties'  => ['source_driver' => 'meta', 'source_name' => $source->name, 'imported' => true],
                     ]);
 
-                    LeadCreated::dispatch($lead);
+                    LeadCreated::dispatch($lead, LeadOriginEnum::Import);
                 }
             } while ($hasMore && $afterCursor);
         }

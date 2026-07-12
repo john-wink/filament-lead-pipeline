@@ -13,6 +13,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use JohnWink\FilamentLeadPipeline\Enums\ImmoScoutConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadOriginEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
@@ -154,7 +155,7 @@ class ImportImmoScoutLeadsJob implements ShouldQueue
                 'properties'  => ['source_driver' => 'immoscout24', 'source_name' => $source->name, 'imported' => true],
             ]);
 
-            LeadCreated::dispatch($lead);
+            LeadCreated::dispatch($lead, LeadOriginEnum::Import);
         }
 
         $source->update([

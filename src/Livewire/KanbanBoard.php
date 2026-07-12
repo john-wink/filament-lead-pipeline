@@ -6,6 +6,7 @@ namespace JohnWink\FilamentLeadPipeline\Livewire;
 
 use Illuminate\Contracts\View\View;
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadOriginEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
@@ -160,7 +161,7 @@ class KanbanBoard extends Component
             'causer_id'   => auth()->id(),
         ]);
 
-        LeadCreated::dispatch($lead);
+        LeadCreated::dispatch($lead, LeadOriginEnum::Manual);
 
         $this->showCreateModal = false;
         $this->dispatch('phase-updated', phaseId: $phaseId);
