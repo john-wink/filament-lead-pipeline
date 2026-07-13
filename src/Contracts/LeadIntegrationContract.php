@@ -45,6 +45,13 @@ interface LeadIntegrationContract
     /**
      * Additional form schema components for the LeadBoard edit form.
      *
+     * Wired by the package itself - the host does not need an
+     * extendBoardForm() hook for this. Only called on the edit form: the
+     * board must already exist, so this never runs on the create form.
+     * Called fail-closed alongside isActivatedFor() - a throw (from either
+     * check) skips this integration's components for that render instead
+     * of breaking the form.
+     *
      * @return array<int, mixed>
      */
     public function boardFormComponents(LeadBoard $board): array;

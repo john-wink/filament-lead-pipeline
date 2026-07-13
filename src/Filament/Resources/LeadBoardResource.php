@@ -84,6 +84,60 @@ class LeadBoardResource extends Resource
         return $components;
     }
 
+    /**
+     * Returns the schema components contributed by activated integrations'
+     * boardFormComponents() (registered via
+     * FilamentLeadPipelinePlugin::integrations()).
+     *
+     * Only meaningful on the edit form: the contract requires an existing
+     * LeadBoard, which is not available yet on the create form, so a null
+     * record short-circuits to no components. Fail-closed per integration:
+     * isActivatedFor() and boardFormComponents() are each guarded - a throw
+     * skips only that integration instead of breaking the form.
+     *
+     * @return array<int, mixed>
+     */
+    public static function getIntegrationBoardFormComponents(?Model $record): array
+    {
+        if ( ! $record instanceof LeadBoard) {
+            return [];
+        }
+
+        try {
+            $plugin = filament()->getPlugin('filament-lead-pipeline');
+        } catch (Throwable) {
+            return [];
+        }
+
+        if ( ! $plugin instanceof FilamentLeadPipelinePlugin) {
+            return [];
+        }
+
+        $tenant = filament()->getTenant();
+
+        if ( ! $tenant instanceof Model) {
+            return [];
+        }
+
+        $components = [];
+
+        foreach ($plugin->getIntegrations() as $integration) {
+            try {
+                if ( ! $integration->isActivatedFor($tenant)) {
+                    continue;
+                }
+
+                $integrationComponents = $integration->boardFormComponents($record);
+            } catch (Throwable) {
+                continue;
+            }
+
+            $components = [...$components, ...$integrationComponents];
+        }
+
+        return $components;
+    }
+
     public static function scopeEloquentQueryToTenant(Builder $query, ?Model $tenant): Builder
     {
         return $query->visibleToTenant($tenant);
@@ -330,6 +384,7 @@ class LeadBoardResource extends Resource
                     ->columns(1),
 
                 ...static::getBoardFormExtensionComponents(),
+                ...static::getIntegrationBoardFormComponents($form->getRecord()),
             ]);
     }
 

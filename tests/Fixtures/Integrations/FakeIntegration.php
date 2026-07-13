@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Tests\Fixtures\Integrations;
 
+use Filament\Forms\Components\Toggle;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use JohnWink\FilamentLeadPipeline\Contracts\LeadIntegrationContract;
@@ -52,7 +53,19 @@ class FakeIntegration implements LeadIntegrationContract
     /** @return array<int, mixed> */
     public function boardFormComponents(LeadBoard $board): array
     {
-        return [];
+        if (config('lead-pipeline.testing.fake_integration_board_throws', false)) {
+            throw new RuntimeException('Fake-Integration-Board-Form-Komponenten fehlgeschlagen');
+        }
+
+        if ( ! config('lead-pipeline.testing.fake_integration_board_components', false)) {
+            return [];
+        }
+
+        return [
+            Toggle::make('fake_setting')
+                ->label('Fake Setting')
+                ->dehydrated(false),
+        ];
     }
 
     /** @return array<int, IntegrationActionData> */
