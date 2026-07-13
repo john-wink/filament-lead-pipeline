@@ -25,6 +25,7 @@ A PipeDrive-style lead management system for [Filament 3](https://filamentphp.co
 - [Analytics & Reporting](#analytics--reporting)
 - [Webhooks & Custom Drivers](#webhooks--custom-drivers)
 - [Lead Conversion](#lead-conversion)
+- [Integrations](#integrations)
 - [Events](#events)
 - [Internationalization](#internationalization)
 - [Configuration](#configuration)
@@ -477,6 +478,14 @@ class Customer extends Model
 $customer->wasConvertedFromLead(); // bool
 $customer->getSourceLead();        // ?Lead
 ```
+
+---
+
+## Integrations
+
+Third-party integrations (e.g. dialers) can contribute a settings card on the Integrations page, extra fields on the board edit form, actions in the lead detail modal, and custom activity-timeline rendering — registered via `FilamentLeadPipelinePlugin::make()->integrations([MyIntegration::class])`.
+
+See [`docs/building-integrations.md`](docs/building-integrations.md) for the full contract reference and a working example.
 
 ---
 
