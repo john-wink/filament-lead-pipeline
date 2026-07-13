@@ -57,7 +57,22 @@ class TestCase extends Orchestra
             FilamentServiceProvider::class,
             FilamentLeadPipelineServiceProvider::class,
             AdminPanelProvider::class,
+            ...$this->additionalPackageProviders(),
         ];
+    }
+
+    /**
+     * Extension point for individual test files that need an extra panel
+     * booted alongside the default admin fixture (e.g. a panel with zero
+     * integrations). Add a trait via Pest's `uses()` in that test file to
+     * override this — scoped to that file, it leaves every other test's
+     * panel setup untouched.
+     *
+     * @return array<int, class-string>
+     */
+    protected function additionalPackageProviders(): array
+    {
+        return [];
     }
 
     protected function defineEnvironment($app): void

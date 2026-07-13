@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use JohnWink\FilamentLeadPipeline\DTOs\IntegrationActionData;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
+use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Integrations\DuplicateKeyFakeIntegration;
 use JohnWink\FilamentLeadPipeline\Tests\Fixtures\Integrations\FakeIntegration;
 
 it('has no integrations by default', function (): void {
@@ -23,6 +24,16 @@ it('memoizes resolved integration instances', function (): void {
     $plugin = FilamentLeadPipelinePlugin::make()->integrations([FakeIntegration::class]);
 
     expect($plugin->getIntegration('fake'))->toBe($plugin->getIntegration('fake'));
+});
+
+it('throws when two registered integrations resolve to the same key', function (): void {
+    $plugin = FilamentLeadPipelinePlugin::make()->integrations([
+        FakeIntegration::class,
+        DuplicateKeyFakeIntegration::class,
+    ]);
+
+    expect(fn () => $plugin->getIntegrations())
+        ->toThrow(InvalidArgumentException::class, 'fake');
 });
 
 it('exposes action metadata with defaults through the data object', function (): void {

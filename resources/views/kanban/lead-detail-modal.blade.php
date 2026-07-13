@@ -368,7 +368,7 @@
                         @foreach($this->integrationModalActions() as $integrationEntry)
                             @foreach($integrationEntry['actions'] as $integrationAction)
                                 <button
-                                    wire:click="runIntegrationAction('{{ $integrationEntry['integration']->key() }}', '{{ $integrationAction->key }}')"
+                                    wire:click="runIntegrationAction(@js($integrationEntry['integration']->key()), @js($integrationAction->key))"
                                     @if($integrationAction->requiresConfirmation)
                                         wire:confirm="{{ $integrationAction->confirmText ?? __('lead-pipeline::lead-pipeline.integrations.confirm_action') }}"
                                     @endif
@@ -596,18 +596,12 @@
                                     </div>
                                     @if($integrationActivityView = $this->integrationActivityView($activity))
                                         <div class="flex-1 pb-3">
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ $activity->type->getLabel() }}</span>
-                                                <span class="text-xs text-gray-400 dark:text-gray-500">{{ $activity->created_at->diffForHumans() }}</span>
-                                            </div>
+                                            @include('lead-pipeline::kanban.partials.activity-header', ['activity' => $activity])
                                             {{ $integrationActivityView }}
                                         </div>
                                     @else
                                     <div class="flex-1 pb-3">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-xs font-medium text-gray-900 dark:text-gray-100">{{ $activity->type->getLabel() }}</span>
-                                            <span class="text-xs text-gray-400 dark:text-gray-500">{{ $activity->created_at->diffForHumans() }}</span>
-                                        </div>
+                                        @include('lead-pipeline::kanban.partials.activity-header', ['activity' => $activity])
                                         <p class="mt-0.5 text-xs text-gray-600 dark:text-gray-400">{{ $activity->description }}</p>
                                         @if($activity->causer)
                                             <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">von {{ $activity->causer->name ?? 'System' }}</p>

@@ -10,6 +10,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
+use InvalidArgumentException;
 use JohnWink\FilamentLeadPipeline\Contracts\StatsAggregatorContract;
 use JohnWink\FilamentLeadPipeline\DTOs\FieldPresetData;
 use JohnWink\FilamentLeadPipeline\DTOs\PhasePresetData;
@@ -334,7 +335,11 @@ class FilamentLeadPipelinePlugin implements Plugin
         return $this;
     }
 
-    /** @return array<string, Contracts\LeadIntegrationContract> */
+    /**
+     * @return array<string, Contracts\LeadIntegrationContract>
+     *
+     * @throws InvalidArgumentException when two registered integrations resolve to the same key()
+     */
     public function getIntegrations(): array
     {
         if (null === $this->resolvedIntegrations) {
@@ -343,8 +348,18 @@ class FilamentLeadPipelinePlugin implements Plugin
             foreach ($this->integrations as $class) {
                 /** @var Contracts\LeadIntegrationContract $integration */
                 $integration = app($class);
+                $key         = $integration->key();
 
-                $resolved[$integration->key()] = $integration;
+                if (array_key_exists($key, $resolved)) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Duplicate lead pipeline integration key "%s": both %s and %s resolve to it.',
+                        $key,
+                        $resolved[$key]::class,
+                        $class,
+                    ));
+                }
+
+                $resolved[$key] = $integration;
             }
 
             $this->resolvedIntegrations = $resolved;
