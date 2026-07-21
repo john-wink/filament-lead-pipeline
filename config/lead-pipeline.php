@@ -203,9 +203,14 @@ return [
     | Wiedervorlage / Reminders
     |--------------------------------------------------------------------------
     | Scheduler benachrichtigt zugewiesene Berater über fällige Wiedervorlagen.
+    |
+    | 'notification' erlaubt der Host-App, eine eigene Notification-Klasse
+    | (z. B. mit Mail-/Push-Kanälen) statt der einfachen Package-Notification
+    | einzuhängen. Muss denselben Konstruktor akzeptieren: __construct(Lead $lead).
     */
     'reminders' => [
-        'enabled' => true,
+        'enabled'      => true,
+        'notification' => JohnWink\FilamentLeadPipeline\Notifications\LeadReminderDue::class,
     ],
 
     /*

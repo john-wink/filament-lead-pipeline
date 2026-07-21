@@ -17,7 +17,8 @@ class SendLeadRemindersCommand extends Command
 
     public function handle(): int
     {
-        $sent = 0;
+        $sent              = 0;
+        $notificationClass = (string) config('lead-pipeline.reminders.notification', LeadReminderDue::class);
 
         Lead::query()
             ->where('status', LeadStatusEnum::Active)
@@ -27,14 +28,14 @@ class SendLeadRemindersCommand extends Command
             ->whereNull('reminder_notified_at')
             ->with('assignedUser')
             ->orderBy('reminder_at')
-            ->each(function (Lead $lead) use (&$sent): void {
+            ->each(function (Lead $lead) use (&$sent, $notificationClass): void {
                 $user = $lead->assignedUser;
 
                 if (null === $user) {
                     return;
                 }
 
-                $user->notify(new LeadReminderDue($lead));
+                $user->notify(new $notificationClass($lead));
                 $lead->forceFill(['reminder_notified_at' => now()])->save();
                 $sent++;
             });
