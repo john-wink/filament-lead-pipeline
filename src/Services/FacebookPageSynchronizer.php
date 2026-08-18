@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookForm;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
+use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use Throwable;
 
 class FacebookPageSynchronizer
@@ -72,12 +73,38 @@ class FacebookPageSynchronizer
             ->when([] !== $remoteIds, fn ($query) => $query->whereNotIn('page_id', $remoteIds))
             ->delete();
 
+        $this->relinkOrphanedLeadSources($connection);
+
         return [
             'added'        => $added,
             'updated'      => $updated,
             'removed'      => $removed,
             'forms_synced' => $formsSynced,
         ];
+    }
+
+    /**
+     * Self-heal after a disconnect/reconnect cycle: lead sources keep their
+     * stable external facebook_page_id while their internal page link is
+     * severed when the connection (and its pages) get deleted. Once the page
+     * reappears under this connection, relink the sources of the same team.
+     */
+    private function relinkOrphanedLeadSources(FacebookConnection $connection): void
+    {
+        $tenantFk = config('lead-pipeline.tenancy.foreign_key', 'team_uuid');
+        $teamId   = $connection->getAttribute($tenantFk);
+
+        $pages = FacebookPage::query()
+            ->where('facebook_connection_uuid', $connection->uuid)
+            ->pluck('uuid', 'page_id');
+
+        foreach ($pages as $pageId => $pageUuid) {
+            LeadSource::query()
+                ->whereNull('facebook_page_uuid')
+                ->where('facebook_page_id', $pageId)
+                ->whereHas('board', fn ($query) => $query->where($tenantFk, $teamId))
+                ->update(['facebook_page_uuid' => $pageUuid]);
+        }
     }
 
     private function syncFormsFor(FacebookPage $page, string $pageAccessToken): int

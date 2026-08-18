@@ -402,6 +402,22 @@ class FacebookGraphService
     }
 
     /**
+     * Revokes the app authorization of the user behind the given token
+     * (`DELETE /me/permissions`). Meta then shows the full consent dialog on
+     * the next OAuth flow again — including the option to switch accounts.
+     *
+     * @throws ConnectionException
+     */
+    public function revokePermissions(string $accessToken): bool
+    {
+        $response = $this->client()->delete(
+            "{$this->graphUrl}/{$this->graphVersion}/me/permissions?" . http_build_query(['access_token' => $accessToken]),
+        );
+
+        return $response->successful() && true === $response->json('success');
+    }
+
+    /**
      * @return array{id: string, name: string}
      *
      * @throws ConnectionException

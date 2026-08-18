@@ -38,6 +38,7 @@ class LeadSource extends Model
         'team_uuid',
         'created_by',
         'facebook_page_uuid',
+        'facebook_page_id',
         'facebook_form_ids',
         'default_assigned_to',
     ];
@@ -80,6 +81,22 @@ class LeadSource extends Model
     public function isActive(): bool
     {
         return LeadSourceStatusEnum::Active === $this->status;
+    }
+
+    /**
+     * Keeps the stable external Facebook page id in sync with the internal
+     * page link. It survives a disconnect (which deletes the FacebookPage
+     * rows) and lets the page synchronizer relink this source on reconnect.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $source): void {
+            if ($source->isDirty('facebook_page_uuid') && ! $source->isDirty('facebook_page_id')) {
+                $source->facebook_page_id = null === $source->facebook_page_uuid
+                    ? null
+                    : FacebookPage::withTrashed()->find($source->facebook_page_uuid)?->page_id;
+            }
+        });
     }
 
     protected static function newFactory(): LeadSourceFactory
