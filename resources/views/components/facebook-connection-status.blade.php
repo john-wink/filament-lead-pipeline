@@ -46,6 +46,12 @@
                         class="rounded-lg px-2.5 py-1 text-xs font-medium text-white transition-colors {{ 'critical' === $state ? 'bg-red-600 hover:bg-red-700' : 'bg-primary-600 hover:bg-primary-700' }}">
                         {{ __('lead-pipeline::lead-pipeline.connection_status.reconnect') }}
                     </a>
+                    <button type="button" wire:click="disconnect('{{ $connection->getKey() }}')"
+                        wire:confirm="{{ __('lead-pipeline::lead-pipeline.connection_status.disconnect_confirm') }}"
+                        wire:loading.attr="disabled" wire:target="disconnect"
+                        class="rounded-lg border border-red-300 px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 transition-colors">
+                        {{ __('lead-pipeline::lead-pipeline.connection_status.disconnect') }}
+                    </button>
                 </div>
             </div>
         </div>

@@ -8,6 +8,7 @@ use Filament\Notifications\Notification;
 use Illuminate\Contracts\View\View;
 use JohnWink\FilamentLeadPipeline\Jobs\RefreshFacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
+use JohnWink\FilamentLeadPipeline\Services\FacebookConnectionDisconnector;
 use Livewire\Component;
 
 class FacebookConnectionStatus extends Component
@@ -26,6 +27,23 @@ class FacebookConnectionStatus extends Component
 
         Notification::make()->success()
             ->title(__('lead-pipeline::lead-pipeline.connection_status.refresh_queued'))
+            ->send();
+    }
+
+    public function disconnect(string $connectionUuid): void
+    {
+        $connection = FacebookConnection::query()
+            ->where(config('lead-pipeline.tenancy.foreign_key', 'team_uuid'), filament()->getTenant()?->getKey())
+            ->find($connectionUuid);
+
+        if (null === $connection) {
+            return;
+        }
+
+        app(FacebookConnectionDisconnector::class)->disconnect($connection);
+
+        Notification::make()->success()
+            ->title(__('lead-pipeline::lead-pipeline.connection_status.disconnected'))
             ->send();
     }
 
