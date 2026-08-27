@@ -12,6 +12,7 @@ use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionReconnected;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
+use JohnWink\FilamentLeadPipeline\Services\FacebookConnectionDisconnector;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
 use Throwable;
@@ -38,6 +39,26 @@ class FacebookOAuthController
         ]));
 
         return redirect()->away($this->facebook->getOAuthRedirectUrl($state));
+    }
+
+    /**
+     * Disconnects one of the current user's own Facebook connections from the
+     * source form. The lookup is scoped to the authenticated user, so foreign
+     * connections are simply not found (404) instead of being disclosed.
+     */
+    public function disconnect(Request $request, string $connection, FacebookConnectionDisconnector $disconnector): RedirectResponse|Response
+    {
+        $ownConnection = FacebookConnection::query()
+            ->where('user_uuid', auth()->id())
+            ->findOrFail($connection);
+
+        $disconnector->disconnect($ownConnection);
+
+        if ($request->expectsJson()) {
+            return response()->noContent();
+        }
+
+        return redirect()->back();
     }
 
     public function callback(Request $request): RedirectResponse|Response

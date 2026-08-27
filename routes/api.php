@@ -23,6 +23,8 @@ Route::middleware(['web', 'auth'])
             ->name('lead-pipeline.facebook.redirect');
         Route::get('callback', [FacebookOAuthController::class, 'callback'])
             ->name('lead-pipeline.facebook.callback');
+        Route::delete('connections/{connection}', [FacebookOAuthController::class, 'disconnect'])
+            ->name('lead-pipeline.facebook.disconnect');
     });
 
 Route::middleware(['web', 'auth'])
