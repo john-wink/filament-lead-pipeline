@@ -427,6 +427,9 @@ return [
         'reimport_started'       => 'Réimportation démarrée',
         'reimport_started_body'  => 'Les leads sont en cours de mise à jour en arrière-plan.',
         'reconnect'              => 'Reconnecter',
+        'connect_other_account'  => 'Connecter un autre compte',
+        'disconnect'             => 'Déconnecter',
+        'disconnect_hint'        => 'Facebook vous connecte avec le compte actuellement ouvert — changez de compte sur Facebook au préalable pour en lier un autre.',
         'token_health'           => 'État du jeton',
         'status'                 => [
             'connected'    => 'Connecté',
