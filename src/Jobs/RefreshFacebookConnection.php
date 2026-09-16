@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Events\FacebookTokenRefreshed;
 use JohnWink\FilamentLeadPipeline\Events\FacebookTokenRefreshFailed;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookGraphException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
@@ -57,7 +58,11 @@ class RefreshFacebookConnection implements ShouldQueue
 
             return;
         } catch (FacebookTransientException $e) {
-            $this->recordTransientFailure($connection, $e->getMessage());
+            $this->recordRefreshFailure($connection, $e->getMessage());
+
+            return;
+        } catch (FacebookGraphException $e) {
+            $this->recordRefreshFailure($connection, $e->getMessage());
 
             return;
         }
@@ -66,7 +71,7 @@ class RefreshFacebookConnection implements ShouldQueue
         $expiresIn = $result['expires_in'] ?? null;
 
         if ( ! is_string($token) || '' === $token || ! is_int($expiresIn) || $expiresIn <= 0) {
-            $this->recordTransientFailure($connection, 'Malformed token refresh response from Facebook.');
+            $this->recordRefreshFailure($connection, 'Malformed token refresh response from Facebook.');
 
             return;
         }
@@ -105,7 +110,7 @@ class RefreshFacebookConnection implements ShouldQueue
         );
     }
 
-    private function recordTransientFailure(FacebookConnection $connection, string $reason): void
+    private function recordRefreshFailure(FacebookConnection $connection, string $reason): void
     {
         $attempts = $connection->refresh_attempts + 1;
 
@@ -116,7 +121,7 @@ class RefreshFacebookConnection implements ShouldQueue
         ])->save();
 
         if ($this->shouldEscalate($attempts, $connection->token_expires_at)) {
-            $this->markConnectionNeedsReauth($connection, 'Escalated to re-auth after repeated transient failures.');
+            $this->markConnectionNeedsReauth($connection, 'Escalated to re-auth after repeated refresh failures.');
 
             return;
         }
