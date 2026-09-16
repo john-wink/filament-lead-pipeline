@@ -167,3 +167,29 @@ it('marks needs-reauth when page sync hits a dead token after a successful refre
     Event::assertDispatched(FacebookConnectionNeedsReauth::class);
     Event::assertNotDispatched(FacebookTokenRefreshed::class);
 });
+
+it('records an unclassified graph rejection as a refresh failure and backs off', function (): void {
+    Event::fake([FacebookTokenRefreshFailed::class, FacebookConnectionNeedsReauth::class]);
+
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*' => Http::response([
+            'error' => ['message' => 'Missing client_id parameter.', 'code' => 100],
+        ], 400),
+    ]);
+
+    runRefresh($this->connection->fresh());
+
+    $fresh = $this->connection->fresh();
+    expect($fresh->status)->toBe(FacebookConnectionStatusEnum::Connected)
+        ->and($fresh->refresh_attempts)->toBe(1)
+        ->and($fresh->refresh_failed_at)->not->toBeNull()
+        ->and($fresh->last_error)->toContain('Missing client_id parameter.');
+
+    Event::assertDispatched(FacebookTokenRefreshFailed::class);
+    Event::assertNotDispatched(FacebookConnectionNeedsReauth::class);
+
+    runRefresh($this->connection->fresh());
+
+    Http::assertSentCount(1);
+    expect($this->connection->fresh()->refresh_attempts)->toBe(1);
+});
