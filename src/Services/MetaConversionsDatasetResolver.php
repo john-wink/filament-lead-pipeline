@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
+use JohnWink\FilamentLeadPipeline\Support\MetaSecretRedactor;
 use Throwable;
 
 /**
@@ -111,7 +112,7 @@ class MetaConversionsDatasetResolver
             Log::warning('Meta dataset resolution errored', [
                 'lead_id' => (string) $lead->getKey(),
                 'ad_id'   => $adId,
-                'error'   => $exception->getMessage(),
+                ...MetaSecretRedactor::logContext($exception),
             ]);
 
             return null;

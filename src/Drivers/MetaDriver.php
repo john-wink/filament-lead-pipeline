@@ -455,12 +455,12 @@ class MetaDriver implements LeadSourceDriver
                             ->body(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_success_body', ['page' => $page->page_name]))
                             ->success()
                             ->send();
-                    } catch (Throwable $e) {
+                    } catch (Throwable) {
                         $page->update(['is_webhooks_subscribed' => false]);
 
                         \Filament\Notifications\Notification::make()
                             ->title(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_failed'))
-                            ->body($e->getMessage())
+                            ->body(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_failed_body', ['page' => $page->page_name]))
                             ->danger()
                             ->send();
                     }

@@ -9,6 +9,7 @@ use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookForm;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Support\MetaSecretRedactor;
 use Throwable;
 
 class FacebookPageSynchronizer
@@ -114,7 +115,7 @@ class FacebookPageSynchronizer
         } catch (Throwable $e) {
             Log::warning('FacebookPageSynchronizer: failed to fetch lead forms', [
                 'page_id' => $page->page_id,
-                'error'   => $e->getMessage(),
+                ...MetaSecretRedactor::logContext($e),
             ]);
 
             return 0;

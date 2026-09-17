@@ -11,6 +11,7 @@ use JohnWink\FilamentLeadPipeline\Models\FacebookForm;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
 use JohnWink\FilamentLeadPipeline\Models\LeadReportAdSource;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Support\MetaSecretRedactor;
 use Throwable;
 
 class FacebookConnectionDisconnector
@@ -38,7 +39,7 @@ class FacebookConnectionDisconnector
         } catch (Throwable $e) {
             Log::warning('Facebook permission revocation failed during disconnect', [
                 'connection_uuid' => $connection->uuid,
-                'error'           => $e->getMessage(),
+                ...MetaSecretRedactor::logContext($e),
             ]);
         }
 

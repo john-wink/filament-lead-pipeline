@@ -95,3 +95,15 @@ it('does not create duplicate leads when the same facebook lead is imported twic
 
     expect(Lead::query()->where('email', 'dup-import@example.com')->count())->toBe(1);
 });
+
+it('stores a network failure on the source without the page access token', function (): void {
+    Http::fake(['graph.facebook.com/*/form-selfheal-1/leads*' => Http::failedConnection()]);
+
+    ImportFacebookLeadsJob::dispatchSync($this->source);
+
+    $source = $this->source->fresh();
+
+    expect($source->error_message)->not->toContain('page-token-selfheal')
+        ->and($source->status)->toBe(LeadSourceStatusEnum::Error)
+        ->and($source->error_message)->toContain('access_token=[REDACTED]');
+});

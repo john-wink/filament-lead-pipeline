@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Livewire\FacebookConnectionStatus;
@@ -87,6 +90,33 @@ it('deletes the connection even when the token revocation at Meta fails', functi
         ->assertNotified();
 
     expect(FacebookConnection::query()->find($connection->uuid))->toBeNull();
+});
+
+it('logs an unreachable token revocation without the access token and still disconnects', function (): void {
+    Http::fake(['graph.facebook.com/*' => Http::failedConnection()]);
+
+    $connection = disconnectableConnection();
+
+    $logged = collect();
+    Event::listen(MessageLogged::class, fn (MessageLogged $entry) => $logged->push($entry));
+
+    Livewire::test(FacebookConnectionStatus::class)
+        ->call('disconnect', $connection->uuid)
+        ->assertNotified();
+
+    expect($logged->map(fn (MessageLogged $logEntry): string => $logEntry->message . json_encode($logEntry->context))->implode("\n"))
+        ->not->toContain('user-token-123');
+
+    $entry = $logged->firstWhere('message', 'Facebook permission revocation failed during disconnect');
+
+    expect(FacebookConnection::query()->find($connection->uuid))->toBeNull()
+        ->and($entry)->not->toBeNull()
+        ->and($entry->level)->toBe('warning')
+        ->and($entry->context)->toMatchArray([
+            'connection_uuid' => $connection->uuid,
+            'exception_class' => ConnectionException::class,
+        ])
+        ->and($entry->context['error'])->toContain('access_token=[REDACTED]');
 });
 
 it('does not disconnect connections of foreign teams', function (): void {

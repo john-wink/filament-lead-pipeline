@@ -453,6 +453,7 @@ return [
         'reactivate_webhook_success'      => 'Webhook reaktiviert',
         'reactivate_webhook_success_body' => 'Die Page :page ist wieder für Leadgen-Events abonniert.',
         'reactivate_webhook_failed'       => 'Webhook-Reaktivierung fehlgeschlagen',
+        'reactivate_webhook_failed_body'  => 'Das Leadgen-Webhook-Abo der Page :page konnte gerade nicht erneuert werden. Bitte später erneut versuchen oder das Facebook-Konto neu verbinden.',
         'reactivate_webhook_no_page'      => 'Diese Quelle hat keine Facebook-Page verbunden.',
         'status'                          => [
             'connected'    => 'Verbunden',

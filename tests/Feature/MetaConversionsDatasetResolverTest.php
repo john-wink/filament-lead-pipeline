@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
@@ -109,4 +112,28 @@ it('returns null when the source connection has no token', function (): void {
     expect($this->resolver->resolve($lead))->toBeNull();
 
     Http::assertNothingSent();
+});
+
+it('returns null and logs a network failure without the access token', function (): void {
+    Http::fake(['graph.facebook.com/*' => Http::failedConnection()]);
+
+    $lead = leadWithAd($this->board, $this->openPhase, 'ad-network', 'conn-token-network-failure');
+
+    $logged = collect();
+    Event::listen(MessageLogged::class, fn (MessageLogged $entry) => $logged->push($entry));
+
+    expect($this->resolver->resolve($lead))->toBeNull()
+        ->and($logged->map(fn (MessageLogged $logEntry): string => $logEntry->message . json_encode($logEntry->context))->implode("\n"))
+        ->not->toContain('conn-token-network-failure');
+
+    $entry = $logged->firstWhere('message', 'Meta dataset resolution errored');
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->level)->toBe('warning')
+        ->and($entry->context)->toMatchArray([
+            'lead_id'         => (string) $lead->getKey(),
+            'ad_id'           => 'ad-network',
+            'exception_class' => ConnectionException::class,
+        ])
+        ->and($entry->context['error'])->toContain('access_token=[REDACTED]');
 });

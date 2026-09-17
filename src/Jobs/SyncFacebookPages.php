@@ -15,6 +15,7 @@ use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
+use JohnWink\FilamentLeadPipeline\Support\MetaSecretRedactor;
 use Throwable;
 
 class SyncFacebookPages implements ShouldQueue
@@ -38,7 +39,7 @@ class SyncFacebookPages implements ShouldQueue
                 } catch (Throwable $e) {
                     Log::warning('SyncFacebookPages: sync failed', [
                         'connection' => $connection->uuid,
-                        'error'      => $e->getMessage(),
+                        ...MetaSecretRedactor::logContext($e),
                     ]);
                 }
             });

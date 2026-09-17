@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Services;
 
+use Closure;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
@@ -12,6 +13,7 @@ use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookGraphException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTransientException;
+use JohnWink\FilamentLeadPipeline\Support\MetaSecretRedactor;
 use Throwable;
 
 class FacebookGraphService
@@ -69,12 +71,12 @@ class FacebookGraphService
      */
     public function exchangeCodeForToken(string $code): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
             'client_id'     => config('lead-pipeline.facebook.client_id'),
             'client_secret' => config('lead-pipeline.facebook.client_secret'),
             'redirect_uri'  => $this->getRedirectUri(),
             'code'          => $code,
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Facebook token exchange failed');
@@ -91,12 +93,12 @@ class FacebookGraphService
      */
     public function exchangeForLongLivedToken(string $shortLivedToken): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/oauth/access_token", [
             'grant_type'        => 'fb_exchange_token',
             'client_id'         => config('lead-pipeline.facebook.client_id'),
             'client_secret'     => config('lead-pipeline.facebook.client_secret'),
             'fb_exchange_token' => $shortLivedToken,
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Facebook long-lived token exchange failed');
@@ -123,10 +125,10 @@ class FacebookGraphService
      */
     public function getUserPages(string $userAccessToken): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/me/accounts", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/me/accounts", [
             'access_token' => $userAccessToken,
             'fields'       => 'id,name,access_token,tasks',
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to fetch Facebook pages');
@@ -143,10 +145,10 @@ class FacebookGraphService
      */
     public function getPageLeadForms(string $pageId, string $pageAccessToken): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/leadgen_forms", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/leadgen_forms", [
             'access_token' => $pageAccessToken,
             'fields'       => 'id,name,status',
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to fetch lead forms');
@@ -161,10 +163,10 @@ class FacebookGraphService
      */
     public function subscribePageToLeadgen(string $pageId, string $pageAccessToken): bool
     {
-        $response = $this->client()->post("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->post("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
             'access_token'      => $pageAccessToken,
             'subscribed_fields' => 'leadgen',
-        ]);
+        ]));
 
         if ($response->failed()) {
             app(WebhookLogger::class)->recordRegistration(
@@ -198,9 +200,9 @@ class FacebookGraphService
      */
     public function getPageSubscribedApps(string $pageId, string $pageAccessToken): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$pageId}/subscribed_apps", [
             'access_token' => $pageAccessToken,
-        ]);
+        ]));
 
         if ($response->failed()) {
             app(WebhookLogger::class)->recordStatusCheck(
@@ -252,9 +254,9 @@ class FacebookGraphService
     {
         $appId = (string) config('lead-pipeline.facebook.client_id');
 
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$appId}/subscriptions", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$appId}/subscriptions", [
             'access_token' => $this->appAccessToken(),
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to fetch app subscriptions');
@@ -276,14 +278,14 @@ class FacebookGraphService
     {
         $appId = (string) config('lead-pipeline.facebook.client_id');
 
-        $response = $this->client()->post("{$this->graphUrl}/{$this->graphVersion}/{$appId}/subscriptions", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->post("{$this->graphUrl}/{$this->graphVersion}/{$appId}/subscriptions", [
             'object'         => 'page',
             'callback_url'   => $callbackUrl,
             'fields'         => 'leadgen',
             'verify_token'   => $verifyToken,
             'include_values' => 'true',
             'access_token'   => $this->appAccessToken(),
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to subscribe app to leadgen');
@@ -322,10 +324,10 @@ class FacebookGraphService
      */
     public function getLeadData(string $leadId, string $pageAccessToken): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$leadId}", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$leadId}", [
             'access_token' => $pageAccessToken,
             'fields'       => 'id,form_id,field_data,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,platform,is_organic',
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to fetch lead data');
@@ -344,10 +346,10 @@ class FacebookGraphService
      */
     public function getFormQuestions(string $formId, string $pageAccessToken): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$formId}", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$formId}", [
             'access_token' => $pageAccessToken,
             'fields'       => 'id,name,questions',
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to fetch form questions');
@@ -389,7 +391,7 @@ class FacebookGraphService
             $params['after'] = $afterCursor;
         }
 
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$formId}/leads", $params);
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/{$formId}/leads", $params));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to fetch form leads');
@@ -410,9 +412,9 @@ class FacebookGraphService
      */
     public function revokePermissions(string $accessToken): bool
     {
-        $response = $this->client()->delete(
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->delete(
             "{$this->graphUrl}/{$this->graphVersion}/me/permissions?" . http_build_query(['access_token' => $accessToken]),
-        );
+        ));
 
         return $response->successful() && true === $response->json('success');
     }
@@ -425,10 +427,10 @@ class FacebookGraphService
      */
     public function getMe(string $accessToken): array
     {
-        $response = $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/me", [
+        $response = $this->redactingConnectionErrors(fn (): Response => $this->client()->get("{$this->graphUrl}/{$this->graphVersion}/me", [
             'access_token' => $accessToken,
             'fields'       => 'id,name',
-        ]);
+        ]));
 
         if ($response->failed()) {
             throw $this->classifyError($response, 'Failed to fetch Facebook user');
@@ -445,11 +447,11 @@ class FacebookGraphService
      */
     public function getAdAccounts(string $accessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/me/adaccounts", [
+        $response = $this->redactingConnectionErrors(fn (): Response => Http::get("{$this->graphUrl}/{$this->graphVersion}/me/adaccounts", [
             'access_token' => $accessToken,
             'fields'       => 'id,account_id,name',
             'limit'        => 200,
-        ])->throw();
+        ])->throw());
 
         return $response->json('data', []);
     }
@@ -494,7 +496,7 @@ class FacebookGraphService
             $params['after'] = $after;
         }
 
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/insights", $params)->throw();
+        $response = $this->redactingConnectionErrors(fn (): Response => Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/insights", $params)->throw());
 
         return [
             'data'      => $response->json('data', []),
@@ -533,7 +535,7 @@ class FacebookGraphService
             ]]);
         }
 
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/insights", $params)->throw();
+        $response = $this->redactingConnectionErrors(fn (): Response => Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/insights", $params)->throw());
 
         return (int) collect($response->json('data', []))->sum('reach');
     }
@@ -558,7 +560,7 @@ class FacebookGraphService
             ]]);
         }
 
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/ads", $params)->throw();
+        $response = $this->redactingConnectionErrors(fn (): Response => Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/ads", $params)->throw());
 
         return $response->json('data', []);
     }
@@ -575,11 +577,11 @@ class FacebookGraphService
             return [];
         }
 
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/adimages", [
+        $response = $this->redactingConnectionErrors(fn (): Response => Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/adimages", [
             'access_token' => $accessToken,
             'hashes'       => json_encode($hashes),
             'fields'       => 'hash,permanent_url',
-        ])->throw();
+        ])->throw());
 
         return collect($response->json('data', []))
             ->mapWithKeys(fn (array $image): array => [(string) ($image['hash'] ?? '') => (string) ($image['permanent_url'] ?? '')])
@@ -594,11 +596,11 @@ class FacebookGraphService
      */
     public function getCampaigns(string $adAccountId, string $accessToken): array
     {
-        $response = Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/campaigns", [
+        $response = $this->redactingConnectionErrors(fn (): Response => Http::get("{$this->graphUrl}/{$this->graphVersion}/{$adAccountId}/campaigns", [
             'access_token' => $accessToken,
             'fields'       => 'id,name',
             'limit'        => 200,
-        ])->throw();
+        ])->throw());
 
         return collect($response->json('data', []))->pluck('name', 'id')->all();
     }
@@ -641,7 +643,7 @@ class FacebookGraphService
         $status = $response->status();
         $code   = isset($error['code']) && is_numeric($error['code']) ? (int) $error['code'] : null;
 
-        $message = $this->sanitize($context . ': ' . ($error['message'] ?? $response->body()));
+        $message = MetaSecretRedactor::redact($context . ': ' . ($error['message'] ?? $response->body()));
 
         if (401 === $status || 190 === $code) {
             return new FacebookTokenInvalidException($message, $status, $error);
@@ -655,15 +657,17 @@ class FacebookGraphService
     }
 
     /**
-     * Redact token-like material so secrets never reach logs or exceptions.
+     * @param  Closure(): Response  $request
+     *
+     * @throws ConnectionException
      */
-    private function sanitize(string $body): string
+    private function redactingConnectionErrors(Closure $request): Response
     {
-        return (string) preg_replace(
-            '/(access_token|appsecret_proof|client_secret|fb_exchange_token)=[^&\s"\']+/i',
-            '$1=[REDACTED]',
-            $body,
-        );
+        try {
+            return $request();
+        } catch (ConnectionException $exception) {
+            throw new ConnectionException(MetaSecretRedactor::redact($exception->getMessage()), $exception->getCode());
+        }
     }
 
     /**
