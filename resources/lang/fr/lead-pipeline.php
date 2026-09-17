@@ -430,6 +430,10 @@ return [
         'connect_other_account'  => 'Connecter un autre compte',
         'disconnect'             => 'Déconnecter',
         'disconnect_hint'        => 'Facebook vous connecte avec le compte actuellement ouvert — changez de compte sur Facebook au préalable pour en lier un autre.',
+        'sync_reauth'            => 'Connexion Facebook expirée',
+        'sync_reauth_body'       => 'Votre connexion Facebook a expiré ou a été révoquée sur Facebook. Veuillez reconnecter votre compte Facebook pour synchroniser les pages.',
+        'sync_failed'            => 'Pages non synchronisées',
+        'sync_failed_body'       => 'Les pages Facebook n\'ont pas pu être chargées pour le moment, veuillez réessayer plus tard.',
         'token_health'           => 'État du jeton',
         'status'                 => [
             'connected'    => 'Connecté',

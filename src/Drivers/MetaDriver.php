@@ -14,10 +14,14 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\View;
 use Filament\Tables\Actions\Action as TableAction;
+use Illuminate\Http\Client\ConnectionException;
+use JohnWink\FilamentLeadPipeline\Concerns\MarksConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Contracts\LeadSourceDriver;
 use JohnWink\FilamentLeadPipeline\DTOs\LeadData;
 use JohnWink\FilamentLeadPipeline\DTOs\WebhookPayloadData;
 use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookGraphException;
+use JohnWink\FilamentLeadPipeline\Exceptions\FacebookTokenInvalidException;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
@@ -30,6 +34,8 @@ use Throwable;
 
 class MetaDriver implements LeadSourceDriver
 {
+    use MarksConnectionNeedsReauth;
+
     /**
      * Special `board_field_key` values that map a Facebook field directly onto a
      * core lead field. Lets users assign fields Meta didn't auto-detect (e.g. a
@@ -176,7 +182,27 @@ class MetaDriver implements LeadSourceDriver
                                 return;
                             }
 
-                            $summary = app(FacebookPageSynchronizer::class)->sync($connection);
+                            try {
+                                $summary = app(FacebookPageSynchronizer::class)->sync($connection);
+                            } catch (FacebookTokenInvalidException $e) {
+                                $this->markConnectionNeedsReauth($connection, $e->getMessage());
+
+                                \Filament\Notifications\Notification::make()
+                                    ->title(__('lead-pipeline::lead-pipeline.facebook.sync_reauth'))
+                                    ->body(__('lead-pipeline::lead-pipeline.facebook.sync_reauth_body'))
+                                    ->danger()
+                                    ->send();
+
+                                return;
+                            } catch (FacebookGraphException|ConnectionException) {
+                                \Filament\Notifications\Notification::make()
+                                    ->title(__('lead-pipeline::lead-pipeline.facebook.sync_failed'))
+                                    ->body(__('lead-pipeline::lead-pipeline.facebook.sync_failed_body'))
+                                    ->warning()
+                                    ->send();
+
+                                return;
+                            }
 
                             \Filament\Notifications\Notification::make()
                                 ->title(__('lead-pipeline::lead-pipeline.facebook.sync_completed'))
