@@ -3,6 +3,8 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Log\Events\MessageLogged;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
@@ -199,4 +201,36 @@ it('does not re-subscribe at the app level when it is already active', function 
 
     Http::assertNotSent(fn ($request) => 'POST' === $request->method()
         && str_contains($request->url(), '/test-client-id/subscriptions'));
+});
+
+it('logs an unreachable app-level subscription check without the app secret', function (): void {
+    config()->set('lead-pipeline.facebook.verify_token', 'verify-secret');
+    config()->set('lead-pipeline.public_url', 'https://funnel.finance-estate.test');
+
+    Http::fake([
+        'graph.facebook.com/*/oauth/access_token*'           => Http::response(['access_token' => 'll', 'token_type' => 'bearer', 'expires_in' => 5_184_000]),
+        'graph.facebook.com/*/me/accounts*'                  => Http::response(['data' => []]),
+        'graph.facebook.com/*/me*'                           => Http::response(['id' => 'fb-app-sub-3', 'name' => 'Unreachable App Check']),
+        'graph.facebook.com/*/test-client-id/subscriptions*' => Http::failedConnection(),
+    ]);
+
+    $logged = collect();
+    Event::listen(MessageLogged::class, fn (MessageLogged $entry) => $logged->push($entry));
+
+    $nonce = 'app-sub-nonce-3';
+    $state = base64_encode(json_encode(['nonce' => $nonce, 'team' => $this->team->uuid]));
+
+    $this->withSession(['facebook_oauth_nonce' => $nonce])
+        ->get(route('lead-pipeline.facebook.callback', ['code' => 'auth-code', 'state' => $state]))
+        ->assertOk();
+
+    expect($logged->map(fn (MessageLogged $logEntry): string => $logEntry->message . json_encode($logEntry->context))->implode("\n"))
+        ->not->toContain('test-client-secret');
+
+    $entry = $logged->firstWhere('message', 'App-level leadgen webhook subscription failed');
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->level)->toBe('warning')
+        ->and($entry->context)->toMatchArray(['exception_class' => ConnectionException::class])
+        ->and($entry->context['error'])->toContain('access_token=[REDACTED]');
 });

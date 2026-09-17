@@ -26,6 +26,7 @@ use JohnWink\FilamentLeadPipeline\Models\Lead;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Support\MetaCoreFieldDefaults;
+use JohnWink\FilamentLeadPipeline\Support\MetaSecretRedactor;
 
 class ImportFacebookLeadsJob implements ShouldQueue
 {
@@ -108,7 +109,7 @@ class ImportFacebookLeadsJob implements ShouldQueue
                 } catch (Exception $e) {
                     $source->update([
                         'status'        => LeadSourceStatusEnum::Error,
-                        'error_message' => $e->getMessage(),
+                        'error_message' => MetaSecretRedactor::redact($e->getMessage()),
                     ]);
 
                     return;

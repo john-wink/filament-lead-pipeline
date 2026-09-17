@@ -3,6 +3,10 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Jobs\SyncFacebookPages;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
@@ -46,4 +50,28 @@ it('skips needs-reauth connections and continues despite sync failures', functio
     (new SyncFacebookPages())->handle(app(FacebookPageSynchronizer::class));
 
     expect(true)->toBeTrue();
+});
+
+it('logs a network failure during the page sync with its class and connection but without the access token', function (): void {
+    $accessToken = $this->connection->access_token;
+
+    Http::fake(['graph.facebook.com/*/me/accounts*' => Http::failedConnection()]);
+
+    $logged = collect();
+    Event::listen(MessageLogged::class, fn (MessageLogged $entry) => $logged->push($entry));
+
+    (new SyncFacebookPages())->handle(app(FacebookPageSynchronizer::class));
+
+    expect($logged->map(fn (MessageLogged $logEntry): string => $logEntry->message . json_encode($logEntry->context))->implode("\n"))
+        ->not->toContain($accessToken);
+
+    $entry = $logged->firstWhere('message', 'SyncFacebookPages: sync failed');
+
+    expect($entry)->not->toBeNull()
+        ->and($entry->level)->toBe('warning')
+        ->and($entry->context)->toMatchArray([
+            'connection'      => $this->connection->uuid,
+            'exception_class' => ConnectionException::class,
+        ])
+        ->and($entry->context['error'])->toContain('access_token=[REDACTED]');
 });

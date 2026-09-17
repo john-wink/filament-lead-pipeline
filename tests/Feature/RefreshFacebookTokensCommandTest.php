@@ -181,3 +181,27 @@ it('stays successful without app credentials when no connection is due', functio
 
     Http::assertNothingSent();
 });
+
+it('reports an unreachable token refresh without the app secret or the user token', function (): void {
+    Exceptions::fake();
+
+    Http::fake(['graph.facebook.com/*/oauth/access_token*' => Http::failedConnection()]);
+
+    $connection = FacebookConnection::factory()->expiringSoon()->create([
+        'user_uuid'    => $this->user->id,
+        'team_uuid'    => $this->team->uuid,
+        'access_token' => 'user-token-refresh-network',
+    ]);
+
+    $this->artisan('lead-pipeline:facebook:refresh-tokens')
+        ->expectsOutputToContain(ConnectionException::class)
+        ->doesntExpectOutputToContain('secret-xyz')
+        ->doesntExpectOutputToContain('user-token-refresh-network')
+        ->assertFailed();
+
+    Exceptions::assertReported(fn (ConnectionException $exception): bool => ! str_contains($exception->getMessage(), 'secret-xyz')
+        && ! str_contains($exception->getMessage(), 'user-token-refresh-network')
+        && str_contains($exception->getMessage(), 'client_secret=[REDACTED]'));
+
+    expect($connection->fresh()->access_token)->toBe('user-token-refresh-network');
+});

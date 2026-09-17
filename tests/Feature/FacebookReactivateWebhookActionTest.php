@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\SourceManagement;
@@ -93,6 +94,51 @@ it('reports an error notification when the graph api call fails', function (): v
 
     expect($page->fresh()->is_webhooks_subscribed)->toBeFalse();
 });
+
+it('shows a translated failure notification without the raw error when the webhook cannot be reactivated', function (Closure $failure): void {
+    [$source, $page] = makeMetaSourceWithPage($this->team, $this->user);
+
+    Http::fake(['graph.facebook.com/*/' . $page->page_id . '/subscribed_apps*' => $failure()]);
+
+    livewire(SourceManagement::class)
+        ->callTableAction('meta_reactivate_webhook', $source);
+
+    expect(json_encode(session('filament.notifications'), JSON_UNESCAPED_SLASHES))
+        ->not->toContain($page->page_access_token)
+        ->not->toContain('graph.facebook.com')
+        ->not->toContain('Invalid OAuth access token');
+
+    Notification::assertNotified(
+        Notification::make()
+            ->title(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_failed'))
+            ->body(__('lead-pipeline::lead-pipeline.facebook.reactivate_webhook_failed_body', ['page' => $page->page_name]))
+            ->danger(),
+    );
+
+    expect($page->fresh()->is_webhooks_subscribed)->toBeFalse();
+})->with([
+    'network failure' => [fn () => Http::failedConnection()],
+    'graph rejection' => [fn () => Http::response([
+        'error' => ['message' => 'Invalid OAuth access token.', 'type' => 'OAuthException', 'code' => 190],
+    ], 401)],
+]);
+
+it('resolves the reactivate webhook texts in every locale', function (string $locale, string $key): void {
+    app('translator')->setFallback('none');
+    app()->setLocale($locale);
+
+    expect(__("lead-pipeline::lead-pipeline.facebook.{$key}"))
+        ->not->toBe("lead-pipeline::lead-pipeline.facebook.{$key}")
+        ->not->toBeEmpty();
+})->with(['de', 'en', 'fr'])->with([
+    'reactivate_webhook',
+    'reactivate_webhook_description',
+    'reactivate_webhook_success',
+    'reactivate_webhook_success_body',
+    'reactivate_webhook_failed',
+    'reactivate_webhook_failed_body',
+    'reactivate_webhook_no_page',
+]);
 
 it('does not show the reactivate action for non-meta sources', function (): void {
     $board = LeadBoard::factory()->create(['team_uuid' => $this->team->uuid]);

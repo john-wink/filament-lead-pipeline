@@ -3,6 +3,9 @@
 declare(strict_types=1);
 
 use App\Models\Team;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Log\Events\MessageLogged;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookForm;
@@ -176,4 +179,32 @@ it('does not abort the whole sync when a single pages forms fail to load', funct
 
     expect($summary)->toMatchArray(['added' => 1, 'updated' => 0, 'removed' => 0, 'forms_synced' => 0])
         ->and(FacebookPage::query()->where('page_id', 'page-ok')->exists())->toBeTrue();
+});
+
+it('logs a network failure while loading lead forms without the page access token', function (): void {
+    Http::fake([
+        'graph.facebook.com/*/me/accounts*' => Http::response(['data' => [
+            usablePage('page-network', 'Page Network', 'page-token-forms-network'),
+        ]]),
+        'graph.facebook.com/*/leadgen_forms*' => Http::failedConnection(),
+    ]);
+
+    $logged = collect();
+    Event::listen(MessageLogged::class, fn (MessageLogged $entry) => $logged->push($entry));
+
+    $summary = app(FacebookPageSynchronizer::class)->sync($this->connection);
+
+    expect($logged->map(fn (MessageLogged $logEntry): string => $logEntry->message . json_encode($logEntry->context))->implode("\n"))
+        ->not->toContain('page-token-forms-network');
+
+    $entry = $logged->firstWhere('message', 'FacebookPageSynchronizer: failed to fetch lead forms');
+
+    expect($summary['forms_synced'])->toBe(0)
+        ->and($entry)->not->toBeNull()
+        ->and($entry->level)->toBe('warning')
+        ->and($entry->context)->toMatchArray([
+            'page_id'         => 'page-network',
+            'exception_class' => ConnectionException::class,
+        ])
+        ->and($entry->context['error'])->toContain('access_token=[REDACTED]');
 });

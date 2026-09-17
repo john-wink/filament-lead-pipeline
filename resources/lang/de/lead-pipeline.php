@@ -407,6 +407,10 @@ return [
         'sync_pages'                      => 'Seiten synchronisieren',
         'sync_completed'                  => 'Seiten synchronisiert',
         'sync_summary'                    => ':added neu, :updated aktualisiert, :removed entfernt, :forms_synced Formulare synchronisiert.',
+        'sync_reauth'                     => 'Facebook-Verbindung abgelaufen',
+        'sync_reauth_body'                => 'Deine Facebook-Verbindung ist abgelaufen oder wurde bei Facebook widerrufen. Bitte verbinde dein Facebook-Konto neu, um die Seiten zu synchronisieren.',
+        'sync_failed'                     => 'Seiten nicht synchronisiert',
+        'sync_failed_body'                => 'Facebook-Seiten konnten gerade nicht geladen werden, bitte später erneut versuchen.',
         'no_connection'                   => 'Keine aktive Facebook-Verbindung gefunden.',
         'page'                            => 'Facebook Page',
         'forms'                           => 'Lead-Formulare',
@@ -449,6 +453,7 @@ return [
         'reactivate_webhook_success'      => 'Webhook reaktiviert',
         'reactivate_webhook_success_body' => 'Die Page :page ist wieder für Leadgen-Events abonniert.',
         'reactivate_webhook_failed'       => 'Webhook-Reaktivierung fehlgeschlagen',
+        'reactivate_webhook_failed_body'  => 'Das Leadgen-Webhook-Abo der Page :page konnte gerade nicht erneuert werden. Bitte später erneut versuchen oder das Facebook-Konto neu verbinden.',
         'reactivate_webhook_no_page'      => 'Diese Quelle hat keine Facebook-Page verbunden.',
         'status'                          => [
             'connected'    => 'Verbunden',

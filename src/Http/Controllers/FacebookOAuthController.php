@@ -15,6 +15,7 @@ use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Services\FacebookConnectionDisconnector;
 use JohnWink\FilamentLeadPipeline\Services\FacebookGraphService;
 use JohnWink\FilamentLeadPipeline\Services\FacebookPageSynchronizer;
+use JohnWink\FilamentLeadPipeline\Support\MetaSecretRedactor;
 use Throwable;
 
 class FacebookOAuthController
@@ -203,9 +204,10 @@ class FacebookOAuthController
 
             $this->facebook->subscribeAppToLeadgen($callbackUrl, (string) $verifyToken);
         } catch (Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('App-level leadgen webhook subscription failed', [
-                'error' => $e->getMessage(),
-            ]);
+            \Illuminate\Support\Facades\Log::warning(
+                'App-level leadgen webhook subscription failed',
+                MetaSecretRedactor::logContext($e),
+            );
         }
     }
 
