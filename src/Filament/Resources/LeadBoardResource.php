@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace JohnWink\FilamentLeadPipeline\Filament\Resources;
 
+use Closure;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
@@ -13,6 +14,7 @@ use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
@@ -27,6 +29,7 @@ use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoardSharedTenant;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoardTeamShare;
 use JohnWink\FilamentLeadPipeline\Models\LeadFieldDefinition;
+use JohnWink\FilamentLeadPipeline\Models\LeadPhase;
 use JohnWink\FilamentLeadPipeline\Services\LeadFieldMergeService;
 use Throwable;
 
@@ -184,7 +187,7 @@ class LeadBoardResource extends Resource
                             ->label(__('lead-pipeline::lead-pipeline.board.auto_move_phase'))
                             ->options(
                                 fn (?LeadBoard $record): array => $record
-                                ? $record->phases()->ordered()->pluck('name', \JohnWink\FilamentLeadPipeline\Models\LeadPhase::pkColumn())->toArray()
+                                ? $record->phases()->ordered()->pluck('name', LeadPhase::pkColumn())->toArray()
                                 : []
                             )
                             ->placeholder(__('lead-pipeline::lead-pipeline.board.auto_move_none'))
@@ -201,7 +204,16 @@ class LeadBoardResource extends Resource
                         Forms\Components\Repeater::make('phases')
                             ->label(__('lead-pipeline::lead-pipeline.board.phases'))
                             ->hiddenLabel()
-                            ->relationship('phases')
+                            ->relationship('phases', fn (Builder $query): Builder => $query->withCount('leads'))
+                            ->rules([
+                                fn (Forms\Components\Repeater $component): Closure => function (string $attribute, mixed $value, Closure $fail) use ($component): void {
+                                    $error = static::phaseStateError($component, is_array($value) ? $value : []);
+
+                                    if (null !== $error) {
+                                        $fail($error);
+                                    }
+                                },
+                            ])
                             ->schema([
                                 Forms\Components\TextInput::make('name')
                                     ->label(__('lead-pipeline::lead-pipeline.field.name'))
@@ -246,6 +258,9 @@ class LeadBoardResource extends Resource
                             ->reorderable()
                             ->addable()
                             ->deletable()
+                            ->deleteAction(fn (Forms\Components\Actions\Action $action): Forms\Components\Actions\Action => $action->hidden(
+                                fn (array $arguments, Forms\Components\Repeater $component): bool => static::isPhaseItemDeletionBlocked($component, (string) ($arguments['item'] ?? '')),
+                            ))
                             ->collapsible()
                             ->collapsed()
                             ->itemLabel(function (array $state): ?Htmlable {
@@ -639,6 +654,83 @@ class LeadBoardResource extends Resource
 
                 static::executeFieldMerge($board, $source->getKey(), $data['target'], $data['value_map'] ?? [], $livewire);
             });
+    }
+
+    /**
+     * @param  array<int|string, mixed>  $state
+     */
+    protected static function phaseStateError(Forms\Components\Repeater $component, array $state): ?string
+    {
+        $existingPhases = $component->getCachedExistingRecords();
+
+        foreach ($existingPhases as $itemKey => $phase) {
+            if (array_key_exists($itemKey, $state) || ! $phase instanceof LeadPhase) {
+                continue;
+            }
+
+            $error = static::phaseRemovalError($phase, $existingPhases, $state);
+
+            if (null !== $error) {
+                return $error;
+            }
+        }
+
+        $terminalTypes = collect($state)
+            ->map(fn (mixed $item): ?string => static::terminalPhaseTypeFromState($item)?->value)
+            ->filter();
+
+        if ($terminalTypes->count() !== $terminalTypes->unique()->count()) {
+            return __('lead-pipeline::lead-pipeline.board_edit.duplicate_terminal');
+        }
+
+        return null;
+    }
+
+    protected static function isPhaseItemDeletionBlocked(Forms\Components\Repeater $component, string $itemKey): bool
+    {
+        $existingPhases = $component->getCachedExistingRecords();
+        $phase          = $existingPhases->get($itemKey);
+
+        if ( ! $phase instanceof LeadPhase) {
+            return false;
+        }
+
+        return null !== static::phaseRemovalError($phase, $existingPhases, $component->getState() ?? []);
+    }
+
+    /**
+     * @param  Collection<int|string, Model>  $existingPhases
+     * @param  array<int|string, mixed>  $state
+     */
+    protected static function phaseRemovalError(LeadPhase $phase, Collection $existingPhases, array $state): ?string
+    {
+        if ((int) $phase->getAttribute('leads_count') > 0) {
+            return __('lead-pipeline::lead-pipeline.board_edit.phase_delete_has_leads');
+        }
+
+        if ( ! $phase->type instanceof LeadPhaseTypeEnum || ! $phase->type->isTerminal()) {
+            return null;
+        }
+
+        $keepsPhaseOfSameType = $existingPhases->contains(
+            fn (Model $other, int|string $itemKey): bool => $other instanceof LeadPhase
+                && $other->isNot($phase)
+                && array_key_exists($itemKey, $state)
+                && $other->type === $phase->type,
+        );
+
+        return $keepsPhaseOfSameType ? null : __('lead-pipeline::lead-pipeline.board_edit.phase_delete_last_terminal');
+    }
+
+    protected static function terminalPhaseTypeFromState(mixed $item): ?LeadPhaseTypeEnum
+    {
+        $type = is_array($item) ? ($item['type'] ?? null) : null;
+
+        if (is_string($type)) {
+            $type = LeadPhaseTypeEnum::tryFrom($type);
+        }
+
+        return $type instanceof LeadPhaseTypeEnum && $type->isTerminal() ? $type : null;
     }
 
     /** @return array<int, class-string> */
