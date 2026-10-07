@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Models\Team;
 use JohnWink\FilamentLeadPipeline\Enums\LeadFieldTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadPhaseTypeEnum;
+use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages\CreateLeadBoard;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages\EditLeadBoard;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages\ListLeadBoards;
@@ -38,6 +39,15 @@ beforeEach(function (): void {
 it('renders the list page', function (): void {
     livewire(ListLeadBoards::class)
         ->assertSuccessful();
+});
+
+it('renders the wrapper classes the left aligned tabs rule targets', function (): void {
+    expect(LeadBoardResource::getSlug())->toBe('lead-boards');
+
+    livewire(ListLeadBoards::class)
+        ->assertSeeHtml('fi-resource-list-records-page')
+        ->assertSeeHtml('fi-resource-lead-boards')
+        ->assertSeeHtml('fi-tabs');
 });
 
 it('displays boards in the table', function (): void {

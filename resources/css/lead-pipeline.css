@@ -426,3 +426,8 @@
     opacity: 0.65;
     pointer-events: none;
 }
+
+/* ---- Board List Tabs ---- */
+.fi-resource-list-records-page.fi-resource-lead-boards .fi-tabs {
+    margin-inline-start: 0;
+}
