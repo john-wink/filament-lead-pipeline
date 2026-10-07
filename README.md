@@ -149,6 +149,8 @@ $panel->plugin(
 
 A board is the central entity. It defines phases, custom fields, and contains leads. Boards are team-scoped (multi-tenancy). Each board has its own set of admins who can see all leads and assign them.
 
+The board list is split into an **Active** and an **Inactive** tab. Board admins can deactivate and reactivate boards from the row menu or in bulk. Deactivating only tidies up the list: sources, webhooks and funnels of an inactive board keep delivering leads.
+
 ### Phases
 
 Phases have two dimensions:

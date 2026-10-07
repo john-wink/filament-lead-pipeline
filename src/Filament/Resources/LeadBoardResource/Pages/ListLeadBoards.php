@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource\Pages;
 
 use Filament\Actions;
+use Filament\Resources\Components\Tab;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Eloquent\Builder;
 use JohnWink\FilamentLeadPipeline\Filament\Pages\IntegrationsPage;
 use JohnWink\FilamentLeadPipeline\Filament\Resources\LeadBoardResource;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
@@ -14,6 +16,21 @@ use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 class ListLeadBoards extends ListRecords
 {
     protected static string $resource = LeadBoardResource::class;
+
+    /**
+     * @return array<string, Tab>
+     */
+    public function getTabs(): array
+    {
+        return [
+            'active' => Tab::make(__('lead-pipeline::lead-pipeline.board.tab_active'))
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->active())
+                ->badge(fn (): int => $this->visibleBoards()->active()->count()),
+            'inactive' => Tab::make(__('lead-pipeline::lead-pipeline.board.tab_inactive'))
+                ->modifyQueryUsing(fn (Builder $query): Builder => $query->inactive())
+                ->badge(fn (): int => $this->visibleBoards()->inactive()->count()),
+        ];
+    }
 
     public function getFooter(): ?View
     {
@@ -36,5 +53,11 @@ class ListLeadBoards extends ListRecords
                 ->action(fn () => $this->dispatch('open-analytics')),
             Actions\CreateAction::make(),
         ];
+    }
+
+    protected function visibleBoards(): Builder
+    {
+        return LeadBoardResource::getEloquentQuery()
+            ->visibleToUser(auth()->user(), filament()->getTenant());
     }
 }
