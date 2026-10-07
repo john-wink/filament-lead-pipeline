@@ -646,7 +646,7 @@ class LeadDetailModal extends Component
 
         $query = LeadBoard::query()
             ->visibleToTenant($tenant)
-            ->where('is_active', true)
+            ->active()
             ->whereKeyNot($this->lead->{Lead::fkColumn('lead_board')});
 
         $filterClass = config('lead-pipeline.transfer.board_filter');

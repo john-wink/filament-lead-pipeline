@@ -272,7 +272,7 @@ class PhaseListTable extends Component implements HasForms, HasTable
 
                                 return LeadBoard::query()
                                     ->visibleToTenant(filament()->getTenant())
-                                    ->where('is_active', true)
+                                    ->active()
                                     ->when($boardId, fn ($q) => $q->whereKeyNot($boardId))
                                     ->orderBy('name')
                                     ->pluck('name', LeadBoard::pkColumn())

@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use JohnWink\FilamentLeadPipeline\Concerns\BelongsToTeam;
 use JohnWink\FilamentLeadPipeline\Concerns\HasConfigurablePrimaryKey;
 use JohnWink\FilamentLeadPipeline\Database\Factories\LeadBoardFactory;
+use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\RoutingModeEnum;
 use JohnWink\FilamentLeadPipeline\FilamentLeadPipelinePlugin;
 use Throwable;
@@ -189,9 +190,36 @@ class LeadBoard extends Model
         return static::applySharedWithTenantConstraint($query, $tenant);
     }
 
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->where($query->qualifyColumn('is_active'), true);
+    }
+
+    public function scopeInactive(Builder $query): Builder
+    {
+        return $query->where($query->qualifyColumn('is_active'), false);
+    }
+
+    public function scopeVisibleToUser(Builder $query, ?Model $user, ?Model $tenant): Builder
+    {
+        $userId = $user?->getKey();
+        $userFk = config('lead-pipeline.user_foreign_key', 'user_uuid');
+
+        return $query->where(function (Builder $q) use ($userId, $userFk, $tenant): void {
+            $q->whereHas('admins', fn (Builder $adminQuery) => $adminQuery->where('lead_board_admins.' . $userFk, $userId))
+                ->orWhereHas('leads', fn (Builder $leadQuery) => $leadQuery->where('assigned_to', $userId))
+                ->orWhere(fn (Builder $sharedQuery) => $sharedQuery->sharedWithTenant($tenant));
+        });
+    }
+
     public function hasLeads(): bool
     {
         return $this->leads()->exists();
+    }
+
+    public function hasActiveSources(): bool
+    {
+        return $this->sources()->where('status', LeadSourceStatusEnum::Active)->exists();
     }
 
     public function admins(): \Illuminate\Database\Eloquent\Relations\BelongsToMany

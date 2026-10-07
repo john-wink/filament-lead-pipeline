@@ -34,7 +34,7 @@ class LeadBoardStatsRefresher implements ShouldQueue
         $periodKey  = $period->toDateString();
 
         LeadBoard::query()
-            ->where('is_active', true)
+            ->active()
             ->cursor()
             ->each(function (LeadBoard $board) use ($period, $periodKey, $aggregator): void {
                 $existing = LeadBoardStat::query()

@@ -112,21 +112,268 @@ it('shows board counts for phases leads and sources', function (): void {
         ->assertTableColumnStateSet('sources_count', 1, $board->getKey());
 });
 
-it('shows active icon column correctly for active board', function (): void {
+it('shows only active boards in the default tab', function (): void {
     $activeBoard = LeadBoard::factory()
         ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
 
-    livewire(ListLeadBoards::class)
-        ->assertTableColumnStateSet('is_active', true, $activeBoard);
-});
-
-it('shows inactive icon column correctly for inactive board', function (): void {
     $inactiveBoard = LeadBoard::factory()
         ->inactive()
         ->create(['team_uuid' => $this->team->uuid]);
 
     livewire(ListLeadBoards::class)
-        ->assertTableColumnStateSet('is_active', false, $inactiveBoard);
+        ->assertSet('activeTab', 'active')
+        ->assertCanSeeTableRecords([$activeBoard])
+        ->assertCanNotSeeTableRecords([$inactiveBoard]);
+});
+
+it('shows only inactive boards in the inactive tab', function (): void {
+    $activeBoard = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    $inactiveBoard = LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    livewire(ListLeadBoards::class)
+        ->set('activeTab', 'inactive')
+        ->assertCanSeeTableRecords([$inactiveBoard])
+        ->assertCanNotSeeTableRecords([$activeBoard]);
+});
+
+it('labels the tabs Aktiv and Inaktiv', function (): void {
+    $tabs = livewire(ListLeadBoards::class)->instance()->getTabs();
+
+    expect(array_keys($tabs))->toBe(['active', 'inactive'])
+        ->and($tabs['active']->getLabel())->toBe('Aktiv')
+        ->and($tabs['inactive']->getLabel())->toBe('Inaktiv');
+});
+
+it('counts only boards the user can see in the tab badges', function (): void {
+    $ownerTeam = Team::query()->create(['name' => 'Owner Team', 'slug' => 'owner-team']);
+
+    LeadBoard::factory()
+        ->count(2)
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $ownerTeam->getKey()]);
+
+    LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $ownerTeam->getKey()]);
+
+    $boardWithoutAccess = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+    $boardWithoutAccess->admins()->detach();
+
+    $inactiveBoardWithoutAccess = LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+    $inactiveBoardWithoutAccess->admins()->detach();
+
+    $tabs = livewire(ListLeadBoards::class)->instance()->getTabs();
+
+    expect($tabs['active']->getBadge())->toBe(2)
+        ->and($tabs['inactive']->getBadge())->toBe(1);
+});
+
+it('can deactivate an active board from the table', function (): void {
+    $board = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    livewire(ListLeadBoards::class)
+        ->assertTableActionVisible('deactivate', $board)
+        ->assertTableActionHidden('activate', $board)
+        ->callTableAction('deactivate', $board)
+        ->assertNotified('Board deaktiviert');
+
+    expect($board->refresh()->is_active)->toBeFalse();
+});
+
+it('can activate an inactive board from the table', function (): void {
+    $board = LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    livewire(ListLeadBoards::class)
+        ->set('activeTab', 'inactive')
+        ->assertTableActionVisible('activate', $board)
+        ->assertTableActionHidden('deactivate', $board)
+        ->callTableAction('activate', $board)
+        ->assertNotified('Board aktiviert');
+
+    expect($board->refresh()->is_active)->toBeTrue();
+});
+
+it('warns about active sources when deactivating a board', function (): void {
+    $boardWithActiveSource = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    LeadSource::factory()
+        ->active()
+        ->for($boardWithActiveSource, 'board')
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    $boardWithDraftSource = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    LeadSource::factory()
+        ->for($boardWithDraftSource, 'board')
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    $hint = 'liefern weiterhin Leads';
+
+    livewire(ListLeadBoards::class)
+        ->mountTableAction('deactivate', $boardWithActiveSource)
+        ->assertSee($hint);
+
+    livewire(ListLeadBoards::class)
+        ->mountTableAction('deactivate', $boardWithDraftSource)
+        ->assertDontSee($hint);
+
+    expect($boardWithActiveSource->hasActiveSources())->toBeTrue()
+        ->and($boardWithDraftSource->hasActiveSources())->toBeFalse();
+});
+
+it('hides the activation actions from users who are not board admins', function (): void {
+    $activeBoard = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    $inactiveBoard = LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    foreach ([$activeBoard, $inactiveBoard] as $board) {
+        $board->admins()->detach();
+
+        Lead::factory()
+            ->for($board, 'board')
+            ->for(LeadPhase::factory()->for($board, 'board'), 'phase')
+            ->create(['assigned_to' => $this->user->getKey()]);
+    }
+
+    livewire(ListLeadBoards::class)
+        ->assertCanSeeTableRecords([$activeBoard])
+        ->assertTableActionHidden('deactivate', $activeBoard)
+        ->set('activeTab', 'inactive')
+        ->assertCanSeeTableRecords([$inactiveBoard])
+        ->assertTableActionHidden('activate', $inactiveBoard);
+});
+
+it('can bulk deactivate boards and skips boards without admin rights', function (): void {
+    $adminBoards = LeadBoard::factory()
+        ->count(2)
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    $foreignBoard = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+    $foreignBoard->admins()->detach();
+
+    Lead::factory()
+        ->for($foreignBoard, 'board')
+        ->for(LeadPhase::factory()->for($foreignBoard, 'board'), 'phase')
+        ->create(['assigned_to' => $this->user->getKey()]);
+
+    livewire(ListLeadBoards::class)
+        ->callTableBulkAction('deactivate', [...$adminBoards, $foreignBoard])
+        ->assertNotified('2 Boards deaktiviert');
+
+    expect($adminBoards->every(fn (LeadBoard $board): bool => false === $board->refresh()->is_active))->toBeTrue()
+        ->and($foreignBoard->refresh()->is_active)->toBeTrue();
+});
+
+it('can bulk activate boards and skips boards without admin rights', function (): void {
+    $adminBoards = LeadBoard::factory()
+        ->count(2)
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    $foreignBoard = LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+    $foreignBoard->admins()->detach();
+
+    Lead::factory()
+        ->for($foreignBoard, 'board')
+        ->for(LeadPhase::factory()->for($foreignBoard, 'board'), 'phase')
+        ->create(['assigned_to' => $this->user->getKey()]);
+
+    livewire(ListLeadBoards::class)
+        ->set('activeTab', 'inactive')
+        ->callTableBulkAction('activate', [...$adminBoards, $foreignBoard])
+        ->assertNotified('2 Boards aktiviert');
+
+    expect($adminBoards->every(fn (LeadBoard $board): bool => true === $board->refresh()->is_active))->toBeTrue()
+        ->and($foreignBoard->refresh()->is_active)->toBeFalse();
+});
+
+it('offers only the bulk action matching the current tab', function (): void {
+    livewire(ListLeadBoards::class)
+        ->assertTableBulkActionVisible('deactivate')
+        ->assertTableBulkActionHidden('activate')
+        ->set('activeTab', 'inactive')
+        ->assertTableBulkActionVisible('activate')
+        ->assertTableBulkActionHidden('deactivate');
+});
+
+it('scopes boards by active state', function (): void {
+    $activeBoard = LeadBoard::factory()
+        ->create(['is_active' => true, 'team_uuid' => $this->team->uuid]);
+
+    $inactiveBoard = LeadBoard::factory()
+        ->inactive()
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    expect(LeadBoard::query()->active()->pluck('uuid')->all())
+        ->toContain($activeBoard->getKey())
+        ->not->toContain($inactiveBoard->getKey())
+        ->and(LeadBoard::query()->inactive()->pluck('uuid')->all())
+        ->toContain($inactiveBoard->getKey())
+        ->not->toContain($activeBoard->getKey());
+});
+
+it('scopes boards to those visible to a user', function (): void {
+    $ownerTeam = Team::query()->create(['name' => 'Owner Team', 'slug' => 'owner-team']);
+
+    $adminBoard = LeadBoard::factory()
+        ->create(['team_uuid' => $this->team->uuid]);
+
+    $assignedBoard = LeadBoard::factory()
+        ->create(['team_uuid' => $this->team->uuid]);
+    $assignedBoard->admins()->detach();
+
+    Lead::factory()
+        ->for($assignedBoard, 'board')
+        ->for(LeadPhase::factory()->for($assignedBoard, 'board'), 'phase')
+        ->create(['assigned_to' => $this->user->getKey()]);
+
+    $sharedBoard = LeadBoard::factory()
+        ->create(['team_uuid' => $ownerTeam->getKey()]);
+    $sharedBoard->admins()->detach();
+
+    LeadBoardSharedTenant::query()->create([
+        'lead_board_uuid'  => $sharedBoard->getKey(),
+        'shared_with_type' => $this->team->getMorphClass(),
+        'shared_with_id'   => $this->team->getKey(),
+        'permissions'      => null,
+    ]);
+
+    $unrelatedBoard = LeadBoard::factory()
+        ->create(['team_uuid' => $this->team->uuid]);
+    $unrelatedBoard->admins()->detach();
+
+    $visibleKeys = LeadBoard::query()
+        ->visibleToUser($this->user, $this->team)
+        ->pluck('uuid')
+        ->all();
+
+    expect($visibleKeys)
+        ->toContain($adminBoard->getKey(), $assignedBoard->getKey(), $sharedBoard->getKey())
+        ->not->toContain($unrelatedBoard->getKey());
 });
 
 it('sorts by created_at', function (): void {

@@ -479,19 +479,9 @@ class LeadBoardResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(function ($query) {
-                $query->withCount(['phases', 'leads', 'sources']);
-
-                $userId = auth()->id();
-                $userFk = config('lead-pipeline.user_foreign_key', 'user_uuid');
-                $tenant = filament()->getTenant();
-
-                $query->where(function ($q) use ($userId, $userFk, $tenant): void {
-                    $q->whereHas('admins', fn ($aq) => $aq->where('lead_board_admins.' . $userFk, $userId))
-                        ->orWhereHas('leads', fn ($lq) => $lq->where('assigned_to', $userId))
-                        ->orWhere(fn ($sq) => $sq->sharedWithTenant($tenant));
-                });
-            })
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query
+                ->withCount(['phases', 'leads', 'sources'])
+                ->visibleToUser(auth()->user(), filament()->getTenant()))
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label(__('lead-pipeline::lead-pipeline.field.name'))
@@ -506,9 +496,6 @@ class LeadBoardResource extends Resource
                 Tables\Columns\TextColumn::make('sources_count')
                     ->label(__('lead-pipeline::lead-pipeline.source.plural'))
                     ->counts('sources'),
-                Tables\Columns\IconColumn::make('is_active')
-                    ->label(__('lead-pipeline::lead-pipeline.board.active'))
-                    ->boolean(),
                 Tables\Columns\TextColumn::make('created_at')
                     ->label(__('lead-pipeline::lead-pipeline.board.created_at'))
                     ->dateTime('d.m.Y')
@@ -524,6 +511,37 @@ class LeadBoardResource extends Resource
                         ->url(fn (LeadBoard $record): string => KanbanBoard::getUrl(['board' => $record->getKey()])),
                     Tables\Actions\EditAction::make()
                         ->visible(fn (LeadBoard $record): bool => $record->isAdmin(auth()->user())),
+                    Tables\Actions\Action::make('deactivate')
+                        ->label(__('lead-pipeline::lead-pipeline.board.deactivate'))
+                        ->icon('heroicon-o-archive-box')
+                        ->color('gray')
+                        ->visible(fn (LeadBoard $record): bool => $record->is_active && $record->isAdmin(auth()->user()))
+                        ->requiresConfirmation()
+                        ->modalHeading(__('lead-pipeline::lead-pipeline.board.deactivate_heading'))
+                        ->modalDescription(fn (LeadBoard $record): string => $record->hasActiveSources()
+                            ? __('lead-pipeline::lead-pipeline.board.deactivate_sources_hint')
+                            : __('lead-pipeline::lead-pipeline.board.deactivate_description'))
+                        ->action(function (LeadBoard $record): void {
+                            static::setBoardsActive(collect([$record]), false);
+
+                            Notification::make()
+                                ->success()
+                                ->title(__('lead-pipeline::lead-pipeline.board.deactivated'))
+                                ->send();
+                        }),
+                    Tables\Actions\Action::make('activate')
+                        ->label(__('lead-pipeline::lead-pipeline.board.activate'))
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->color('gray')
+                        ->visible(fn (LeadBoard $record): bool => ! $record->is_active && $record->isAdmin(auth()->user()))
+                        ->action(function (LeadBoard $record): void {
+                            static::setBoardsActive(collect([$record]), true);
+
+                            Notification::make()
+                                ->success()
+                                ->title(__('lead-pipeline::lead-pipeline.board.activated'))
+                                ->send();
+                        }),
                     Tables\Actions\DeleteAction::make()
                         ->visible(fn (LeadBoard $record): bool => $record->isAdmin(auth()->user())),
                 ]),
@@ -535,8 +553,58 @@ class LeadBoardResource extends Resource
                     ->url(SourceManagement::getUrl()),
             ])
             ->bulkActions([
+                Tables\Actions\BulkAction::make('deactivate')
+                    ->label(__('lead-pipeline::lead-pipeline.board.deactivate'))
+                    ->icon('heroicon-o-archive-box')
+                    ->color('gray')
+                    ->visible(fn (Pages\ListLeadBoards $livewire): bool => 'inactive' !== $livewire->activeTab)
+                    ->requiresConfirmation()
+                    ->modalHeading(__('lead-pipeline::lead-pipeline.board.bulk_deactivate_heading'))
+                    ->modalDescription(__('lead-pipeline::lead-pipeline.board.bulk_deactivate_description'))
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (Collection $records): void {
+                        Notification::make()
+                            ->success()
+                            ->title(trans_choice(
+                                'lead-pipeline::lead-pipeline.board.bulk_deactivated',
+                                static::setBoardsActive($records, false),
+                            ))
+                            ->send();
+                    }),
+                Tables\Actions\BulkAction::make('activate')
+                    ->label(__('lead-pipeline::lead-pipeline.board.activate'))
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->color('gray')
+                    ->visible(fn (Pages\ListLeadBoards $livewire): bool => 'inactive' === $livewire->activeTab)
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (Collection $records): void {
+                        Notification::make()
+                            ->success()
+                            ->title(trans_choice(
+                                'lead-pipeline::lead-pipeline.board.bulk_activated',
+                                static::setBoardsActive($records, true),
+                            ))
+                            ->send();
+                    }),
                 Tables\Actions\DeleteBulkAction::make(),
             ]);
+    }
+
+    /**
+     * @param  Collection<int, LeadBoard>  $boards
+     */
+    public static function setBoardsActive(Collection $boards, bool $active): int
+    {
+        $user = auth()->user();
+
+        if (null === $user) {
+            return 0;
+        }
+
+        return $boards
+            ->filter(fn (LeadBoard $board): bool => $active !== $board->is_active && $board->isAdmin($user))
+            ->filter(fn (LeadBoard $board): bool => $board->update(['is_active' => $active]))
+            ->count();
     }
 
     public static function getRelations(): array
