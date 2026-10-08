@@ -5,25 +5,37 @@ declare(strict_types=1);
 namespace JohnWink\FilamentLeadPipeline\Filament\Pages;
 
 use Filament\Forms;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Tables;
 use Filament\Tables\Concerns\InteractsWithTable;
 use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use JohnWink\FilamentLeadPipeline\Enums\FacebookConnectionStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadSourceTypeEnum;
 use JohnWink\FilamentLeadPipeline\Models\LeadBoard;
 use JohnWink\FilamentLeadPipeline\Models\LeadSource;
+use JohnWink\FilamentLeadPipeline\Services\LeadSourceLifecycle;
 use JohnWink\FilamentLeadPipeline\Services\LeadSourceManager;
+use Livewire\Attributes\Url;
 use Throwable;
 
 class SourceManagement extends Page implements HasTable
 {
     use InteractsWithTable;
 
+    public const TAB_ACTIVE = 'active';
+
+    public const TAB_INACTIVE = 'inactive';
+
     public ?string $editingFunnelSourceId = null;
+
+    #[Url]
+    public string $activeTab = self::TAB_ACTIVE;
 
     protected static ?string $navigationIcon = 'heroicon-o-bolt';
 
@@ -36,45 +48,43 @@ class SourceManagement extends Page implements HasTable
         return __('lead-pipeline::lead-pipeline.source.management');
     }
 
+    public function mount(): void
+    {
+        $this->activeTab = $this->normalizeTab($this->activeTab);
+    }
+
+    public function updatedActiveTab(): void
+    {
+        $this->activeTab = $this->normalizeTab($this->activeTab);
+
+        $this->deselectAllTableRecords();
+        $this->resetPage();
+    }
+
+    /**
+     * @return array<string, array{label: string, badge: int}>
+     */
+    public function getTabs(): array
+    {
+        return [
+            self::TAB_ACTIVE => [
+                'label' => __('lead-pipeline::lead-pipeline.source.tab_active'),
+                'badge' => $this->visibleSources()->inActiveGroup()->count(),
+            ],
+            self::TAB_INACTIVE => [
+                'label' => __('lead-pipeline::lead-pipeline.source.tab_inactive'),
+                'badge' => $this->visibleSources()->inInactiveGroup()->count(),
+            ],
+        ];
+    }
+
     public function table(Table $table): Table
     {
         return $table
             ->modelLabel(__('lead-pipeline::lead-pipeline.source.singular'))
             ->pluralModelLabel(__('lead-pipeline::lead-pipeline.source.plural'))
-            ->query(
-                LeadSource::query()
-                    ->with(['funnel', 'facebookPage.connection'])
-                    ->when(
-                        filament()->getTenant(),
-                        fn ($q) => $q->whereHas('board', fn ($boardQuery) => $boardQuery->visibleToTenant(filament()->getTenant()))
-                    )
-                    ->where(function ($q): void {
-                        $user = auth()->user();
-                        if ( ! $user) {
-                            return;
-                        }
-
-                        $q->where(function ($sub) use ($user): void {
-                            // Creator always sees their own sources
-                            $sub->where('created_by', $user->getKey())
-                                // Board admins see non-private sources (api, funnel, manual) + legacy sources without created_by
-                                ->orWhere(function ($adminSub) use ($user): void {
-                                    $adminSub->where(function ($driverSub): void {
-                                        $driverSub->whereNotIn('driver', ['meta', 'zapier'])
-                                            ->orWhereNull('created_by');
-                                    })
-                                        ->whereHas('board', fn ($bq) => $bq->whereHas(
-                                            'admins',
-                                            fn ($aq) => $aq->where(
-                                                'lead_board_admins.' . config('lead-pipeline.user_foreign_key', 'user_uuid'),
-                                                $user->getKey(),
-                                            )
-                                        ));
-                                });
-                        });
-                    })
-            )
-            ->modifyQueryUsing(fn ($query) => $query->withCount('leads'))
+            ->query(fn (): Builder => $this->visibleSources()->with(['funnel', 'facebookPage.connection']))
+            ->modifyQueryUsing(fn (Builder $query): Builder => $this->applyActiveTab($query)->withCount('leads'))
             ->columns([
                 Tables\Columns\TextColumn::make('name')
                     ->label(__('lead-pipeline::lead-pipeline.field.name'))
@@ -157,8 +167,76 @@ class SourceManagement extends Page implements HasTable
                             return $this->autoCreateFieldDefinitions($data);
                         }),
                     ...$this->getDriverTableActions(),
+                    Tables\Actions\Action::make('end')
+                        ->label(__('lead-pipeline::lead-pipeline.source.end'))
+                        ->icon('heroicon-o-stop-circle')
+                        ->color('gray')
+                        ->visible(fn (LeadSource $record): bool => ! $record->isEnded())
+                        ->requiresConfirmation()
+                        ->modalHeading(__('lead-pipeline::lead-pipeline.source.end_heading'))
+                        ->modalDescription(__('lead-pipeline::lead-pipeline.source.end_description'))
+                        ->form(fn (LeadSource $record): array => [
+                            Forms\Components\Toggle::make('deactivate_board')
+                                ->label(__('lead-pipeline::lead-pipeline.source.end_deactivate_board'))
+                                ->default($record->isLastInActiveGroupOnBoard())
+                                ->visible(app(LeadSourceLifecycle::class)->canDeactivateBoardOf($record)),
+                        ])
+                        ->action(function (LeadSource $record, array $data): void {
+                            app(LeadSourceLifecycle::class)->end($record, (bool) ($data['deactivate_board'] ?? false));
+
+                            Notification::make()
+                                ->success()
+                                ->title(__('lead-pipeline::lead-pipeline.source.ended'))
+                                ->send();
+                        }),
+                    Tables\Actions\Action::make('reactivate')
+                        ->label(__('lead-pipeline::lead-pipeline.source.reactivate'))
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->color('gray')
+                        ->visible(fn (LeadSource $record): bool => $record->isEnded())
+                        ->requiresConfirmation()
+                        ->modalHeading(__('lead-pipeline::lead-pipeline.source.reactivate_heading'))
+                        ->modalDescription(__('lead-pipeline::lead-pipeline.source.reactivate_description'))
+                        ->form(fn (LeadSource $record): array => [
+                            Forms\Components\Toggle::make('activate_board')
+                                ->label(__('lead-pipeline::lead-pipeline.source.reactivate_activate_board'))
+                                ->default(true)
+                                ->visible(app(LeadSourceLifecycle::class)->canActivateBoardOf($record)),
+                        ])
+                        ->action(function (LeadSource $record, array $data): void {
+                            app(LeadSourceLifecycle::class)->reactivate($record, (bool) ($data['activate_board'] ?? false));
+
+                            Notification::make()
+                                ->success()
+                                ->title(__('lead-pipeline::lead-pipeline.source.reactivated'))
+                                ->send();
+                        }),
                     Tables\Actions\DeleteAction::make(),
                 ]),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkAction::make('end')
+                    ->label(__('lead-pipeline::lead-pipeline.source.end'))
+                    ->icon('heroicon-o-stop-circle')
+                    ->color('gray')
+                    ->requiresConfirmation()
+                    ->modalHeading(__('lead-pipeline::lead-pipeline.source.bulk_end_heading'))
+                    ->modalDescription(__('lead-pipeline::lead-pipeline.source.bulk_end_description'))
+                    ->form([
+                        Forms\Components\Toggle::make('deactivate_boards')
+                            ->label(__('lead-pipeline::lead-pipeline.source.bulk_end_deactivate_boards'))
+                            ->default(true),
+                    ])
+                    ->deselectRecordsAfterCompletion()
+                    ->action(function (Collection $records, array $data): void {
+                        Notification::make()
+                            ->success()
+                            ->title(trans_choice(
+                                'lead-pipeline::lead-pipeline.source.bulk_ended',
+                                app(LeadSourceLifecycle::class)->endMany($records, (bool) ($data['deactivate_boards'] ?? false)),
+                            ))
+                            ->send();
+                    }),
             ])
             ->headerActions([
                 Tables\Actions\CreateAction::make()
@@ -275,6 +353,23 @@ class SourceManagement extends Page implements HasTable
         return $design;
     }
 
+    protected function visibleSources(): Builder
+    {
+        return LeadSource::query()->visibleToUser(auth()->user(), filament()->getTenant());
+    }
+
+    protected function applyActiveTab(Builder $query): Builder
+    {
+        return self::TAB_INACTIVE === $this->activeTab
+            ? $query->inInactiveGroup()
+            : $query->inActiveGroup();
+    }
+
+    protected function normalizeTab(string $tab): string
+    {
+        return self::TAB_INACTIVE === $tab ? self::TAB_INACTIVE : self::TAB_ACTIVE;
+    }
+
     /** @return array<\Filament\Actions\Action> */
     protected function getHeaderActions(): array
     {
@@ -352,7 +447,7 @@ class SourceManagement extends Page implements HasTable
         $data['config']['custom_field_mapping'] = $customMapping;
 
         if ($created > 0) {
-            \Filament\Notifications\Notification::make()
+            Notification::make()
                 ->title(__('lead-pipeline::lead-pipeline.facebook.fields_created', ['count' => $created]))
                 ->body(__('lead-pipeline::lead-pipeline.facebook.fields_created_body'))
                 ->success()

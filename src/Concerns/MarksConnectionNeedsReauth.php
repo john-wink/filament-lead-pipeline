@@ -10,6 +10,7 @@ use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\FacebookConnectionNeedsReauth;
 use JohnWink\FilamentLeadPipeline\Models\FacebookConnection;
 use JohnWink\FilamentLeadPipeline\Models\FacebookPage;
+use JohnWink\FilamentLeadPipeline\Models\LeadSource;
 
 trait MarksConnectionNeedsReauth
 {
@@ -22,10 +23,14 @@ trait MarksConnectionNeedsReauth
 
         $connection->pages()
             ->whereHas('leadSources')
-            ->each(fn (FacebookPage $page) => $page->leadSources()->update([
-                'status'        => LeadSourceStatusEnum::Error,
-                'error_message' => 'Facebook-Verbindung erfordert einen erneuten Login.',
-            ]));
+            ->each(function (FacebookPage $page): void {
+                $page->leadSources()->get()->each(function (LeadSource $source): void {
+                    $source->applyAutomaticStatus(
+                        LeadSourceStatusEnum::Error,
+                        'Facebook-Verbindung erfordert einen erneuten Login.',
+                    );
+                });
+            });
 
         FacebookConnectionNeedsReauth::dispatch($connection, $reason);
     }

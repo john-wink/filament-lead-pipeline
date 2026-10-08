@@ -595,16 +595,7 @@ class LeadBoardResource extends Resource
      */
     public static function setBoardsActive(Collection $boards, bool $active): int
     {
-        $user = auth()->user();
-
-        if (null === $user) {
-            return 0;
-        }
-
-        return $boards
-            ->filter(fn (LeadBoard $board): bool => $active !== $board->is_active && $board->isAdmin($user))
-            ->filter(fn (LeadBoard $board): bool => $board->update(['is_active' => $active]))
-            ->count();
+        return LeadBoard::setActiveByAdmin($boards, $active, auth()->user());
     }
 
     public static function getRelations(): array

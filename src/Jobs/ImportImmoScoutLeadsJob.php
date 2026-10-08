@@ -53,16 +53,18 @@ class ImportImmoScoutLeadsJob implements ShouldQueue
     public function handle(ImmoScoutApiService $api): void
     {
         $source = $this->source;
-        $board  = $source->board;
+
+        if ($source->hasBeenEnded()) {
+            return;
+        }
+
+        $board = $source->board;
 
         $connection = ImmoScoutConnection::query()
             ->find($source->config['immoscout_connection_uuid'] ?? null);
 
         if ( ! $connection || ! $board) {
-            $source->update([
-                'status'        => LeadSourceStatusEnum::Error,
-                'error_message' => 'ImmoScout24-Verbindung nicht gefunden.',
-            ]);
+            $source->applyAutomaticStatus(LeadSourceStatusEnum::Error, 'ImmoScout24-Verbindung nicht gefunden.');
 
             return;
         }
@@ -84,17 +86,11 @@ class ImportImmoScoutLeadsJob implements ShouldQueue
                 'status'     => ImmoScoutConnectionStatusEnum::Error,
                 'last_error' => $e->getMessage(),
             ]);
-            $source->update([
-                'status'        => LeadSourceStatusEnum::Error,
-                'error_message' => $e->getMessage(),
-            ]);
+            $source->applyAutomaticStatus(LeadSourceStatusEnum::Error, $e->getMessage());
 
             return;
         } catch (Exception $e) {
-            $source->update([
-                'status'        => LeadSourceStatusEnum::Error,
-                'error_message' => $e->getMessage(),
-            ]);
+            $source->applyAutomaticStatus(LeadSourceStatusEnum::Error, $e->getMessage());
 
             return;
         }
@@ -158,11 +154,8 @@ class ImportImmoScoutLeadsJob implements ShouldQueue
             LeadCreated::dispatch($lead, LeadOriginEnum::Import);
         }
 
-        $source->update([
-            'last_received_at' => now(),
-            'status'           => LeadSourceStatusEnum::Active,
-            'error_message'    => null,
-        ]);
+        $source->update(['last_received_at' => now()]);
+        $source->applyAutomaticStatus(LeadSourceStatusEnum::Active);
 
         $connection->update([
             'last_synced_at' => now(),

@@ -17,6 +17,8 @@ class FunnelController extends Controller
             ->with(['steps.fields.definition', 'board', 'source'])
             ->firstOrFail();
 
+        abort_if($funnel->source?->isEnded(), 404);
+
         $funnel->incrementViews();
 
         return view('lead-pipeline::funnel.layout', compact('funnel'));

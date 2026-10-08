@@ -153,6 +153,7 @@ class ImmoScoutDriver implements LeadSourceDriver
                 ->label(__('lead-pipeline::lead-pipeline.immoscout.import_leads'))
                 ->icon('heroicon-o-arrow-down-tray')
                 ->visible(fn (LeadSource $record): bool => 'immoscout24' === $record->driver)
+                ->hidden(fn (LeadSource $record): bool => $record->isEnded())
                 ->form([
                     Select::make('days')
                         ->label(__('lead-pipeline::lead-pipeline.immoscout.import_days'))
@@ -180,6 +181,7 @@ class ImmoScoutDriver implements LeadSourceDriver
                 ->icon('heroicon-o-beaker')
                 ->color('gray')
                 ->visible(fn (LeadSource $record): bool => 'immoscout24' === $record->driver)
+                ->hidden(fn (LeadSource $record): bool => $record->isEnded())
                 ->requiresConfirmation()
                 ->modalDescription(__('lead-pipeline::lead-pipeline.immoscout.import_test_leads_help'))
                 ->action(function (LeadSource $record): void {

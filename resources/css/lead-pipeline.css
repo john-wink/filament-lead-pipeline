@@ -427,7 +427,8 @@
     pointer-events: none;
 }
 
-/* ---- Board List Tabs ---- */
-.fi-resource-list-records-page.fi-resource-lead-boards .fi-tabs {
+/* ---- Board List & Source Management Tabs ---- */
+.fi-resource-list-records-page.fi-resource-lead-boards .fi-tabs,
+.fi-lead-pipeline-source-management .fi-tabs {
     margin-inline-start: 0;
 }

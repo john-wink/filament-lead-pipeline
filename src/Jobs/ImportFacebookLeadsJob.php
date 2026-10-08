@@ -49,8 +49,13 @@ class ImportFacebookLeadsJob implements ShouldQueue
     public function handle(FacebookGraphService $facebook): void
     {
         $source = $this->source;
-        $board  = $source->board;
-        $page   = $source->facebookPage;
+
+        if ($source->hasBeenEnded()) {
+            return;
+        }
+
+        $board = $source->board;
+        $page  = $source->facebookPage;
 
         if ( ! $page) {
             return;
@@ -99,18 +104,12 @@ class ImportFacebookLeadsJob implements ShouldQueue
                     if ($connection) {
                         $this->markConnectionNeedsReauth($connection, $e->getMessage());
                     } else {
-                        $source->update([
-                            'status'        => LeadSourceStatusEnum::Error,
-                            'error_message' => 'Facebook-Verbindung erfordert einen erneuten Login.',
-                        ]);
+                        $source->applyAutomaticStatus(LeadSourceStatusEnum::Error, 'Facebook-Verbindung erfordert einen erneuten Login.');
                     }
 
                     return;
                 } catch (Exception $e) {
-                    $source->update([
-                        'status'        => LeadSourceStatusEnum::Error,
-                        'error_message' => MetaSecretRedactor::redact($e->getMessage()),
-                    ]);
+                    $source->applyAutomaticStatus(LeadSourceStatusEnum::Error, MetaSecretRedactor::redact($e->getMessage()));
 
                     return;
                 }

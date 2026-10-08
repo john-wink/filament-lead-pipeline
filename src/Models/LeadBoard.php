@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use JohnWink\FilamentLeadPipeline\Concerns\BelongsToTeam;
 use JohnWink\FilamentLeadPipeline\Concerns\HasConfigurablePrimaryKey;
 use JohnWink\FilamentLeadPipeline\Database\Factories\LeadBoardFactory;
@@ -39,6 +40,21 @@ class LeadBoard extends Model
         'recipient_id',
         'routing_settings',
     ];
+
+    /**
+     * @param  Collection<int, self>  $boards
+     */
+    public static function setActiveByAdmin(Collection $boards, bool $active, ?Model $user): int
+    {
+        if (null === $user) {
+            return 0;
+        }
+
+        return $boards
+            ->filter(fn (self $board): bool => $active !== $board->is_active && $board->isAdmin($user))
+            ->filter(fn (self $board): bool => $board->update(['is_active' => $active]))
+            ->count();
+    }
 
     public function phases(): HasMany
     {

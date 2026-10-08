@@ -14,6 +14,24 @@ enum LeadSourceStatusEnum: string implements HasColor, HasIcon, HasLabel
     case Active = 'active';
     case Paused = 'paused';
     case Error  = 'error';
+    case Ended  = 'ended';
+
+    /** @return list<self> */
+    public static function activeGroup(): array
+    {
+        return [self::Active, self::Draft];
+    }
+
+    /** @return list<self> */
+    public static function inactiveGroup(): array
+    {
+        return [self::Paused, self::Error, self::Ended];
+    }
+
+    public function isInActiveGroup(): bool
+    {
+        return in_array($this, self::activeGroup(), true);
+    }
 
     public function getLabel(): string
     {
@@ -22,6 +40,7 @@ enum LeadSourceStatusEnum: string implements HasColor, HasIcon, HasLabel
             self::Active => __('lead-pipeline::lead-pipeline.source_status.active'),
             self::Paused => __('lead-pipeline::lead-pipeline.source_status.paused'),
             self::Error  => __('lead-pipeline::lead-pipeline.source_status.error'),
+            self::Ended  => __('lead-pipeline::lead-pipeline.source_status.ended'),
         };
     }
 
@@ -32,6 +51,7 @@ enum LeadSourceStatusEnum: string implements HasColor, HasIcon, HasLabel
             self::Active => 'success',
             self::Paused => 'warning',
             self::Error  => 'danger',
+            self::Ended  => 'gray',
         };
     }
 
@@ -42,6 +62,7 @@ enum LeadSourceStatusEnum: string implements HasColor, HasIcon, HasLabel
             self::Active => 'heroicon-o-check-circle',
             self::Paused => 'heroicon-o-pause-circle',
             self::Error  => 'heroicon-o-exclamation-triangle',
+            self::Ended  => 'heroicon-o-stop-circle',
         };
     }
 }
