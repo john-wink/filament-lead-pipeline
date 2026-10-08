@@ -1,4 +1,4 @@
-<x-filament-panels::page>
+<x-filament-panels::page class="fi-lead-pipeline-source-management">
     @if($this->editingFunnelSourceId)
         <div class="space-y-4">
             <div class="flex items-center gap-3">
@@ -22,6 +22,21 @@
                 {{ __('lead-pipeline::lead-pipeline.source.back_to_boards') }}
             </a>
         </div>
-        {{ $this->table }}
+        <div class="flex flex-col gap-y-6">
+            <x-filament::tabs>
+                @foreach ($this->getTabs() as $tabKey => $tab)
+                    <x-filament::tabs.item
+                        :active="$activeTab === $tabKey"
+                        :badge="$tab['badge']"
+                        wire:click="$set('activeTab', '{{ $tabKey }}')"
+                        wire:key="source-tab-{{ $tabKey }}"
+                    >
+                        {{ $tab['label'] }}
+                    </x-filament::tabs.item>
+                @endforeach
+            </x-filament::tabs>
+
+            {{ $this->table }}
+        </div>
     @endif
 </x-filament-panels::page>

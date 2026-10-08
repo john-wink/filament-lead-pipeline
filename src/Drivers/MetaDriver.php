@@ -395,6 +395,7 @@ class MetaDriver implements LeadSourceDriver
                 ->icon('heroicon-o-arrow-down-tray')
                 ->visible(fn (LeadSource $record) => filled($record->facebook_page_uuid)
                     && \JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum::Active === $record->status)
+                ->hidden(fn (LeadSource $record): bool => $record->isEnded())
                 ->form($importForm)
                 ->modalDescription(__('lead-pipeline::lead-pipeline.facebook.import_description'))
                 ->action(function (LeadSource $record, array $data): void {
@@ -412,6 +413,7 @@ class MetaDriver implements LeadSourceDriver
                 ->visible(fn (LeadSource $record) => filled($record->facebook_page_uuid)
                     && \JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum::Active === $record->status
                     && $record->leads()->exists())
+                ->hidden(fn (LeadSource $record): bool => $record->isEnded())
                 ->form($importForm)
                 ->modalDescription(__('lead-pipeline::lead-pipeline.facebook.reimport_description'))
                 ->action(function (LeadSource $record, array $data): void {

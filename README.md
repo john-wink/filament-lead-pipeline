@@ -207,6 +207,8 @@ Sources define where leads come from. Each source is bound to a board.
 
 Each driver controls its own config form, webhook URL generation, signature verification, and table actions.
 
+Source Management is split into an **Active** tab (statuses `active` and `draft`) and an **Inactive** tab (`paused`, `error`, `ended`). A source can be **ended** from the row menu or in bulk and **reactivated** later. An ended source accepts no leads on any path (webhooks, funnel, imports) and is never touched by automatic status changes; only reactivating it or editing its status lifts the ended state. When ending a source, board admins can deactivate the board in the same step; the bulk action only deactivates boards that are left without an active or draft source.
+
 ### Funnels
 
 Funnels are public multi-step forms for lead capture. They are linked to a source of type `funnel`.

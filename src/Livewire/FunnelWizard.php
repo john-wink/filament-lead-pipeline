@@ -6,6 +6,7 @@ namespace JohnWink\FilamentLeadPipeline\Livewire;
 
 use JohnWink\FilamentLeadPipeline\Enums\LeadActivityTypeEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadOriginEnum;
+use JohnWink\FilamentLeadPipeline\Enums\LeadSourceStatusEnum;
 use JohnWink\FilamentLeadPipeline\Enums\LeadStatusEnum;
 use JohnWink\FilamentLeadPipeline\Events\LeadCreated;
 use JohnWink\FilamentLeadPipeline\Models\Lead;
@@ -34,6 +35,8 @@ class FunnelWizard extends Component
         $this->funnelId = $funnelId;
         $this->funnel   = LeadFunnel::with(['steps' => fn ($q) => $q->orderBy('sort'), 'steps.fields' => fn ($q) => $q->orderBy('sort'), 'steps.fields.definition'])
             ->findOrFail($funnelId);
+
+        $this->abortIfSourceEnded();
     }
 
     #[Computed]
@@ -94,6 +97,8 @@ class FunnelWizard extends Component
 
     public function submit(): void
     {
+        $this->abortIfSourceEnded();
+
         $this->validateCurrentStep();
         $this->validateSystemFields();
 
@@ -165,6 +170,11 @@ class FunnelWizard extends Component
     public function render(): \Illuminate\Contracts\View\View
     {
         return view('lead-pipeline::funnel.wizard');
+    }
+
+    protected function abortIfSourceEnded(): void
+    {
+        abort_if($this->funnel->source()->where('status', LeadSourceStatusEnum::Ended)->exists(), 404);
     }
 
     protected function checkRejectionRules(): bool

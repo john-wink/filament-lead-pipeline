@@ -147,10 +147,7 @@ class WebhookController
 
             return response()->json(['id' => $lead->getKey()], 201);
         } catch (Exception $e) {
-            $source->update([
-                'status'        => LeadSourceStatusEnum::Error,
-                'error_message' => $e->getMessage(),
-            ]);
+            $source->applyAutomaticStatus(LeadSourceStatusEnum::Error, $e->getMessage());
 
             $this->logger->recordIncoming($source, $request, $sourceId, 'processing_error', 500, $e->getMessage());
 
@@ -235,7 +232,7 @@ class WebhookController
 
                 $sources = LeadSource::query()
                     ->whereIn('facebook_page_uuid', $pageUuids)
-                    ->where('status', '!=', LeadSourceStatusEnum::Paused)
+                    ->whereNotIn('status', [LeadSourceStatusEnum::Paused, LeadSourceStatusEnum::Ended])
                     ->get()
                     ->filter(fn ($source) => in_array((string) $formId, array_map('strval', $source->facebook_form_ids ?? []), true));
 
@@ -307,10 +304,7 @@ class WebhookController
                             $lead,
                         );
                     } catch (Exception $e) {
-                        $source->update([
-                            'status'        => LeadSourceStatusEnum::Error,
-                            'error_message' => $e->getMessage(),
-                        ]);
+                        $source->applyAutomaticStatus(LeadSourceStatusEnum::Error, $e->getMessage());
 
                         $this->logger->recordIncoming($source, $request, 'meta-central', 'processing_error', 500, $e->getMessage());
                     }
